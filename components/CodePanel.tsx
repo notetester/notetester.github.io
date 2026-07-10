@@ -1,5 +1,4 @@
 import type { CodeExample } from "@/content/types";
-import { CopyCodeButton } from "./CopyCodeButton";
 
 export function CodePanel({ example }: { example: CodeExample }) {
   return (
@@ -7,7 +6,9 @@ export function CodePanel({ example }: { example: CodeExample }) {
       <div className="code-panel__header">
         <span>{example.label}</span>
         <span className="code-language">{example.language}</span>
-        <CopyCodeButton code={example.code} />
+        <button aria-live="polite" className="copy-button" data-copy-code type="button">
+          코드 복사
+        </button>
       </div>
       <pre>
         <code>{example.code}</code>

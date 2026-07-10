@@ -51,6 +51,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        <script defer src="/copy-code.js" />
+      </head>
       <body>
         <a className="skip-link" href="#main-content">
           본문으로 바로가기

@@ -27,6 +27,7 @@ test("exports the complete learning archive as static HTML", async () => {
 
   assert.match(home, /개발 학습 아카이브/);
   assert.match(home, /실제 코드, 실행 결과/);
+  assert.match(home, /src="\/copy-code\.js"/);
   assert.match(roadmap, /전체 학습 지도/);
   assert.match(glossary, /DOM/);
   assert.match(projects, /CareerTuner/);
@@ -43,11 +44,13 @@ test("exports every lesson and GitHub Pages control files", async () => {
     access(new URL(".nojekyll", outputRoot)),
     access(new URL("robots.txt", outputRoot)),
     access(new URL("404.html", outputRoot)),
+    access(new URL("copy-code.js", outputRoot)),
   ]);
 
   const rag = await readFile(new URL("learn/langchain-rag-pipeline/index.html", outputRoot), "utf8");
   assert.match(rag, /RAG/);
   assert.match(rag, /result-panel/);
+  assert.match(rag, /data-copy-code/);
 });
 
 test("keeps every internal page link inside the static export", async () => {
