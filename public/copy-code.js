@@ -1,19 +1,6 @@
-/* global document, navigator, window, Element, HTMLButtonElement */
+/* global document, navigator, window */
 
 (() => {
-  function copyWithTextarea(text) {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand("copy");
-    textarea.remove();
-    return copied;
-  }
-
   function copyWithTimeout(text) {
     return new Promise((resolve, reject) => {
       const timer = window.setTimeout(
@@ -39,26 +26,30 @@
         await copyWithTimeout(text);
         return true;
       } catch {
-        // The textarea path also works when clipboard permission is unavailable.
+        return false;
       }
     }
-    return copyWithTextarea(text);
+    return false;
   }
 
-  document.addEventListener("click", async (event) => {
-    if (!(event.target instanceof Element)) return;
-    const button = event.target.closest("[data-copy-code]");
-    if (!(button instanceof HTMLButtonElement)) return;
+  document.addEventListener("click", (event) => {
+    const button = event
+      .composedPath()
+      .find((node) => typeof node?.matches === "function" && node.matches("[data-copy-code]"));
+    if (!button) return;
 
     const code = button.closest(".code-panel")?.querySelector("code")?.textContent;
     if (!code) return;
 
-    button.disabled = true;
-    const copied = await copyText(code);
-    button.textContent = copied ? "복사됨" : "복사 실패";
-    window.setTimeout(() => {
-      button.textContent = "코드 복사";
-      button.disabled = false;
-    }, 1600);
-  });
+    if (button.dataset.copyInProgress === "true") return;
+    button.dataset.copyInProgress = "true";
+    button.textContent = "복사 중…";
+    copyText(code).then((copied) => {
+      button.textContent = copied ? "복사됨" : "복사 실패";
+      window.setTimeout(() => {
+        button.textContent = "코드 복사";
+        delete button.dataset.copyInProgress;
+      }, 1600);
+    });
+  }, true);
 })();

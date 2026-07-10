@@ -6,7 +6,7 @@ export function CodePanel({ example }: { example: CodeExample }) {
       <div className="code-panel__header">
         <span>{example.label}</span>
         <span className="code-language">{example.language}</span>
-        <button aria-live="polite" className="copy-button" data-copy-code type="button">
+        <button aria-label="코드 복사" aria-live="polite" className="copy-button" data-copy-code type="button">
           코드 복사
         </button>
       </div>
