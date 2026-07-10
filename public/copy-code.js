@@ -32,20 +32,36 @@
     return false;
   }
 
+  function selectCode(element) {
+    const selection = window.getSelection();
+    if (!selection) return false;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
   document.addEventListener("click", (event) => {
     const button = event
       .composedPath()
       .find((node) => typeof node?.matches === "function" && node.matches("[data-copy-code]"));
     if (!button) return;
 
-    const code = button.closest(".code-panel")?.querySelector("code")?.textContent;
-    if (!code) return;
+    const codeElement = button.closest(".code-panel")?.querySelector("code");
+    const code = codeElement?.textContent;
+    if (!codeElement || !code) return;
 
     if (button.dataset.copyInProgress === "true") return;
     button.dataset.copyInProgress = "true";
     button.textContent = "복사 중…";
     copyText(code).then((copied) => {
-      button.textContent = copied ? "복사됨" : "복사 실패";
+      const selected = !copied && selectCode(codeElement);
+      button.textContent = copied
+        ? "복사됨"
+        : selected
+          ? "코드 선택됨 · Ctrl+C"
+          : "복사 실패";
       window.setTimeout(() => {
         button.textContent = "코드 복사";
         delete button.dataset.copyInProgress;
