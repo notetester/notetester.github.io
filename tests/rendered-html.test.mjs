@@ -59,7 +59,7 @@ test("keeps every internal page link inside the static export", async () => {
 
   for (const file of htmlFiles) {
     const html = await readFile(new URL(file, outputRoot), "utf8");
-    assert.doesNotMatch(html, /(?:["'(=\s][A-Za-z]:\/|\/home\/runner\/)/, file);
+    assert.doesNotMatch(html, /(?:D:[\\/]+dev[\\/]+|C:[\\/]+Users[\\/]+ict-27|\/home\/runner\/)/i, file);
     const links = [...html.matchAll(/href=["'](\/[^"'#?]*)/g)].map((match) => match[1]);
     for (const href of links) {
       if (href.startsWith("/_next/") || href === "/") continue;

@@ -42,3 +42,6 @@ next-env.d.ts
 /outputs/
 /work/
 /public/sitemap.xml
+/research/source-manifest.json
+/research/inventory-*.json
+/research/curriculum-coverage.json

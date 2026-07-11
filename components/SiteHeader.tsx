@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const navigation = [
+  { href: "/curriculum/", label: "정규 과정" },
   { href: "/roadmap/", label: "학습 지도" },
   { href: "/glossary/", label: "용어 사전" },
   { href: "/projects/", label: "프로젝트" },

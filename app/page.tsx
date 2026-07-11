@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LessonExplorer } from "@/components/LessonExplorer";
+import type { ExplorerLesson } from "@/components/LessonExplorer";
 import { allLessons } from "@/content/lessons";
 import { projectHighlights } from "@/content/projectHighlights";
 import { tracks } from "@/content/tracks";
+import { detailedSessions } from "@/content/curriculum/session-index";
+import { getModuleTitle } from "@/content/curriculum/module-meta";
 
 export const metadata: Metadata = {
   title: "개발 학습 아카이브",
@@ -12,7 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  const explorerLessons = allLessons.map((lesson) => ({
+  const courseTrack: Record<string, (typeof tracks)[number]["id"]> = {
+    web: "web", javascript: "web", java: "java", "servlet-jsp": "java",
+    database: "backend", spring: "backend", react: "frontend-devops", devops: "frontend-devops",
+    python: "ai", "machine-learning": "ai", "deep-learning": "ai", "langchain-rag": "ai", projects: "projects",
+  };
+  const explorerLessons: ExplorerLesson[] = [...allLessons.map((lesson) => ({
+    href: `/learn/${lesson.slug}/`,
     slug: lesson.slug,
     title: lesson.title,
     eyebrow: lesson.eyebrow,
@@ -21,7 +30,17 @@ export default function Home() {
     duration: lesson.duration,
     track: lesson.track,
     keywords: lesson.keywords,
-  }));
+  })), ...detailedSessions.map((session) => ({
+    href: `/curriculum/${session.courseId}/${session.slug}/`,
+    slug: session.slug,
+    title: session.title,
+    eyebrow: `정규 과정 · ${getModuleTitle(session.courseId, session.moduleId)}`,
+    summary: session.summary,
+    level: session.level,
+    duration: `${session.estimatedMinutes}분`,
+    track: courseTrack[session.courseId] ?? "projects",
+    keywords: session.keywords,
+  }))];
 
   return (
     <main id="main-content">
@@ -48,7 +67,7 @@ export default function Home() {
           </div>
           <dl className="hero-stats">
             <div>
-              <dt>{allLessons.length}</dt>
+              <dt>{allLessons.length + detailedSessions.length}</dt>
               <dd>상세 학습자료</dd>
             </div>
             <div>
@@ -132,7 +151,7 @@ export default function Home() {
         </div>
         <div className="track-list">
           {tracks.map((track) => {
-            const count = allLessons.filter((lesson) => lesson.track === track.id).length;
+            const count = explorerLessons.filter((lesson) => lesson.track === track.id).length;
             return (
               <article key={track.id} id={track.id}>
                 <span className="track-list__number" style={{ color: track.color }}>

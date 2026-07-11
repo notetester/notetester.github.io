@@ -7,11 +7,14 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "prebuild": "node --experimental-strip-types scripts/generate-sitemap.mjs",
+    "prebuild": "node scripts/generate-curriculum-index.mjs && node --experimental-strip-types scripts/validate-detailed-sessions.mjs --final && node --experimental-strip-types scripts/generate-sitemap.mjs",
     "build": "vinext build",
     "start": "vinext start",
     "test": "npm run build && node --experimental-strip-types --test tests/*.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "content:validate": "node --experimental-strip-types scripts/validate-detailed-sessions.mjs",
+    "content:validate:final": "node --experimental-strip-types scripts/validate-detailed-sessions.mjs --final",
+    "content:coverage": "node --experimental-strip-types scripts/report-curriculum-coverage.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

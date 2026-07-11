@@ -1,0 +1,348 @@
+import type { DetailedSession } from "../../types";
+
+const session = {
+  schemaVersion: 2,
+  inventoryIds: ["py-005"],
+  slug: "python-005-arithmetic-comparison-logic",
+  courseId: "python",
+  moduleId: "01-language-foundations",
+  order: 5,
+  title: "산술·비교·논리 연산자",
+  subtitle: "우선순위, 음수 나눗셈, 비교 체이닝, 단락 평가를 따라 표현식의 값과 실행 여부를 정확히 예측합니다.",
+  level: "입문",
+  estimatedMinutes: 135,
+  coreQuestion: "여러 연산자가 섞인 Python 표현식에서 무엇이 먼저 평가되고, 어떤 값이 반환되며, 어떤 코드는 아예 실행되지 않는지 어떻게 예측할까요?",
+  summary: "산술식의 우선순위와 결합 방향을 괄호로 검증하고 /, //, %가 양수·음수·0 경계에서 어떻게 달라지는지 실행 결과로 확인합니다. 비교 연산과 연쇄 비교의 평가 규칙, and·or의 단락 평가와 피연산자 반환, not의 bool 반환을 구분합니다. 연산자 표를 외우는 대신 피연산자 평가 → 연산 적용 → 값 반환 → 다음 평가 여부 결정이라는 한 가지 정신 모델로 식을 읽습니다.",
+  objectives: [
+    "괄호·거듭제곱·단항 부호·곱셈군·덧셈군·비교·not·and·or의 상대적 우선순위로 평가 순서를 설명할 수 있다.",
+    "정수 피연산자에서 /, //, %의 결과와 타입을 구분하고 음수에서도 몫·나머지 항등식으로 검산할 수 있다.",
+    "제수 0에서 /, //, %가 실패하는 이유를 traceback으로 확인하고 연산 전에 입력을 검증할 수 있다.",
+    "비교 연산과 연쇄 비교에서 가운데 피연산자가 한 번만 평가되는 규칙을 설명할 수 있다.",
+    "and와 or가 무조건 bool을 반환한다는 오해를 고치고 단락 평가와 실제 반환 피연산자를 예측할 수 있다.",
+    "복합 대입 뒤 숫자 이름이 새 결과에 다시 바인딩되고 특히 /= 뒤 타입이 달라질 수 있음을 확인할 수 있다.",
+  ],
+  prerequisites: [
+    { title: "숫자형·진법·형 변환", reason: "피연산자의 숫자 타입에 따라 결과 타입과 지원 연산이 달라집니다. int와 float, 절삭과 floor를 먼저 구분하면 /와 //를 정확히 읽을 수 있습니다.", sessionSlug: "python-004-numeric-types-conversion" },
+    { title: "첫 스크립트 실행과 출력", reason: "표현식의 값·타입·호출 여부를 print와 f-string으로 관찰하고 traceback의 사용자 코드 줄을 읽습니다.", sessionSlug: "python-001-output-names-types" },
+  ],
+  keywords: ["Python", "연산자 우선순위", "산술 연산자", "floor division", "modulo", "비교 체이닝", "short-circuit", "and", "or", "not", "복합 대입"],
+  chapters: [
+    {
+      id: "evaluation-mental-model",
+      title: "연산자는 기호 목록이 아니라 값을 만드는 평가 규칙입니다",
+      lead: "긴 식을 왼쪽부터 막연히 계산하지 않고 어떤 피연산자를 언제 평가해 어떤 값을 돌려주는지 추적합니다.",
+      explanations: [
+        "7 + 3에서 7과 3은 피연산자이고 +는 두 값을 받아 새 값을 만드는 연산자입니다. 더 긴 식은 모든 기호를 왼쪽부터 실행하지 않습니다. Python 문법의 우선순위와 결합 방향이 작은 부분 표현식을 먼저 묶고, 그 결과를 더 큰 표현식의 피연산자로 사용합니다. 2 + 3 * 4는 3 * 4를 12로 만든 뒤 2 + 12를 계산합니다.",
+        "평가에는 결과값뿐 아니라 실행 흔적도 생길 수 있습니다. 피연산자가 함수 호출이면 화면 출력, 파일 읽기, 네트워크 요청 같은 부작용이 일어날 수 있습니다. and와 or는 왼쪽만으로 결과를 선택할 수 있으면 오른쪽을 평가하지 않으므로 오른쪽 함수의 부작용도 없습니다. 논리 연산자를 안다는 것은 진리표뿐 아니라 어느 코드가 실행되는지를 안다는 뜻입니다.",
+        "이 세션의 공통 추적 순서는 네 단계입니다. 먼저 괄호와 우선순위로 부분식을 나눕니다. 각 피연산자의 값과 타입을 확인합니다. 연산 규칙이 반환한 값과 타입을 적습니다. 마지막으로 그 값 때문에 다음 피연산자 평가가 계속되는지 멈추는지 확인합니다. 이 순서를 종이에 적으면 복잡한 한 줄도 검증 가능한 작은 단계가 됩니다.",
+      ],
+      concepts: [
+        { term: "표현식 평가", definition: "코드 조각을 문법과 연산 규칙에 따라 실행해 하나의 값을 얻는 과정입니다.", detail: ["리터럴과 이름도 값으로 평가되고, 연산 결과는 다음 연산의 피연산자가 됩니다.", "함수 호출이 피연산자라면 호출의 반환값이 연산에 사용됩니다."], analogy: "작은 계산 상자의 출력값을 다음 상자의 입력으로 보내는 흐름과 비슷합니다." },
+        { term: "피연산자", definition: "연산자가 계산하거나 선택하는 값 또는 그 값을 만드는 표현식입니다.", detail: ["a + b에서는 a와 b가 피연산자입니다.", "ready and load()에서는 ready와 load()가 피연산자지만 load가 반드시 실행되지는 않습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [],
+    },
+    {
+      id: "precedence-associativity",
+      title: "우선순위와 결합 방향을 괄호로 드러냅니다",
+      lead: "곱셈이 덧셈보다 먼저라는 규칙만으로 부족합니다. 거듭제곱의 오른쪽 결합과 단항 음수의 위치까지 확인합니다.",
+      explanations: [
+        "자주 쓰는 상대 순서는 괄호, 거듭제곱 **, 단항 +·-, 곱셈군 *·/·//·%, 덧셈군 +·-, 비교, not, and, or입니다. 전체 표를 무작정 외우기보다 의미가 다른 연산이 섞일 때 괄호로 의도를 표시합니다. price + shipping * count가 배송비에만 수량을 곱하려는 식인지, (price + shipping) * count인지 요구사항에서 먼저 결정해야 합니다.",
+        "같은 우선순위의 많은 산술 연산은 왼쪽에서 오른쪽으로 묶이지만 **는 오른쪽에서 왼쪽으로 묶입니다. 2 ** 3 ** 2는 (2 ** 3) ** 2가 아니라 2 ** (3 ** 2)이므로 512입니다. 거듭제곱은 왼쪽의 단항 음수보다 먼저 묶여 -2 ** 2는 -(2 ** 2)인 -4입니다. 음수 자체를 제곱하려면 (-2) ** 2라고 적습니다.",
+        "괄호는 결과를 바꾸는 용도만이 아닙니다. 기본 우선순위와 같은 결과라도 (minimum <= score) and (score <= maximum)처럼 업무 규칙 단위를 보여 주면 독자가 식을 다시 해석하는 시간을 줄입니다. 다만 모든 이름 하나를 괄호로 둘러 오히려 읽기 어렵게 만들지는 않습니다.",
+      ],
+      concepts: [
+        { term: "연산자 우선순위", definition: "괄호가 없을 때 서로 다른 연산자 중 어느 부분을 먼저 묶어 평가할지 정하는 문법 규칙입니다.", detail: ["높은 우선순위의 결과가 낮은 연산의 피연산자가 됩니다.", "업무 의미가 더 잘 보이도록 괄호로 평가 단위를 명시할 수 있습니다."], caveat: "우선순위는 실행 속도의 우선권이 아니라 문법이 식을 묶는 규칙입니다." },
+        { term: "결합 방향", definition: "같은 연산자가 이어질 때 왼쪽과 오른쪽 중 어느 쪽부터 묶을지 정하는 규칙입니다.", detail: ["덧셈·곱셈군은 보통 왼쪽 결합입니다.", "거듭제곱은 오른쪽 결합이므로 연속 사용 시 괄호로 확인합니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "precedence-map",
+          title: "괄호·거듭제곱·단항 음수 결과 비교",
+          language: "python",
+          filename: "precedence_map.py",
+          purpose: "모양이 비슷한 식이 우선순위와 결합 방향 때문에 다른 값을 만드는 지점을 확인합니다.",
+          code: "expressions = [\n    (\"2 + 3 * 4\", 2 + 3 * 4),\n    (\"(2 + 3) * 4\", (2 + 3) * 4),\n    (\"2 ** 3 ** 2\", 2 ** 3 ** 2),\n    (\"(2 ** 3) ** 2\", (2 ** 3) ** 2),\n    (\"-2 ** 2\", -2 ** 2),\n    (\"(-2) ** 2\", (-2) ** 2),\n]\n\nfor label, value in expressions:\n    print(f\"{label} -> {value}\")",
+          walkthrough: [
+            { lines: "1-8", explanation: "각 튜플은 사람이 읽을 식의 라벨과 Python이 실제 평가한 결과를 짝지어 둡니다." },
+            { lines: "2-3", explanation: "*가 +보다 먼저라 첫 식은 14, 괄호가 덧셈을 먼저 묶은 둘째 식은 20입니다." },
+            { lines: "4-5", explanation: "**의 오른쪽 결합 때문에 첫 식은 2**9=512이고, 왼쪽을 괄호로 강제하면 8**2=64입니다." },
+            { lines: "6-7", explanation: "-2**2는 제곱 결과에 음수를 적용해 -4입니다. (-2)를 밑으로 묶으면 4입니다." },
+            { lines: "10-11", explanation: "식 라벨과 실제 값을 나란히 출력해 예측표와 실행을 비교합니다." },
+          ],
+          run: { environment: ["Python 3.11 이상", "precedence_map.py를 UTF-8로 저장"], command: "python precedence_map.py" },
+          output: { value: "2 + 3 * 4 -> 14\n(2 + 3) * 4 -> 20\n2 ** 3 ** 2 -> 512\n(2 ** 3) ** 2 -> 64\n-2 ** 2 -> -4\n(-2) ** 2 -> 4", explanation: ["곱셈과 괄호 차이는 14와 20으로 드러납니다.", "거듭제곱의 오른쪽 결합은 512와 64의 큰 차이를 냅니다.", "괄호 위치가 음수 전체를 제곱할지 제곱 결과에 음수를 붙일지 결정합니다."] },
+          experiments: [
+            { change: "10 - 3 - 2와 10 - (3 - 2)를 추가합니다.", prediction: "-는 왼쪽 결합이므로 5와 9가 됩니다.", result: "(10-3)-2는 5, 10-(3-2)는 9입니다." },
+            { change: "2 * 3 ** 2와 (2 * 3) ** 2를 추가합니다.", prediction: "**가 *보다 먼저라 18과 36입니다.", result: "예측대로 18과 36이 출력됩니다." },
+          ],
+          sourceRefs: ["py-arithmetic", "py-day01-note"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "-2 ** 2가 4라고 예상했지만 -4가 나온다.", likelyCause: "음수 부호까지 밑으로 보았지만 Python은 2**2를 먼저 평가한 뒤 단항 -를 적용합니다.", checks: ["식을 -(2 ** 2)로 써 같은 결과인지 확인합니다.", "밑이 음수여야 하는지 결과에 부호를 붙여야 하는지 구분합니다.", "x=-2; x**2와 리터럴 표기를 비교합니다."], fix: "음수 자체를 거듭제곱하려면 (-2) ** 2처럼 밑을 괄호로 표시합니다.", prevention: "거듭제곱과 단항 부호가 함께 나오면 양수·음수 테스트와 명시적 괄호를 둡니다." },
+      ],
+    },
+    {
+      id: "arithmetic-augmented-assignment",
+      title: "산술 결과와 복합 대입의 상태 변화를 구분합니다",
+      lead: "+, -, *, **는 값을 만들고 += 같은 복합 대입은 그 결과를 왼쪽 이름에 다시 연결합니다.",
+      explanations: [
+        "원본 ex07_number.py는 su1=7, su2=3에서 +, -, *, /, //, %, **를 차례로 실행하고 res 이름을 매번 새 결과에 다시 바인딩합니다. res가 앞줄에서 int였다는 사실은 다음 줄의 float 결과를 막지 않습니다. 각 연산이 반환한 객체의 타입이 현재 결과 타입입니다.",
+        "su2 += 7은 숫자 int 예제에서는 su2 = su2 + 7과 같은 값 10을 만듭니다. 그러나 복합 대입을 모든 타입에서 단순 문자 치환으로 일반화하면 안 됩니다. 객체가 __iadd__ 같은 제자리 연산을 지원할 수 있기 때문입니다. 현재 int는 immutable이라 3 객체를 고치는 대신 10 객체를 만들고 su2를 다시 연결합니다.",
+        "복합 대입 뒤에는 타입도 확인합니다. 정수 n에 n /= 2를 적용하면 / 규칙 때문에 n은 float를 가리킵니다. 정수끼리 n //= 2를 적용하면 int입니다. 타입이 영원히 유지된다고 가정한 후속 range·인덱스 코드가 있다면 /= 한 줄이 오류의 출발점이 됩니다.",
+      ],
+      concepts: [
+        { term: "복합 대입", definition: "연산과 대입을 결합해 왼쪽 대상에 결과를 다시 저장하는 문장입니다.", detail: ["숫자에서는 x += y 뒤 x가 새 숫자 객체를 가리킵니다.", "mutable 객체의 제자리 연산은 공유 객체를 바꿀 수 있어 컬렉션 세션에서 다시 다룹니다."], caveat: "x += y와 x = x + y가 모든 타입과 별칭 상황에서 완전히 같다고 일반화하지 않습니다." },
+        { term: "거듭제곱", definition: "a ** b로 거듭제곱 값을 만드는 연산입니다.", detail: ["정수의 양의 정수 지수는 int 결과를 만들 수 있습니다.", "2 ** -1은 0.5가 되어 지수에 따라 결과 타입도 달라질 수 있습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [
+        { symptom: "정수 이름에 /=를 사용한 뒤 range에서 float를 정수로 해석할 수 없다는 TypeError가 난다.", likelyCause: "두 int의 /도 float를 반환해 복합 대입 후 이름이 float를 가리킵니다.", checks: ["복합 대입 직전·직후 type을 출력합니다.", "실수 비율과 정수 몫 중 어떤 요구인지 확인합니다.", "나머지를 버려도 되는지 검사합니다."], fix: "정수 floor 몫이 계약이면 //=를 사용합니다. int로 무조건 감싸 정보를 몰래 버리지 않습니다.", prevention: "복합 대입 코드 리뷰와 테스트에서 값뿐 아니라 반환 타입도 확인합니다." },
+      ],
+      expertNotes: ["사용자 정의 클래스는 __add__, __iadd__, __pow__로 연산자 의미를 확장할 수 있습니다. 기호만 보고 비용과 부작용을 단정하지 말고 타입 계약을 확인합니다."],
+    },
+    {
+      id: "division-floor-modulo",
+      title: "/, //, %는 한 나눗셈의 서로 다른 결과입니다",
+      lead: "/는 비율, //는 아래 방향으로 내린 몫, %는 그 몫을 적용하고 남은 값을 반환합니다.",
+      explanations: [
+        "두 int를 /로 나누면 정확히 나누어떨어져도 float입니다. 6 / 3은 2.0입니다. //는 floor division입니다. 양수 7 // 3은 2라서 흔히 소수점 버림이라고 설명하지만 음수 -7 // 3은 0 방향의 -2가 아니라 더 작은 정수 -3입니다. //를 int 변환과 같은 규칙으로 외우면 음수 경계에서 틀립니다.",
+        "%는 //와 짝을 이룹니다. 정수 a와 0이 아닌 b에서 a == (a // b) * b + (a % b)를 만족합니다. Python의 나머지는 0이 아니면 제수 b와 같은 부호입니다. -7 % 3은 2이고 7 % -3은 -2입니다. 페이지 순환과 좌표 wrapping에서 음수가 들어올 때 이 규칙이 중요합니다.",
+        "몫과 나머지가 모두 필요하면 divmod(a, b)가 (a // b, a % b)를 한 번에 반환합니다. 같은 입력 계산을 반복하지 않고 두 결과를 함께 쓴다는 의도가 드러납니다. /, //, %, divmod는 제수가 0이면 모두 정의할 수 없어 ZeroDivisionError가 납니다. 예외를 숨기기보다 입력 경계에서 0이 들어온 원인을 처리합니다.",
+      ],
+      concepts: [
+        { term: "true division /", definition: "두 수의 비율을 계산하는 나눗셈입니다.", detail: ["두 built-in int의 결과는 float입니다.", "유한한 이진 float로 표현할 수 없는 결과는 근삿값입니다."] },
+        { term: "floor division //", definition: "나눗셈 결과보다 크지 않은 가장 가까운 정수 방향으로 내린 몫입니다.", detail: ["7//3은 2, -7//3은 -3입니다.", "int끼리는 int지만 float 피연산자가 섞이면 float 결과가 될 수 있습니다."], caveat: "소수점 자르기라는 설명은 양수에서만 우연히 맞습니다." },
+        { term: "modulo %", definition: "floor 몫을 적용하고 남은 나머지를 반환합니다.", detail: ["a=q*b+r로 원래 값을 복원할 수 있습니다.", "0이 아닌 나머지는 제수와 같은 부호입니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "division-sign-boundaries",
+          title: "부호 네 조합에서 나눗셈과 복원식 확인",
+          language: "python",
+          filename: "division_boundaries.py",
+          purpose: "원본의 7과 3을 네 부호 조합으로 확장해 floor 몫과 나머지 부호를 검증합니다.",
+          code: "pairs = [(7, 3), (-7, 3), (7, -3), (-7, -3)]\n\nfor a, b in pairs:\n    quotient, remainder = divmod(a, b)\n    restored = quotient * b + remainder\n    print(\n        f\"{a:>2} div {b:>2}: /={a / b}, \"\n        f\"//={quotient}, %={remainder}, check={restored}\"\n    )",
+          walkthrough: [
+            { lines: "1", explanation: "피제수와 제수 부호의 네 조합을 준비합니다. 제수 0은 정상표가 아니라 진단에서 다룹니다." },
+            { lines: "3-4", explanation: "divmod가 //와 % 결과를 두 이름으로 분해합니다." },
+            { lines: "5", explanation: "몫×제수+나머지로 원래 피제수를 복원해 항등식을 검사합니다." },
+            { lines: "6-9", explanation: "/의 float 값, floor 몫, 나머지, 복원값을 한 줄에 표시합니다." },
+          ],
+          run: { environment: ["Python 3.11 이상", "division_boundaries.py를 저장"], command: "python division_boundaries.py" },
+          output: { value: " 7 div  3: /=2.3333333333333335, //=2, %=1, check=7\n-7 div  3: /=-2.3333333333333335, //=-3, %=2, check=-7\n 7 div -3: /=-2.3333333333333335, //=-3, %=-2, check=7\n-7 div -3: /=2.3333333333333335, //=2, %=-1, check=-7", explanation: ["-7/3은 약 -2.333이지만 floor 몫은 -3입니다.", "나머지는 제수 3과 같은 양수이고 제수가 -3이면 음수입니다.", "네 check 값이 원래 a와 같아 //와 %가 한 규칙의 짝임을 확인합니다."] },
+          experiments: [
+            { change: "pairs에 (6, 3)을 추가합니다.", prediction: "/=2.0, //=2, %=0, check=6입니다.", result: "정확히 나누어도 /는 2.0 float를 만듭니다." },
+            { change: "pairs에 (1, 0)을 추가합니다.", prediction: "divmod에서 ZeroDivisionError가 나고 뒤 출력이 중단됩니다.", result: "integer division or modulo by zero 메시지가 나옵니다." },
+          ],
+          sourceRefs: ["py-arithmetic", "py-day01-note"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "-7 // 3을 -2로 예상했지만 -3이 나온다.", likelyCause: "//를 0 방향 절삭과 같다고 오해했습니다. //는 음의 무한대 방향 floor입니다.", checks: ["-7/3이 약 -2.333임을 확인합니다.", "그보다 크지 않은 가장 가까운 정수가 -3인지 수직선에서 봅니다.", "(-7//3)*3+(-7%3)이 -7인지 검산합니다."], fix: "floor 몫이 요구면 -3을 사용합니다. 0 방향 절삭이 요구면 별도 규칙을 명시합니다.", prevention: "양/양뿐 아니라 음/양, 양/음, 음/음 테스트를 모두 둡니다." },
+        { symptom: "나눗셈 또는 나머지 계산에서 ZeroDivisionError가 발생한다.", likelyCause: "제수나 묶음 크기가 0인 채 연산했습니다.", checks: ["traceback 연산 줄의 오른쪽 값을 확인합니다.", "빈 입력을 0으로 잘못 기본 처리했는지 봅니다.", "0이 금지인지 별도 의미인지 요구사항을 확인합니다."], fix: "연산 전에 divisor == 0을 검사해 명시적 오류 흐름으로 보냅니다.", prevention: "입력 계약에 허용 범위를 적고 0, 1, -1 경계 테스트를 둡니다." },
+      ],
+      comparisons: [
+        { title: "나눗셈 요구에 어떤 도구를 선택할까요?", options: [
+          { name: "/", chooseWhen: "비율·평균처럼 소수 부분을 보존할 때", avoidWhen: "정수 묶음 수나 인덱스가 계약일 때", tradeoffs: ["두 int도 float를 만듭니다.", "일부 소수는 근삿값입니다."] },
+          { name: "//", chooseWhen: "floor 몫이 필요할 때", avoidWhen: "음수에서 0 방향 절삭을 원할 때", tradeoffs: ["음수 경계를 반드시 테스트합니다.", "나머지와 항등식으로 검산할 수 있습니다."] },
+          { name: "divmod", chooseWhen: "몫과 나머지를 함께 사용할 때", avoidWhen: "비율만 필요할 때", tradeoffs: ["한 호출로 두 결과의 관계가 선명합니다.", "반환 튜플을 분해해야 합니다."] },
+        ] },
+      ],
+      expertNotes: ["float %에는 근사 오차가 섞일 수 있습니다. 시간·금액 경계는 정수 최소 단위나 Decimal 정책을 고려합니다."],
+    },
+    {
+      id: "comparison-chaining",
+      title: "비교는 관계를 bool로 만들고 체이닝은 가운데 값을 공유합니다",
+      lead: "a < b <= c는 수학식처럼 범위를 나타내며 가운데 피연산자를 한 번만 평가합니다.",
+      explanations: [
+        "원본 ex08_number.py는 7과 3에 >, >=, <, <=, ==, !=를 적용해 True, True, False, False, False, True를 출력합니다. ==는 두 값이 같은지 묻고 =는 오른쪽 값을 왼쪽 대상에 연결합니다. 경계값을 포함해야 하면 < 대신 <=를 선택하는 식으로 기호가 업무 규칙을 반영합니다.",
+        "Python의 1 < score <= 10은 대략 1 < score and score <= 10의 의미지만 문자열 치환과 완전히 같지는 않습니다. 가운데 score 표현식은 한 번만 평가되고 첫 비교가 거짓이면 뒤 비교를 진행하지 않습니다. 함수 호출이나 iterator처럼 평가할 때 상태가 바뀌는 표현식에서 이 차이는 중요합니다.",
+        "숫자 타입 사이의 값 비교는 가능합니다. 3 == 3.0은 True지만 '3' == 3은 False입니다. Python 3은 문자열과 정수의 임의 순서를 정하지 않아 '3' < 10은 TypeError입니다. 외부 입력을 숫자 범위와 비교하려면 먼저 검증하고 변환합니다. 모두 문자열로 바꾸면 '10' < '2'가 되는 사전식 비교 버그가 생깁니다.",
+      ],
+      concepts: [
+        { term: "비교 연산", definition: "두 피연산자의 값 관계를 검사하는 연산입니다.", detail: [">·>=·<·<=는 순서를, ==·!=는 같음과 다름을 검사합니다.", "built-in 스칼라 값의 비교 결과는 bool입니다."], caveat: "값 동등성 ==와 객체 동일성 is는 다른 질문입니다. 값 비교를 is로 바꾸지 않습니다." },
+        { term: "연쇄 비교", definition: "a < b <= c처럼 비교를 이어 쓰되 가운데 피연산자를 한 번만 평가하는 문법입니다.", detail: ["모든 인접 비교가 참이어야 전체가 참입니다.", "앞 비교가 거짓이면 뒤 비교를 진행하지 않습니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "chain-single-evaluation",
+          title: "범위 판정과 가운데 함수의 단일 평가",
+          language: "python",
+          filename: "comparison_chain.py",
+          purpose: "연쇄 비교가 가운데 함수 호출 결과를 한 번 얻어 두 비교에 공유함을 확인합니다.",
+          code: "def read_score():\n    print(\"read_score() called\")\n    return 7\n\nresult = 1 < read_score() <= 10\nprint(\"in range:\", result)\nprint(\"chains:\", 1 < 2 < 3, 1 < 2 > 3)\nprint(\"equality:\", 3 == 3.0, \"3\" == 3)",
+          walkthrough: [
+            { lines: "1-3", explanation: "호출 횟수가 보이도록 메시지를 출력하고 7을 반환합니다." },
+            { lines: "5", explanation: "1<7과 7<=10을 검사하지만 read_score는 한 번만 호출됩니다." },
+            { lines: "6-7", explanation: "범위 결과와 두 연쇄 비교의 True·False를 출력합니다." },
+            { lines: "8", explanation: "int 3과 float 3.0은 값이 같지만 문자열 '3'은 숫자 3과 같지 않습니다." },
+          ],
+          run: { environment: ["Python 3.11 이상", "comparison_chain.py를 저장"], command: "python comparison_chain.py" },
+          output: { value: "read_score() called\nin range: True\nchains: True False\nequality: True False", explanation: ["호출 메시지가 한 번만 나와 가운데 피연산자의 단일 평가를 확인합니다.", "모든 인접 관계가 참일 때만 연쇄 비교가 True입니다.", "==는 타입 이름이 아니라 타입이 정의한 값 동등성 규칙을 사용합니다."] },
+          experiments: [
+            { change: "read_score가 11을 반환하게 합니다.", prediction: "1<11은 참, 11<=10은 거짓이라 False입니다.", result: "호출은 한 번이고 in range: False가 나옵니다." },
+            { change: "범위를 10 < read_score() <= 20으로 바꿉니다.", prediction: "10<7이 거짓이라 전체가 False입니다.", result: "가운데 값을 얻는 함수는 한 번 호출되고 첫 비교 뒤 체인이 끝납니다." },
+          ],
+          sourceRefs: ["py-comparison-logic", "py-day01-note"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "사용자 입력 '10'을 숫자 20과 <로 비교하자 TypeError가 난다.", likelyCause: "외부 입력은 str이고 Python 3은 str과 int의 순서를 정의하지 않습니다.", checks: ["양쪽 type을 확인합니다.", "공백이나 숫자가 아닌 문자를 검사합니다.", "숫자 비교인지 문자열 정렬인지 결정합니다."], fix: "숫자 입력이면 검증 후 int 또는 float로 경계에서 변환합니다.", prevention: "외부 입력을 받은 즉시 파싱하고 내부에서는 일관된 타입을 유지합니다." },
+      ],
+      comparisons: [
+        { title: "범위를 체인과 and 중 어떻게 표현할까요?", options: [
+          { name: "low <= value < high", chooseWhen: "한 값의 연속 범위를 간결하게 나타낼 때", avoidWhen: "각 실패에 별도 오류 메시지가 필요할 때", tradeoffs: ["가운데 표현식을 한 번 평가합니다.", "경계 포함 여부가 선명합니다."] },
+          { name: "low <= value and value < high", chooseWhen: "두 조건에 이름·진단을 따로 붙일 때", avoidWhen: "복잡한 value 표현식을 양쪽에 반복할 때", tradeoffs: ["부분 조건을 따로 기록하기 쉽습니다.", "표현식을 반복하면 두 번 평가될 수 있습니다."] },
+        ] },
+      ],
+    },
+    {
+      id: "logical-short-circuit",
+      title: "and·or는 필요한 피연산자만 평가하고 그중 하나를 반환합니다",
+      lead: "bool 진리표는 출발점입니다. 실제 and와 or는 평가를 멈추고 bool이 아닌 원래 값을 반환할 수 있습니다.",
+      explanations: [
+        "and는 왼쪽을 먼저 평가합니다. 왼쪽이 거짓으로 취급되면 결과를 이미 결정할 수 있어 그 값을 반환하고 오른쪽을 실행하지 않습니다. 왼쪽이 참으로 취급되면 오른쪽을 평가해 그 값을 반환합니다. 0 and expensive()는 0이고 expensive는 호출되지 않으며, 'python' and 42는 42입니다.",
+        "or는 왼쪽이 참으로 취급되면 그 값을 즉시 반환합니다. 왼쪽이 거짓으로 취급될 때만 오른쪽을 평가합니다. name or 'guest'는 빈 이름에 기본값을 주지만 0이나 빈 리스트처럼 유효할 수 있는 값도 없음으로 간주합니다. None만 대체해야 한다면 value if value is not None else default가 더 정확합니다.",
+        "not은 피연산자의 참·거짓 취급을 반전한 실제 bool을 반환합니다. 원본 age=17에서 not age는 False입니다. 반면 and와 or는 피연산자를 반환합니다. 원본의 논리 연산자 결과는 항상 True/False라는 주석은 피연산자가 True와 False인 표에서는 맞지만 일반 규칙은 아닙니다.",
+        "단락 평가는 guard에 쓸 수 있지만 중요한 오류와 부작용을 한 줄에 숨기지 않습니다. divisor != 0 and total / divisor는 0에서 나눗셈을 건너뛰지만 결과가 False 또는 숫자로 섞입니다. 오류 계약이 중요한 코드에서는 명시적 if와 예외가 더 읽기 쉽습니다.",
+      ],
+      concepts: [
+        { term: "단락 평가", definition: "왼쪽만으로 결과를 선택할 수 있으면 오른쪽을 평가하지 않는 규칙입니다.", detail: ["and는 첫 거짓 취급 값에서 멈춥니다.", "or는 첫 참 취급 값에서 멈춥니다.", "건너뛴 함수의 출력·예외·상태 변경도 없습니다."], analogy: "입장권이 없으면 다음 신분 확인 단계로 가지 않는 검사대와 비슷합니다." },
+        { term: "피연산자 반환", definition: "and와 or가 판정에 사용한 원래 피연산자 중 하나를 결과로 돌려주는 동작입니다.", detail: ["a and b는 a가 거짓이면 a, 아니면 b를 반환합니다.", "a or b는 a가 참이면 a, 아니면 b를 반환합니다.", "not만 항상 bool입니다."], caveat: "bool 계약이 필요하면 비교식이나 bool 변환으로 의도를 드러냅니다." },
+      ],
+      codeExamples: [
+        {
+          id: "short-circuit-values",
+          title: "호출 로그로 단락 평가와 반환값 확인",
+          language: "python",
+          filename: "short_circuit.py",
+          purpose: "오른쪽 함수가 건너뛰어지고 and·or가 bool 아닌 피연산자를 반환하는 사실을 검증합니다.",
+          code: "def mark(label, value):\n    print(\"called:\", label)\n    return value\n\nprint(\"and:\", mark(\"left-zero\", 0) and mark(\"right\", 99))\nprint(\"or:\", mark(\"left-ready\", \"ready\") or mark(\"right\", 99))\nprint(\"value:\", \"python\" and 42)\nprint(\"fallback:\", \"\" or \"guest\")\nprint(\"not:\", not [])",
+          walkthrough: [
+            { lines: "1-3", explanation: "mark는 평가될 때 라벨을 출력하고 전달받은 값을 그대로 반환합니다." },
+            { lines: "5", explanation: "왼쪽이 0이라 and는 0을 반환하고 오른쪽 mark를 호출하지 않습니다." },
+            { lines: "6", explanation: "왼쪽 'ready'가 참이라 or는 그 문자열을 반환하고 오른쪽을 건너뜁니다." },
+            { lines: "7-8", explanation: "and는 42, or는 guest를 반환해 결과가 bool로 강제되지 않음을 보여 줍니다." },
+            { lines: "9", explanation: "not은 빈 리스트의 판정을 반전한 bool True를 반환합니다." },
+          ],
+          run: { environment: ["Python 3.11 이상", "short_circuit.py를 저장"], command: "python short_circuit.py" },
+          output: { value: "called: left-zero\nand: 0\ncalled: left-ready\nor: ready\nvalue: 42\nfallback: guest\nnot: True", explanation: ["called: right가 없어 오른쪽 함수가 실행되지 않았습니다.", "0·ready·42·guest는 선택된 원래 피연산자입니다.", "not 결과만 True bool입니다."] },
+          experiments: [
+            { change: "첫 mark 반환값을 1로 바꿉니다.", prediction: "and가 오른쪽까지 호출해 99를 반환합니다.", result: "두 호출 로그 뒤 and: 99가 나옵니다." },
+            { change: "or의 왼쪽 값을 빈 문자열로 바꿉니다.", prediction: "오른쪽 mark가 호출되고 99가 반환됩니다.", result: "두 호출 로그 뒤 or: 99가 나옵니다." },
+          ],
+          sourceRefs: ["py-comparison-logic", "py-day01-note"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "result = count and 'available'의 결과가 bool이 아니라 0 또는 문자열이다.", likelyCause: "and를 bool 변환 연산자로 오해했습니다. 첫 거짓 값 또는 마지막 값을 반환합니다.", checks: ["repr과 type을 함께 출력합니다.", "count가 0인지 확인합니다.", "호출자 계약이 bool인지 상태 문자열인지 결정합니다."], fix: "bool 계약이면 count > 0 같은 비교식이나 명시적 bool 변환을 사용합니다.", prevention: "and/or 값 선택에서는 가능한 모든 반환 피연산자 타입을 테스트합니다." },
+        { symptom: "quantity or 10이 quantity=0에서 10을 반환해 유효한 0이 사라진다.", likelyCause: "or가 None뿐 아니라 모든 거짓 취급 값을 결측으로 간주합니다.", checks: ["0·빈 문자열·빈 컬렉션이 유효한지 확인합니다.", "결측 sentinel이 None인지 정합니다.", "기본값 전 원본 값을 repr로 확인합니다."], fix: "None만 결측이면 quantity if quantity is not None else 10을 사용합니다.", prevention: "없음의 정확한 sentinel을 정의하고 0 경계 테스트를 둡니다." },
+      ],
+      expertNotes: ["단락 오른쪽에 상태 변경을 숨기면 데이터에 따라 실행 여부가 달라집니다. 중요한 부작용은 명시적 if 블록으로 분리하는 편이 로그와 테스트에 유리합니다."],
+    },
+    {
+      id: "mixed-expression-diagnostics",
+      title: "산술·비교·논리를 섞으면 중간값과 중단점을 적습니다",
+      lead: "실무 조건식은 계산 결과를 비교하고 조건을 연결합니다. 최종값만 보지 말고 각 부분식의 값과 타입을 기록합니다.",
+      explanations: [
+        "total // size >= minimum and enabled를 읽을 때 먼저 //를 계산하고 그 몫을 minimum과 비교합니다. 비교가 거짓이면 enabled는 평가하지 않고 앞 결과가 반환됩니다. 비교가 참이면 enabled를 평가해 그 값을 반환합니다. enabled가 bool이 아닌 객체라면 전체 결과도 그 객체일 수 있습니다.",
+        "최종 True/False만 출력하면 어느 부분이 틀렸는지 알기 어렵습니다. groups = total // size, enough = groups >= minimum, allowed = enough and enabled처럼 의미 있는 중간 이름을 두면 몫, 경계, 활성화 중 실패 지점이 드러납니다. 한 줄이 짧다는 이유보다 검증 가능한 구조가 우선입니다.",
+        "0.1 + 0.2 == 0.3이 False인 것은 비교 연산자 오류가 아니라 피연산자가 이진 부동소수점 근삿값이기 때문입니다. 이전 숫자형 세션의 math.isclose 또는 Decimal 선택 규칙을 적용하고, 잘못된 비교가 뒤 함수까지 단락시킬 수 있음도 함께 확인합니다.",
+      ],
+      concepts: [
+        { term: "중간 불변식", definition: "여러 단계 계산 중 항상 성립해야 할 관계를 이름이나 검사식으로 드러낸 것입니다.", detail: ["몫·나머지의 a==(a//b)*b+a%b가 대표 예입니다.", "복합 조건의 부분 결과를 따로 확인하면 최종 결과 원인을 추적할 수 있습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [
+        { symptom: "0.1 + 0.2 == 0.3이 False라 뒤 and 조건이 실행되지 않는다.", likelyCause: "이진 부동소수점 근삿값을 ==로 비교했고 거짓 결과가 뒤 평가를 단락했습니다.", checks: ["repr(0.1+0.2)를 봅니다.", "두 값의 차이를 출력합니다.", "뒤 조건에 중요한 부작용을 숨겼는지 확인합니다."], fix: "근사 비교는 요구 오차를 정해 math.isclose를 사용하고 정확한 십진 규칙은 Decimal이나 정수 최소 단위를 사용합니다.", prevention: "float 비교와 단락 호출 여부를 함께 테스트합니다." },
+      ],
+      expertNotes: ["NumPy·pandas 배열 비교는 bool 배열을 반환할 수 있어 and/or가 모호성 오류를 냅니다. 벡터 과정에서는 &, |, 괄호, any/all을 별도로 다룹니다."],
+    },
+    {
+      id: "boundary-testing",
+      title: "대표값 한 번보다 경계표와 불변식으로 테스트합니다",
+      lead: "연산 버그는 양수 한 건에서 숨습니다. 부호·0·경계 포함 여부·호출 횟수를 작은 표로 자동 확인합니다.",
+      explanations: [
+        "나눗셈 함수는 피제수와 제수의 부호 네 조합, 나누어떨어짐, 피제수 0, 제수 1·-1, 금지된 제수 0을 테스트합니다. 예상값과 함께 몫·나머지 복원 불변식을 검사하면 더 넓은 입력에서 구현을 검증할 수 있습니다.",
+        "범위 비교는 최소 바로 아래·최소·중간·최대·최대 바로 위를 검사합니다. <와 <=의 한 글자 차이는 경계에서만 드러납니다. 가운데가 함수 호출이면 호출 횟수도 검증합니다. 단락 평가는 카운터나 mock으로 오른쪽 호출이 0회여야 할 경우와 1회여야 할 경우를 모두 확인합니다.",
+        "연산자 선택은 미세 성능보다 데이터 계약의 정확성이 먼저입니다. //의 음수 floor가 업무 규칙인지, or가 0을 결측으로 보아도 되는지, 비교 체인의 경계가 맞는지를 테스트 이름에 기록합니다. 짧은 식이라도 계약이 숨으면 유지보수 비용은 큽니다.",
+      ],
+      concepts: [
+        { term: "경계값 분석", definition: "조건이 바뀌는 바로 전·경계·바로 다음 값을 골라 오류를 찾는 방법입니다.", detail: ["0과 부호 변화는 나눗셈의 핵심 경계입니다.", "<와 <= 차이는 경계값 자체를 넣어야 확인됩니다.", "단락 평가는 호출 0회와 1회를 검증합니다."] },
+        { term: "불변식", definition: "허용된 입력 전체에서 항상 참이어야 하는 관계입니다.", detail: ["b가 0이 아니면 몫·나머지 복원식이 성립합니다.", "개별 예상값보다 넓은 입력에서 오류를 찾습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [],
+      expertNotes: ["pytest parametrize는 경계표를 데이터화하고 Hypothesis는 b!=0 조건 아래 불변식을 많은 값에 검사할 수 있습니다. 도구 없이도 for 루프로 같은 사고를 연습할 수 있습니다."],
+    },
+    {
+      id: "operator-choice-checklist",
+      title: "기호를 고르기 전에 반환값·경계·실행 여부를 질문합니다",
+      lead: "완료 기준은 연산자 표 암기가 아니라 새로운 식의 결과와 실패를 설명하고 더 읽기 좋은 코드로 고치는 능력입니다.",
+      explanations: [
+        "산술에서는 소수 부분 보존, floor 몫, 나머지 동시 사용 여부를 질문합니다. 비교에서는 경계 포함 여부와 타입의 비교 가능성을 확인합니다. 논리에서는 최종 bool이 필요한지 값 선택이 필요한지, 오른쪽을 건너뛰어도 되는지 확인합니다. 이 질문이 /·// 혼동과 or 기본값 버그를 줄입니다.",
+        "읽기 어려운 식은 중간 이름으로 나눕니다. full_groups, remainder_items, within_limit, can_start 같은 이름은 각 연산 목적을 문서화합니다. a, b, res만 이어 쓰면 결과가 맞아도 다음 사람이 경계 규칙을 다시 추론해야 합니다.",
+        "예측과 실행이 다르면 Python이 이상하다고 결론 내리기 전에 괄호 묶음, 피연산자 타입, floor와 절삭, 연쇄 비교, 단락된 함수 호출 순으로 확인합니다. 이 진단 순서는 조건문·반복문·함수·데이터 필터에도 그대로 확장됩니다.",
+      ],
+      concepts: [],
+      codeExamples: [],
+      diagnostics: [],
+      expertNotes: ["포매터가 괄호와 줄바꿈을 정리해도 업무 의미까지 판단하지는 않습니다. 복잡한 조건은 이름 있는 helper 함수와 독립 테스트로 올리는 편이 장기 유지보수에 유리합니다."],
+    },
+  ],
+  lab: {
+    title: "학습 타이머의 블록·잔여 시간·시작 조건 계산기",
+    scenario: "총 학습 시간을 집중 블록으로 나누고 남은 분을 표시한 뒤, 블록 길이와 준비 상태가 유효할 때만 타이머 함수를 호출합니다.",
+    setup: ["study_timer.py를 만듭니다.", "python --version으로 3.11 이상인지 확인합니다.", "총 137분, 블록 25분, 준비 상태 'ready'를 초기값으로 둡니다."],
+    steps: ["full_blocks, remaining = divmod(total_minutes, block_minutes)로 블록 수와 잔여를 계산합니다.", "0 < block_minutes <= 90으로 길이를 검증하고 0·1·90·91을 출력합니다.", "복원식 full_blocks * block_minutes + remaining == total_minutes를 확인합니다.", "호출 메시지를 내는 start_timer를 만들고 valid and ready and start_timer()의 반환값과 호출 여부를 기록합니다.", "block_minutes=0은 divmod 전에 if로 거부해 명시적 오류를 냅니다.", "total_minutes=-1에서 Python floor 결과와 업무상 금지 규칙이 별개임을 설명합니다."],
+    expectedResult: ["137분은 25분 블록 5개와 잔여 12분이고 복원식은 True입니다.", "블록 1·90은 유효하고 0·91은 유효하지 않습니다.", "valid와 ready가 참일 때만 시작 함수 메시지가 보입니다.", "0 제수는 친절한 입력 오류로 처리되고 음수 총 시간은 업무 검증에서 거부됩니다."],
+    cleanup: ["study_timer.py를 이후 조건문 세션의 출발 파일로 보관합니다."],
+    extensions: ["휴식 수를 max(full_blocks - 1, 0)으로 계산합니다.", "빈 준비 상태의 or 기본값과 None 전용 기본값을 비교합니다.", "경계표를 pytest parametrize 데이터로 옮깁니다."],
+  },
+  exercises: [
+    { difficulty: "따라하기", prompt: "원본 7과 3의 산술·비교 결과를 타입과 함께 재현하세요.", requirements: ["+, -, *, /, //, %, **를 출력합니다.", "/와 // 결과 type을 출력합니다.", ">·>=·==·!=를 예측 후 실행합니다.", "+=와 /= 전후 값·타입을 기록합니다."], hints: ["f-string의 expression= 표기를 사용합니다.", "/= 뒤 타입을 확인하세요."], expectedOutcome: "7/3은 float, 7//3은 int이고 복합 대입이 타입을 바꿀 수 있음을 설명합니다.", solutionOutline: ["초기값을 설정합니다.", "산술과 비교 출력을 분리합니다.", "예상과 다른 줄에 이유를 씁니다."] },
+    { difficulty: "응용", prompt: "초 단위 재생 시간을 시·분·초로 분해하고 범위를 검사하세요.", requirements: ["divmod를 두 번 사용합니다.", "0 이상 86400 미만을 연쇄 비교합니다.", "-1·0·59·60·3661·86399·86400을 테스트합니다.", "유효하지 않을 때 분해 함수를 호출하지 않습니다."], hints: ["3600으로 먼저 나누고 남은 값을 60으로 나눕니다.", "함수 첫 줄 로그로 호출 여부를 볼 수 있습니다."], expectedOutcome: "3661초가 1시간 1분 1초가 되고 범위 밖 값은 계산 전에 거부됩니다.", solutionOutline: ["valid를 먼저 계산합니다.", "유효할 때 divmod를 수행합니다.", "경계표와 실제값을 비교합니다."] },
+    { difficulty: "설계", prompt: "쿠폰·배송비·주문 가능 여부 정책 엔진을 설계하세요.", requirements: ["수량 0의 의미를 명시합니다.", "산술 우선순위를 괄호와 중간 이름으로 표시합니다.", "최소 주문 경계를 비교식으로 표현합니다.", "or가 유효한 0을 없애는 실패와 None 전용 수정을 보여 줍니다.", "불필요한 외부 확인 함수가 호출되지 않음을 카운터로 검증합니다.", "정상·0·음수·경계 전후 테스트를 작성합니다."], hints: ["subtotal, discounted, within_limit, can_order로 나눕니다.", "부작용 함수 호출 횟수를 기록합니다."], expectedOutcome: "계산·경계·호출 여부·기본값 정책이 독립적으로 테스트되는 정책 엔진이 완성됩니다.", solutionOutline: ["입력 계약과 sentinel을 정합니다.", "계산·비교·외부 확인을 분리합니다.", "표 기반 테스트를 작성합니다.", "반환 타입을 문서화합니다."] },
+  ],
+  reviewQuestions: [
+    { question: "2 + 3 * 4와 (2 + 3) * 4는 왜 14와 20인가요?", answer: "괄호가 없으면 *가 +보다 먼저이고, 괄호가 있으면 2+3을 먼저 계산합니다." },
+    { question: "2 ** 3 ** 2가 64가 아니라 512인 이유는?", answer: "**는 오른쪽 결합이라 3**2=9 뒤 2**9를 계산합니다." },
+    { question: "6 / 3과 6 // 3의 값·타입은?", answer: "2.0 float와 2 int입니다." },
+    { question: "-7 // 3과 -7 % 3을 어떻게 검산하나요?", answer: "몫 -3, 나머지 2이며 (-3)*3+2=-7입니다." },
+    { question: "1 < get_score() <= 10에서 함수는 몇 번 호출되나요?", answer: "가운데 피연산자는 한 번만 평가되어 한 번 호출됩니다." },
+    { question: "'python' and 42가 True가 아니라 42인 이유는?", answer: "and는 왼쪽이 참이면 오른쪽 피연산자를 평가해 그대로 반환합니다." },
+    { question: "0 and risky()에서 risky가 호출되지 않는 이유는?", answer: "왼쪽 0만으로 and 결과가 결정되어 오른쪽을 단락합니다." },
+    { question: "quantity or 10의 위험은?", answer: "유효한 0도 거짓으로 취급해 10으로 대체합니다. None만 결측이면 명시적으로 검사합니다." },
+    { question: "not과 or의 반환 타입 차이는?", answer: "not은 항상 bool이고 or는 선택된 피연산자를 원래 타입으로 반환합니다." },
+  ],
+  completionChecklist: [
+    "혼합 산술식의 괄호와 우선순위에 따른 평가 순서를 적을 수 있다.",
+    "거듭제곱 오른쪽 결합과 -2 ** 2를 설명할 수 있다.",
+    "/, //, %의 타입·음수 규칙을 구분하고 항등식으로 검산할 수 있다.",
+    "0 제수를 사전 검사하고 ZeroDivisionError를 진단할 수 있다.",
+    "비교 경계와 연쇄 비교의 단일 평가를 설명할 수 있다.",
+    "and·or 단락으로 오른쪽 함수 호출 여부를 예측할 수 있다.",
+    "and·or는 피연산자를, not은 bool을 반환함을 증명할 수 있다.",
+    "복합 대입 뒤 값과 타입 변화를 테스트할 수 있다.",
+  ],
+  nextSessions: [],
+  sources: [
+    { id: "py-arithmetic", repository: "PYTHON-BASIC", path: "day01/ex07_number.py", publicUrl: "https://github.com/notetester/PYTHON-BASIC/blob/main/day01/ex07_number.py", usedFor: ["산술 연산자", "복합 대입", "/·//·%", "거듭제곱", "실행 결과"], evidence: "Python 3.13.9에서 실행해 7·3의 10, 4, 21, 2.3333333333333335, 2, 1, 343과 su2의 10→7을 확인했습니다." },
+    { id: "py-comparison-logic", repository: "PYTHON-BASIC", path: "day01/ex08_number.py", publicUrl: "https://github.com/notetester/PYTHON-BASIC/blob/main/day01/ex08_number.py", usedFor: ["비교", "bool 피연산자 and·or", "not", "실행 결과"], evidence: "Python 3.13.9에서 여섯 비교 결과, and/or 표, bool(age)=True와 not age=False를 확인하고 피연산자 반환·단락 실험으로 확장했습니다." },
+    { id: "py-day01-note", repository: "PYTHON-BASIC", path: "notes/day01_basic.md", publicUrl: "https://github.com/notetester/PYTHON-BASIC/blob/main/notes/day01_basic.md", usedFor: ["연산자 표", "나눗셈 셀프 체크", "숫자형 선수 지식", "파일 매핑"], evidence: "Day01 연산자 표와 Q1을 검토하고 음수 floor·0·체이닝·피연산자 반환을 원본 공백으로 구분해 보강했습니다." },
+  ],
+  sourceCoverage: {
+    filesRead: 3,
+    filesUsed: 3,
+    uncoveredNotes: [
+      "원본은 양수 7과 3만 사용하므로 음수 네 조합, 제수 0, 복원 항등식은 기술 보강입니다.",
+      "원본의 논리 연산자 결과는 항상 True/False라는 문장은 bool 전용 예제 범위의 단순화이며, Python and/or의 일반 피연산자 반환 규칙을 실행으로 바로잡았습니다.",
+      "truthiness 전체 목록은 별도 불리언 세션에 남기고 여기서는 and/or/not 평가 의미에 필요한 최소 사례만 사용했습니다.",
+    ],
+  },
+} satisfies DetailedSession;
+
+export default session;

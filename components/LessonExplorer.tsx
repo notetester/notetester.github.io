@@ -11,6 +11,7 @@ export type ExplorerTrack = {
 };
 
 export type ExplorerLesson = {
+  href: string;
   slug: string;
   title: string;
   eyebrow: string;
@@ -113,7 +114,7 @@ export function LessonExplorer({
                   {lesson.eyebrow}
                 </div>
                 <h3>
-                  <Link href={`/learn/${lesson.slug}/`}>{lesson.title}</Link>
+                  <Link href={lesson.href}>{lesson.title}</Link>
                 </h3>
                 <p>{lesson.summary}</p>
                 <div className="lesson-card__footer">
