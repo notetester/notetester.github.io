@@ -40,8 +40,18 @@ import session37 from "./sessions/python/python-037-datetime-math-pathlib-practi
 import session38 from "./sessions/python/python-038-regex-search-groups-substitution-validation.ts";
 import session39 from "./sessions/python/python-039-type-hints-callable-literal-dataclass.ts";
 import session40 from "./sessions/python/python-040-venv-requirements-unittest-pytest.ts";
+import session41 from "./sessions/web/html-01-document-anatomy-dom-tree.ts";
+import session42 from "./sessions/web/html-02-text-block-inline.ts";
+import session43 from "./sessions/web/html-03-links-paths-navigation.ts";
+import session44 from "./sessions/web/html-04-images-background-media.ts";
+import session45 from "./sessions/web/html-05-lists-navigation.ts";
+import session46 from "./sessions/web/html-06-table-semantics.ts";
+import session47 from "./sessions/web/html-07-form-http-request.ts";
+import session48 from "./sessions/web/html-08-form-controls-validation.ts";
+import session49 from "./sessions/web/html-09-semantic-layout-accessibility.ts";
+import session50 from "./sessions/web/html-10-document-capstone.ts";
 
-export const detailedSessions: DetailedSession[] = ([session1, session2, session3, session4, session5, session6, session7, session8, session9, session10, session11, session12, session13, session14, session15, session16, session17, session18, session19, session20, session21, session22, session23, session24, session25, session26, session27, session28, session29, session30, session31, session32, session33, session34, session35, session36, session37, session38, session39, session40] as DetailedSession[]).sort(
+export const detailedSessions: DetailedSession[] = ([session1, session2, session3, session4, session5, session6, session7, session8, session9, session10, session11, session12, session13, session14, session15, session16, session17, session18, session19, session20, session21, session22, session23, session24, session25, session26, session27, session28, session29, session30, session31, session32, session33, session34, session35, session36, session37, session38, session39, session40, session41, session42, session43, session44, session45, session46, session47, session48, session49, session50] as DetailedSession[]).sort(
   (left, right) => left.courseId.localeCompare(right.courseId, "en")
     || left.moduleId.localeCompare(right.moduleId, "en")
     || left.order - right.order,
