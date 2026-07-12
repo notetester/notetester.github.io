@@ -371,7 +371,7 @@ const session = {
     "fake Response와 local HTTP/CORS server로 unit/protocol/browser tests를 통과했다.",
     "URL/body/headers/token/cookies/raw response/PII를 telemetry에서 redaction했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-11-fetch-xml-domparser-capstone"],
   sources: [
     { id: "web-fetch-text-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex12_fetch.html", usedFor: ["fetch introduction", "click loader", "relative sample.txt", "Promise then chain", "Response.text", "textContent", "catch logging"], evidence: "sample.txt를 fetch→text→pre에 표시하는 원본 chain을 Request/Response/body ownership·error UI와 exact example의 출발점으로 사용했습니다." },
     { id: "web-fetch-async-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex13_fetch.html", usedFor: ["async click handler", "await fetch", "Response.ok", "Error throw", "Response.text", "try/catch", "user error text"], evidence: "ok 검사와 async/await 원본을 status/body/error taxonomy·AbortSignal·JSON schema pipeline으로 확장했습니다." },
