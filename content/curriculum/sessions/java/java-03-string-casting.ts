@@ -815,7 +815,7 @@ class BadConversion {
     "BigInteger/BigDecimal 생성·scale·rounding·equals/compareTo·exactValue 정책을 적용했다.",
     "대표 byte-sum compile-fail·javap·boundary tests를 실행했고 나머지 conversion failures와 no-silent-loss property-test invariants, privacy-safe errors를 설계했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-04-operators"],
   sources: [
     { id: "java-string-concat-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day02/Ex03.java", usedFor: ["String reference introduction", "numeric versus string +", "left-associative concatenation", "parenthesized sum", "constant/runtime concat"], evidence: "JDK 21에서 Hello·100010·10510·10105·결과 : 204/24를 재현하고 constant/runtime lowering을 조사했습니다." },
     { id: "java-widening-division-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day02/Ex04.java", usedFor: ["int widening", "char numeric value", "Hangul UTF-16 units", "integer division", "cast placement", "mixed floating division"], evidence: "100 widening, a/가/나 codes, 2/5→0/0.0과 2/5.0→0.4를 실행했습니다. 원본 상수식은 compiler가 folded했고 i2l/i2f/l2d conversions를 확인했으며, idiv→i2d와 i2d→ddiv 순서는 별도 variable operand probe로 검증합니다." },
