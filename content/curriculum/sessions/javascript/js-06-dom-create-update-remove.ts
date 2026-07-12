@@ -374,7 +374,7 @@ const session = {
     "validation error·삭제 후 focus·aria-live status와 keyboard/screen-reader 흐름을 검증했다.",
     "read/write batching·대량 목록을 profile하고 performance와 접근성 기준을 함께 기록했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-07-dom-attributes-forms"],
   sources: [
     { id: "web-dom-create-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex03_DOM.html", usedFor: ["DOMContentLoaded", "form click prevention", "createElement li", "createTextNode", "trim/empty/focus", "appendChild", "remove API comments"], evidence: "과목 입력을 li text node로 만들어 목록에 추가하는 원본 흐름을 safe text rendering·form semantics·stable CRUD state의 출발점으로 사용했습니다." },
     { id: "web-dom-remove-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex04_DOM.html", usedFor: ["dynamic item addition", "list click delegation", "tagName target", "confirm deletion", "Element.remove"], evidence: "동적으로 추가된 li를 parent click에서 삭제하는 예제를 closest/contains semantic action·detached reference·focus/undo lifecycle로 확장했습니다." },
