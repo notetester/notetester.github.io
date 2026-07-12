@@ -731,7 +731,7 @@ public class DecimalMoney {
     "type selection을 memory size가 아닌 domain range·precision·failure·interop 기준으로 결정했다.",
     "compile-fail·boundary/property tests와 privacy-safe telemetry를 갖췄다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-03-string-casting"],
   sources: [
     { id: "java-boolean-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day01/Ex03.java", usedFor: ["boolean", "declaration", "first assignment", "reassignment", "declaration initializer", "true/false output"], evidence: "JDK 21.0.11에서 true/false/false를 실행해 변수 lifecycle의 원본 evidence로 사용했습니다." },
     { id: "java-char-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day01/Ex04.java", usedFor: ["char literals", "numeric constants", "constant expressions", "Hangul", "digit glyph", "UTF-16 correction"], evidence: "a/d/가/e/A/0과 code units 97/100/44032/101/65/48을 확인하고 String 혼동을 UTF-16 model로 교정했습니다." },
