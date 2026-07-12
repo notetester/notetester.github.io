@@ -585,7 +585,7 @@ const session = {
     "실제 browser에서 four exact outputs와 network/policy failure를 검증했다.",
     "keyboard·accessibility·performance·privacy-safe observability를 release 기준에 포함했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-02-traversal-manipulation"],
   sources: [
     { id: "web-jquery-intro-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex01_jquery.html", usedFor: ["jQuery definition", "library", "CDN", "ready syntax"], evidence: "주석에 jQuery·CDN·두 ready 형식이 소개되지만 library load와 실행 code는 없고 두 번째 형식은 미완성임을 확인했습니다." },
     { id: "web-jquery-class-event-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex02_jquery.html", usedFor: ["jQuery 4.0.0 load", "ID selector", "body-bottom execution order", "jQuery method chain"], evidence: "head에서 jQuery를 동기 load하고 body elements 뒤 script에서 ID collection을 조작하므로 ready 없이도 조회되는 실제 순서를 사용했습니다." },
