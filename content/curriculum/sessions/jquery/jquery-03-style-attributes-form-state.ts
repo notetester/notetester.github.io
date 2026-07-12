@@ -619,7 +619,7 @@ const session = {
     ":visible heuristic과 current application hidden state를 구분했다.",
     "initial→user→programmatic→reset sequence에서 state invariants와 jQuery/native parity를 검증했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-04-events-validation"],
   sources: [
     { id: "web-jquery-class-css-attr-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex05_jquery.html", usedFor: ["add/remove/toggleClass", "css set/remove", "attr/removeAttr", "implicit iteration", "presentation class"], evidence: "일곱 buttons의 실제 class/css/attr mutations를 semantic forced-state render와 inline ownership 비교의 출발점으로 사용했습니다." },
     { id: "web-jquery-computed-css-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex06_jquery.html", usedFor: ["multiple CSS setter", "computed background-color getter", "this and event target", "text versus HTML interpolation", "comment-only output"], evidence: "computed color를 msg에 읽지만 출력 code가 전부 comment임을 확인하고 computed/source serialization과 safe sink로 보완했습니다." },
