@@ -601,7 +601,7 @@ const session = {
     "batch insertion의 performance와 DOM/focus/accessibility order를 browser에서 검증했다.",
     "native migration에서 DOM API 대응뿐 아니라 jQuery cleanup semantics 차이를 test했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-03-style-attributes-form-state"],
   sources: [
     { id: "web-jquery-find-filter-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex11_jquery.html", usedFor: ["find descendants", "filter current set", "function predicate index", ":even legacy selector", "style subset"], evidence: "find/filter의 실제 실행을 사용하고 index++ 부수효과와 deprecated :even selector를 현재 methods로 교정했습니다." },
     { id: "web-jquery-map-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day10/ex12_jquery.html", usedFor: ["Array.map versus $.map", "null input/return", "member transform", "Array.filter", "$.grep"], evidence: "console comparison 전체를 감사해 null*2=0과 callback-return null dropping, callback order와 native filter 선택을 보강했습니다." },
