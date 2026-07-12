@@ -396,7 +396,7 @@ const session = {
     "modal dialog의 accessible name·initial/contained/return focus·Escape·inert background를 검증했다.",
     "keyboard/accessibility tree/payload/tamper/privacy/state invariant E2E를 통과했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-08-event-loop-timers-callback"],
   sources: [
     { id: "web-dom-checkbox-state-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex06_DOM.html", usedFor: ["checkbox checked property", "button disabled property", "select all", "some/every", "change listeners", "form state"], evidence: "전체 선택과 개별 동의가 checked/disabled current properties를 바꾸는 원본을 current/default, indeterminate, required policy와 FormData state machine으로 확장했습니다." },
     { id: "web-notice-popup-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day08/ex10_notice.html", usedFor: ["notice content", "close button", "window close boundary", "in-page disclosure redesign"], evidence: "별도 window의 공지/닫기 흐름을 popup lifecycle과 분리하고 native button·hidden·aria-expanded 기반 in-page disclosure의 content 근거로 사용했습니다." },
