@@ -264,7 +264,7 @@ const session = {
     "실제 PII·secret·private/backup URL·absolute local path·license 불명 asset을 공개 artifact에서 제거했다.",
     "개념·source·실행 방법·정확한 결과·diagnostic·known limits·다음 학습 link를 문서화했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["css-01-apply-cascade"],
   sources: [
     { id: "web-capstone-recruit-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day02/ex14_test01.html", usedFor: ["모집 heading/text/list", "기간·분야·지원 방법", "mic image alt"], evidence: "방송국 모집 page의 전체 content와 mic.jpg/alt 불일치를 audit해 semantic 모집 안내와 image decision으로 교정했습니다." },
     { id: "web-capstone-blank-form-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day02/ex15_test02.html", usedFor: ["개인정보 blank table", "rowspan·colspan", "지원 양식"], evidence: "종이식 빈 table의 visual intent를 실제 web input task와 분리해 form/label/fieldset capstone으로 재설계했습니다." },
