@@ -385,7 +385,7 @@ const session = {
     "detail/counter/gallery를 state transition과 한 render로 만들고 DOM/ARIA invariant를 유지했다.",
     "duplicate mount·dispose·late event·keyboard/touch/IME·heap/performance 회귀를 검증했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-04-built-in-objects"],
   sources: [
     { id: "web-color-event-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day08/ex02_event.html", usedFor: ["inline onclick", "href placeholder/default action", "id/querySelector/NodeList", "multiple color actions"], evidence: "Red/Green/Blue inline handlers와 `href=#`, single/multiple target style mutation을 semantic button·delegation·state/render 교정의 실제 근거로 사용했습니다." },
     { id: "web-basic-listener-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day08/ex03_event.html", usedFor: ["addEventListener", "named click listener", "anonymous click/mouseover/mouseout", "anchor navigation", "box state"], evidence: "named sayHello와 세 anonymous mouse/click listener를 registration mechanism·input event choice·listener lifecycle 분석에 반영했습니다." },
