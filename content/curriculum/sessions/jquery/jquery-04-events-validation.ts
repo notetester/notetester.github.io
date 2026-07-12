@@ -643,7 +643,7 @@ const session = {
     "requestSubmit/form.submit와 client/server/operational error boundaries를 구분했다.",
     "native migration에서 jQuery delegated currentTarget와 lifecycle 차이를 behavior matrix로 test했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-05-effects-slider"],
   sources: [
     { id: "web-jquery-basic-event-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day11/ex01_jquery.html", usedFor: ["hover image", "password keyup", "address checkbox change", "radio change", "programmatic val", "alert/focus/value deletion"], evidence: "실제 hover/keyup/change handlers를 input modality·non-destructive feedback·current value event 경계의 교정 근거로 사용했습니다." },
     { id: "web-jquery-form-event-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day11/ex02_jquery.html", usedFor: ["keyup/blur/change/one/submit", "username coercion bug", "email/password rule drift", "class overwrite/msg_or typo", "id without name", "always preventDefault"], evidence: "회원가입 전체 code를 pure validator·accessible feedback·FormData/server boundary의 중심 audit로 사용했습니다." },
