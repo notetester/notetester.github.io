@@ -391,7 +391,7 @@ const session = {
     "unhandled rejection을 final safety telemetry로만 사용하고 secret/user data를 redaction했다.",
     "fake dependencies로 모든 settlement/race를 arbitrary sleep 없이 검증했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-10-fetch-json-http"],
   sources: [
     { id: "web-promise-basic-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex10_promise.html", usedFor: ["Promise definition comments", "constructor", "resolve/reject", "success boolean", "then/catch", "string messages", "sibling branches"], evidence: "success boolean에 따라 resolve/reject하고 then/catch를 별도로 등록하는 원본을 state/fate·Error reason·returned-chain catch와 microtask 모델로 확장했습니다." },
     { id: "web-promise-input-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex11_promise.html", usedFor: ["timer inside Promise", "delayed prompt", "input success/failure", "then-catch-finally chain", "common cleanup message"], evidence: "2초 뒤 prompt 값을 검사하는 원본을 injected input·validation Error·AbortSignal·timeout·finally cleanup과 deterministic test pipeline으로 확장했습니다." },
