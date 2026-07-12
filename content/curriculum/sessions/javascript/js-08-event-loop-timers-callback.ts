@@ -389,7 +389,7 @@ const session = {
     "fake scheduler로 ticks/error/restart/dispose를 arbitrary sleep 없이 검증했다.",
     "production telemetry에 user/news/raw DOM content 없이 delay/visibility/cancel state만 남겼다.",
   ],
-  nextSessions: [],
+  nextSessions: ["js-09-promise-state-error"],
   sources: [
     { id: "web-sync-async-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex07_callback.html", usedFor: ["synchronous four logs", "two setTimeout callbacks", "1 second delay", "first/third immediate order", "sync/async comments"], evidence: "첫째·셋째가 현재 stack에서 먼저 실행되고 둘째·넷째가 timer tasks로 이어지는 원본을 task/microtask/event-loop exact trace로 확장했습니다." },
     { id: "web-timer-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex08_callback.html", usedFor: ["callback definition", "setTimeout", "setInterval", "timer handle", "three-tick count", "clearInterval", "current time logging"], evidence: "세 번 뒤 interval handle을 clear하는 원본을 minimum delay·monotonic time·lifecycle/error/fake-clock 검증으로 보강했습니다." },
