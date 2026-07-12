@@ -555,7 +555,7 @@ public class CommandLineArgs {
     "compile→locate→load/link→initialize→execute decision tree를 주요 오류에 적용했다.",
     "clean reproducible build와 artifact provenance·privacy-safe diagnostic logging을 검증했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-02-primitives-variables"],
   sources: [
     { id: "java-original-hello-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day01/Ex01_main.java", usedFor: ["package declaration", "public class", "classic main", "println", "Hello output", "compile/run"], evidence: "원본을 JDK 21.0.11로 clean output에 compile해 package class path, stdout와 class major를 확인했습니다." },
     { id: "java-original-print-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day01/Ex02.java", usedFor: ["print", "empty println", "println", "UTF-8 Korean source", "output order", "privacy minimization"], evidence: "원본의 출력 API·한글 evidence는 보존하고 public example에서는 개인 연락처를 가상 학습자 data로 대체했습니다." },
