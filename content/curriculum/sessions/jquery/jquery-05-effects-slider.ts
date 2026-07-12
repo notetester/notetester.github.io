@@ -677,7 +677,7 @@ const session = {
     "images와 thumbnail buttons에 item-specific accessible names/current state를 제공했다.",
     "fake-clock controller tests와 real browser motion/accessibility/performance E2E를 분리했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-06-ajax-modern-migration"],
   sources: [
     { id: "web-jquery-show-hide-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day11/ex04_jquery.html", usedFor: ["hide/show/toggle", "1200ms duration", "dimensions/opacity", "button controls", "missing cancellation"], evidence: "bear image의 세 basic effects를 final visibility와 layout/focus contract로 확장했습니다." },
     { id: "web-jquery-fade-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day11/ex05_jquery.html", usedFor: ["fadeIn/fadeOut/fadeToggle", "opacity", "display final state", "button controls"], evidence: "opacity-centered effect family와 intermediate interaction state를 비교하는 근거입니다." },
