@@ -372,7 +372,7 @@ const session = {
     "DTD/entity/server parser settings와 size/depth/node/memory limits를 threat model에 포함했다.",
     "malformed/namespace/schema/missing/duplicate/malicious/large/CORS/abort fixtures를 통과했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["jquery-01-ready-selectors"],
   sources: [
     { id: "web-weather-fetch-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex14_fetch.html", usedFor: ["weather XML fetch", "status/text", "DOMParser application/xml", "parsererror", "local query", "ta/desc attributes", "innerHTML table"], evidence: "날씨 XML fetch→parse→table 전체 원본을 namespace/schema/safe DOM/error pipeline capstone의 중심 evidence로 사용했습니다." },
     { id: "web-makeup-json-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex15_fetch.html", usedFor: ["external JSON fetch", "double response.json", "top5", "product colors", "Error status bug", "innerHTML/style injection", "XML/JSON comparison"], evidence: "같은 단원의 JSON page를 body double-consumption·Error constructor·external values audit와 common view-model adapter 비교에 사용했습니다." },
