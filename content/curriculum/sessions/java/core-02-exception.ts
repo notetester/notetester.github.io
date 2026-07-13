@@ -1253,7 +1253,7 @@ public class ExceptionCompilerContracts {
     "OS temp GUID direct-child parent boundary와 reverse/post-delete cleanup을 적용했다.",
     "원본8·JLS SE21·Java SE21 APIs·OpenJDK21·운영 retry/security guidance provenance를 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-03-finally-throws"],
   sources: [
     { id: "java-class08-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class08/Ex01_Exception.java", usedFor: ["array range failure", "try abrupt completion", "specific catch", "post-catch continuation", "exact8 output"], evidence: "length5 array에 i<=5 loop를 적용해0~4 뒤 index5 assignment가 실패하고 exception toString·catch marker·outer completion까지8행임을 실행했습니다." },
     { id: "java-class08-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class08/Ex02_Exception.java", usedFor: ["checked FileNotFound catch", "RuntimeException translation", "cause chain", "uncaught exit1", "resource debt"], evidence: "empty working directory에서 FileInputStream a.txt가 FileNotFoundException을 던지고 catch가 RuntimeException(cause)로 다시 던져 source frames13/11과 exit1을 만드는 흐름을 확인했습니다." },
