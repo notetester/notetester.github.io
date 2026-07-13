@@ -313,7 +313,7 @@ const session = {
             { change: "nextNews 안에서 `state.index += 1`로 입력 state를 mutate합니다.", prediction: "caller의 이전 state snapshot도 바뀌고 replay/debug가 어려워집니다.", result: "새 state 반환은 history와 test를 단순화합니다." },
             { change: "4회 loop를 news.length*2회로 바꿉니다.", prediction: "0,1,2 sequence가 정확히 두 번 반복됩니다.", result: "loop invariant와 transition invariant를 함께 검증합니다." },
           ],
-          sourceRefs: ["web-news-callback-source", "ecma-declarations", "ecma-functions"],
+          sourceRefs: ["web-news-callback-source", "ecma-declarations", "ecma-functions", "whatwg-event-handlers"],
         },
       ],
       diagnostics: [
@@ -412,3 +412,71 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 320;
+expertSession.chapters.push({
+  id: "validation-result-debugging-complexity",
+  title: "외부 값을 검증된 domain 값으로 바꾸고 실패·디버깅·복잡도를 계약화합니다",
+  lead: "중간부터 이 절을 읽어도 되도록 입력 문자열이 신뢰할 수 있는 숫자가 되기까지의 단계를 다시 정의합니다. 변환 성공과 실패를 구분하고, 함수의 정상 경로·오류 경로·성능을 독립적으로 테스트하는 것이 작은 프로그램을 전문가 수준 코드로 키우는 출발점입니다.",
+  explanations: [
+    "브라우저 input.value, URLSearchParams, dataset, JSON, CLI 인수는 출처가 달라도 신뢰 경계 바깥의 값입니다. 먼저 lexical 형식이 domain 문법과 맞는지 검사하고, 그다음 Number 같은 변환을 수행한 뒤 Number.isSafeInteger·범위·관계 invariant를 검증합니다. `Number('') === 0`처럼 JavaScript의 편리한 coercion이 제품 의미와 다를 수 있으므로 변환 전에 빈 값 정책을 정합니다.",
+    "함수가 성공 값 또는 실패 정보를 반환해야 할 때 `{ ok: true, value }`와 `{ ok: false, code }`처럼 discriminant를 가진 result object를 사용할 수 있습니다. 호출자는 truthiness로 추측하지 않고 ok를 검사하며 0 같은 유효한 falsy 값도 잃지 않습니다. 복구할 수 없는 프로그래밍 오류와 시스템 실패는 Error를 throw하고, 사용자가 고칠 수 있는 검증 실패는 구조화 결과로 모으는 혼합이 실용적입니다.",
+    "함수는 입력 domain, 반환 shape, 발생 가능한 Error, 외부 상태 변경 여부를 계약으로 가져야 합니다. 모든 분기가 같은 shape를 반환하면 caller와 테스트가 단순해집니다. 일부 경로가 undefined로 끝나거나 오류 문자열·숫자·객체를 제각각 반환하면 다음 코드가 다시 type 추측을 해야 합니다.",
+    "디버깅은 console.log를 무작정 늘리는 일이 아니라 경계에서 관찰 가능한 사실을 좁히는 과정입니다. 최소 입력, 예상 결과, 실제 결과, 최초로 invariant가 깨지는 단계, 함수 호출 순서를 기록합니다. DevTools breakpoint와 Scope 패널로 binding을 보고, watch expression으로 변환 전 raw와 변환 후 value를 동시에 비교합니다. 개인정보·token·전체 DOM은 로그하지 않습니다.",
+    "테스트는 대표값 하나가 아니라 equivalence class와 경계를 선택합니다. 빈 값, whitespace, 선행 0, 음수, 최대 안전 정수, 범위 바로 안팎, 예상하지 않은 type을 포함합니다. Node assert나 브라우저 테스트 runner로 출력 문구보다 구조화 결과를 검증하고, UI 표시는 별도 테스트로 분리합니다.",
+    "성능은 입력 크기 n에 따라 생각합니다. 배열을 한 번 도는 검증은 보통 O(n), loop 안에서 매번 배열 전체를 다시 찾으면 O(n²)가 될 수 있습니다. 작은 UI에서는 가독성이 우선이지만, 실제 느림을 Performance 패널과 반복 횟수로 측정한 뒤 Map index·한 번의 pass·batching을 선택합니다. 미세 benchmark는 JIT warm-up과 host 환경 차이를 함께 기록합니다.",
+    "language와 host 경계를 유지합니다. 함수·값·control flow는 ECMAScript가 정의하지만 클릭 시 함수 reference를 호출하는 event handler, 화면 갱신, timer는 HTML/DOM host가 정의합니다. Node에서 순수 transition을 검증하고 브라우저에서는 handler가 정확한 함수를 전달하는지만 얇게 통합 테스트하면 실패 원인을 좁힐 수 있습니다.",
+  ],
+  concepts: [
+    { term: "validation pipeline", definition: "외부 raw 값을 형식 검사→변환→domain invariant 검사 순서로 신뢰 가능한 값 또는 명시 실패로 바꾸는 경계입니다.", detail: ["coercion 전에 빈 값과 문법 정책을 결정합니다.", "변환 성공만으로 domain 유효성이 증명되지는 않습니다."] },
+    { term: "discriminated result", definition: "ok 같은 고정 tag로 성공과 실패 variant를 구분하는 object 반환 계약입니다.", detail: ["성공은 value, 실패는 안정적 error code를 가집니다.", "0·빈 문자열 같은 유효한 값도 truthiness에 잃지 않습니다."] },
+    { term: "equivalence class", definition: "같은 동작을 기대하는 입력 집합을 대표값 하나로 묶어 테스트 수를 통제하는 방법입니다.", detail: ["각 class와 경계 바로 안팎을 고릅니다.", "형식·범위·type class를 분리합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "tagged-quantity-validation",
+      title: "문자열 수량을 tagged result로 검증",
+      language: "javascript",
+      filename: "quantity-result.mjs",
+      purpose: "암묵 변환 없이 lexical 형식과 안전 정수 범위를 분리하고 모든 입력에 동일한 성공·실패 shape를 반환합니다.",
+      code: "function parseQuantity(raw) {\n  const text = String(raw).trim();\n  if (!/^(0|[1-9]\\d*)$/.test(text)) {\n    return { ok: false, code: 'FORMAT' };\n  }\n\n  const value = Number(text);\n  if (!Number.isSafeInteger(value)) {\n    return { ok: false, code: 'RANGE' };\n  }\n  return { ok: true, value };\n}\n\nfor (const raw of ['3', ' 03 ', '9007199254740992', '-1', '']) {\n  console.log(JSON.stringify(parseQuantity(raw)));\n}",
+      walkthrough: [
+        { lines: "1-5", explanation: "모든 raw를 문자열로 정규화한 뒤 0 또는 선행 0 없는 10진 정수라는 lexical grammar를 검사합니다." },
+        { lines: "7-11", explanation: "형식 통과 후에만 Number로 변환하고 안전 정수 범위를 검사해 성공 result를 만듭니다." },
+        { lines: "14-16", explanation: "정상, 선행 0, 안전 범위 초과, 음수, 빈 값 class를 고정 순서로 실행합니다." },
+      ],
+      run: { environment: ["Node.js 18 이상", "quantity-result.mjs를 UTF-8로 저장"], command: "node quantity-result.mjs" },
+      output: { value: "{\"ok\":true,\"value\":3}\n{\"ok\":false,\"code\":\"FORMAT\"}\n{\"ok\":false,\"code\":\"RANGE\"}\n{\"ok\":false,\"code\":\"FORMAT\"}\n{\"ok\":false,\"code\":\"FORMAT\"}", explanation: ["문자열 '3'만 성공하고 값 3을 보존합니다.", "03·음수·빈 값은 제품 문법 FORMAT 오류입니다.", "정수로 변환 가능한 큰 값도 안전 정수 범위를 벗어나 RANGE 오류입니다."] },
+      experiments: [
+        { change: "정규식 검사를 제거하고 Number(raw)만 사용합니다.", prediction: "빈 문자열이 0으로, whitespace가 0으로 변환되어 생략 의미와 수량 0이 충돌합니다.", result: "lexical validation과 numeric conversion을 분리해야 함을 확인합니다." },
+        { change: "성공 여부를 `if (result.value)`로 검사합니다.", prediction: "유효한 수량 0이 실패처럼 처리됩니다.", result: "result.ok discriminant를 사용해야 falsy domain 값을 보존합니다." },
+      ],
+      sourceRefs: ["ecma-data-types", "ecma-functions", "ecma-toboolean", "ecma-equality"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "빈 입력이 수량 0으로 저장된다.", likelyCause: "Number('') 또는 Number(whitespace)의 0 변환을 입력 생략과 같은 의미로 받아들였습니다.", checks: ["raw의 JSON.stringify 결과를 개발용 fixture에서 확인합니다.", "형식 검사와 Number 변환 순서를 봅니다.", "빈 값·0·'0'의 제품 의미를 표로 만듭니다."], fix: "변환 전에 빈 값과 허용 lexical grammar를 검증하고 0은 명시된 경우에만 domain 값으로 만듭니다.", prevention: "빈 값·whitespace·0·선행 0을 경계 테스트에 고정합니다." },
+    { symptom: "데이터가 커질수록 필터 화면이 급격히 느려진다.", likelyCause: "한 loop 안에서 find·filter·includes로 전체 배열을 반복 탐색해 O(n²) 경로가 됐습니다.", checks: ["Performance 패널에서 callback 호출 횟수를 봅니다.", "입력 크기를 2배로 늘려 시간 증가 비율을 비교합니다.", "lookup key가 안정적이고 고유한지 확인합니다."], fix: "한 번의 pass로 결과를 만들거나 Map index를 사전 구성하고 DOM 갱신은 후속 세션의 batching으로 분리합니다.", prevention: "복잡도 설명과 실제 profile evidence를 변경 리뷰에 함께 남깁니다." },
+  ],
+  comparisons: [
+    { title: "검증 실패를 어떻게 전달할까요?", options: [
+      { name: "tagged result", chooseWhen: "사용자가 고칠 수 있는 예상 실패를 여러 건 모으거나 UI에 안정적 code로 표시할 때", avoidWhen: "메모리 손상이나 invariant 붕괴처럼 호출자가 정상 흐름으로 복구할 수 없을 때", tradeoffs: ["호출자가 분기를 명시합니다.", "batch 오류 수집이 쉽습니다.", "모든 caller가 ok를 확인해야 합니다."] },
+      { name: "throw Error", chooseWhen: "정상 값을 만들 수 없고 현재 함수가 복구 책임을 가지지 않을 때", avoidWhen: "매 keystroke 검증처럼 실패가 일상적이며 여러 오류를 함께 보여 줘야 할 때", tradeoffs: ["호출 stack을 따라 전파됩니다.", "구체 Error type과 cause를 보존할 수 있습니다.", "넓은 catch는 버그를 숨길 수 있습니다."] },
+    ] },
+  ],
+  expertNotes: ["정규식 하나가 전체 domain validation을 대체하지 않습니다. 형식과 숫자 안전 범위, 업무 상한은 서로 다른 오류 code로 유지합니다.", "성능 개선 전에는 최소 fixture가 아니라 실제 크기와 비슷한 데이터를 profile하고, 측정 코드가 production 개인정보를 남기지 않게 합니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "외부 문자열을 Number로 바로 바꾸기 전에 무엇을 정해야 하나요?", answer: "빈 값·공백·부호·선행 0 등 허용 lexical grammar를 먼저 정하고, 변환 뒤 안전 범위와 업무 invariant를 별도로 검사합니다." },
+  { question: "tagged result의 ok가 필요한 이유는 무엇인가요?", answer: "성공 값 0·빈 문자열·false를 truthiness로 실패와 혼동하지 않고 성공·실패 variant를 안정적으로 구분하기 위해서입니다." },
+  { question: "성능 문제가 보이면 즉시 Map으로 바꾸면 되나요?", answer: "아닙니다. 먼저 입력 크기별 profile과 호출 횟수로 병목을 확인하고, key 안정성·메모리 비용을 포함해 자료구조를 선택합니다." },
+);
+expertSession.completionChecklist.push(
+  "외부 raw 값을 형식 검사→변환→domain invariant 순서로 검증할 수 있다.",
+  "성공과 실패를 일관된 discriminated result shape로 반환할 수 있다.",
+  "빈 값·falsy 값·안전 정수 경계를 포함한 equivalence-class 테스트를 작성할 수 있다.",
+  "language 계산과 HTML/DOM host callback 경계를 분리해 디버깅할 수 있다.",
+);

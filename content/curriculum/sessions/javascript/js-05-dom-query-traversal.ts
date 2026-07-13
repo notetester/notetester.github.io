@@ -361,3 +361,124 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 380;
+expertSession.chapters.push(
+  {
+    id: "treewalker-nodeiterator-range-traversal",
+    title: "TreeWalker·NodeIterator로 큰 subtree를 type·filter 계약에 따라 순회합니다",
+    lead: "querySelectorAll 하나로 충분하지 않은 순차 문서 처리에서는 DOM이 제공하는 traversal cursor를 사용할 수 있습니다. root, whatToShow, NodeFilter, 현재 위치, mutation 중 의미를 이해해야 text와 element를 빠뜨리거나 같은 node를 중복 처리하지 않습니다.",
+    explanations: [
+      "TreeWalker와 NodeIterator는 root 아래 node를 document order로 순회하며 whatToShow bitmask와 filter callback으로 노출 대상을 제한합니다. querySelectorAll이 selector와 맞는 Element의 static snapshot을 반환하는 데 비해 traversal API는 Text·Comment 등 Element가 아닌 Node type도 다룰 수 있습니다.",
+      "NodeFilter.FILTER_ACCEPT는 node를 결과로 포함하고, FILTER_SKIP은 node 자체는 건너뛰되 descendant를 계속 검사합니다. TreeWalker에서 FILTER_REJECT는 해당 subtree까지 거부할 수 있으므로 숨김 container를 통째로 제외할 때 유용하지만 NodeIterator의 해석 차이를 공식 문서와 확인해야 합니다.",
+      "TreeWalker.currentNode는 cursor 상태입니다. nextNode가 null이면 끝이며 같은 walker를 재사용하면 처음부터 시작하지 않습니다. 함수가 walker를 외부에 반환하면 누가 cursor를 소비하는지 ownership을 문서화하고 여러 pass가 필요하면 새 walker를 만듭니다.",
+      "순회 중 subtree를 변경하면 traversal reference가 DOM mutation 알고리즘에 따라 조정될 수 있지만 application 의도까지 보장하지 않습니다. 대량 제거·이동은 먼저 대상 snapshot을 수집하고 두 번째 단계에서 mutate하면 누락과 중복을 줄일 수 있습니다.",
+      "Text node의 textContent에는 whitespace와 숨김 text도 포함될 수 있습니다. 사용자에게 실제 보이는 문자열이 필요하다고 innerText를 반복 읽으면 style/layout 계산 비용이 생길 수 있습니다. 데이터 추출은 semantic element·attribute를 우선하고 표시 여부 요구를 별도 정의합니다.",
+      "Range는 두 boundary point 사이 DOM 구간을 표현하고 selection·부분 clone/delete에 사용됩니다. 사용자 선택과 편집기를 다룰 때 offset 단위가 container node type에 따라 child index 또는 text code unit이 될 수 있음을 이해해야 합니다. 외부 HTML을 Range.createContextualFragment에 넣는 것은 여전히 injection sink 검토가 필요합니다.",
+      "큰 문서 최적화는 API 이름보다 실제 방문 node 수와 callback 비용으로 측정합니다. DevTools Performance에서 filter 호출 수·style/layout을 보고, root를 가장 작은 stable subtree로 제한하며 한 frame에 긴 순회를 나누는 경우 cancel·lifecycle도 설계합니다.",
+    ],
+    concepts: [
+      { term: "TreeWalker", definition: "root 아래 DOM tree를 document order로 이동하며 whatToShow와 filter로 노출 node를 제어하는 상태 있는 traversal cursor입니다.", detail: ["currentNode 상태를 가집니다.", "firstChild·nextSibling·nextNode 등 방향 이동을 제공합니다."] },
+      { term: "NodeFilter", definition: "traversal 대상 node를 ACCEPT·SKIP·REJECT로 분류하는 callback 계약입니다.", detail: ["SKIP은 descendant를 계속 볼 수 있습니다.", "REJECT의 subtree 의미는 traversal type에 맞춰 확인합니다."] },
+      { term: "boundary point", definition: "Range의 시작·끝을 container node와 offset 쌍으로 나타내는 DOM 위치입니다.", detail: ["Text에서는 code unit offset입니다.", "Element에서는 child node 사이 index입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "treewalker-heading-order",
+        title: "TreeWalker로 article의 h2만 document order 추출",
+        language: "html",
+        filename: "treewalker-headings.html",
+        purpose: "self-contained DOM에서 SHOW_ELEMENT와 NodeFilter를 사용해 원하는 heading만 방문하고 cursor 고갈을 exact 출력으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>TreeWalker</title></head>\n<body>\n  <article id=\"lesson\">\n    <h1>DOM 순회</h1>\n    <section><h2>소개</h2><p>트리 모델</p></section>\n    <section><h2>실습</h2><p>필터 모델</p></section>\n  </article>\n  <pre id=\"result\"></pre>\n  <script type=\"module\">\n    const root = document.querySelector('#lesson');\n    const walker = document.createTreeWalker(\n      root,\n      NodeFilter.SHOW_ELEMENT,\n      (node) => node.matches('h2')\n        ? NodeFilter.FILTER_ACCEPT\n        : NodeFilter.FILTER_SKIP,\n    );\n    const headings = [];\n    for (let node = walker.nextNode(); node; node = walker.nextNode()) {\n      headings.push(node.textContent.trim());\n    }\n    const output = headings.join('|');\n    document.querySelector('#result').textContent = output;\n    console.log(output);\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-10", explanation: "h1과 두 section/h2/p가 있는 작은 article과 결과 영역을 구성합니다." },
+          { lines: "11-19", explanation: "article을 root로 한 TreeWalker가 Element만 보고 h2는 ACCEPT, 나머지 element는 SKIP해 descendant 탐색을 계속합니다." },
+          { lines: "20-23", explanation: "상태 있는 walker를 null까지 한 번 소비해 h2 textContent를 document order로 모읍니다." },
+          { lines: "24-26", explanation: "결과를 화면과 console에 같은 문자열로 기록합니다." },
+          { lines: "27-29", explanation: "script와 문서를 닫습니다. DevTools breakpoint에서 nextNode마다 currentNode를 관찰할 수 있습니다." },
+        ],
+        run: { environment: ["현대 브라우저", "treewalker-headings.html을 UTF-8로 저장", "DevTools Console을 엽니다"], command: "브라우저에서 treewalker-headings.html을 열어 pre와 Console을 비교" },
+        output: { value: "소개|실습", explanation: ["h1과 p는 결과에서 빠지지만 FILTER_SKIP이라 그 descendant traversal은 계속됩니다.", "두 h2가 document order로 한 번씩 수집됩니다.", "walker는 마지막 nextNode에서 null로 고갈됩니다."] },
+        experiments: [
+          { change: "h2가 아닌 section에서 FILTER_REJECT를 반환합니다.", prediction: "section subtree 전체가 제외되어 그 안 h2도 방문하지 못합니다.", result: "SKIP과 REJECT의 subtree 차이를 확인합니다." },
+          { change: "순회 loop 안에서 현재 section을 remove합니다.", prediction: "cursor 조정은 표준에 따르지만 application 처리 목록이 이해하기 어려워집니다.", result: "대상 snapshot 수집과 mutation 단계를 분리하는 이유를 확인합니다." },
+        ],
+        sourceRefs: ["web-dom-text-source", "dom-standard", "dom-traversal-standard-05", "html-tree-construction"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "FILTER_SKIP을 썼더니 예상한 descendant까지 사라졌다고 생각한다.", likelyCause: "TreeWalker filter 반환 의미를 혼동하거나 실제로 FILTER_REJECT를 반환했습니다.", checks: ["acceptNode 반환값을 nodeName과 함께 합성 문서에서 기록합니다.", "whatToShow가 filter 전에 node type을 제외하는지 확인합니다.", "TreeWalker와 NodeIterator 중 어느 API인지 봅니다."], fix: "node 자체만 제외하고 descendant를 보려면 TreeWalker에서 FILTER_SKIP을, subtree 전체 제외는 FILTER_REJECT를 명시합니다.", prevention: "중첩 3단계 fixture로 ACCEPT·SKIP·REJECT 결과를 golden test합니다." },
+      { symptom: "DOM 순회 중 삭제하면 일부 node가 누락되거나 두 번 처리된다.", likelyCause: "상태 있는 traversal cursor와 같은 tree를 한 loop에서 동시에 mutate해 처리 대상 계약이 불분명합니다.", checks: ["순회와 mutation이 같은 callback에 있는지 확인합니다.", "삭제 전 대상 목록을 static array로 기록해 비교합니다.", "currentNode와 다음 node를 breakpoint로 추적합니다."], fix: "첫 pass에서 node reference/id snapshot을 모으고 두 번째 pass에서 현재 연결 상태를 확인한 뒤 mutate합니다.", prevention: "query phase와 mutation phase를 분리하고 중간 외부 mutation 정책을 문서화합니다." },
+    ],
+    expertNotes: ["TreeWalker filter는 traversal 도중 동기 호출되므로 filter 안에서 layout read·mutation·비동기 side effect를 피합니다.", "Range와 Selection은 사용자 편집기의 보안·접근성·undo 모델까지 영향을 주므로 단순 text highlighting을 넘어가면 별도 원자 주제로 다룹니다."],
+  },
+  {
+    id: "selector-boundary-observability-accessibility-performance",
+    title: "selector 입력을 escape하고 root·Shadow DOM·접근성·성능 관찰 경계를 명시합니다",
+    lead: "querySelector는 편리하지만 selector 문자열 자체가 작은 언어입니다. 외부 id를 그대로 보간하면 SyntaxError나 selector injection이 생길 수 있고, document 전역 query는 component 경계와 중복 id 문제를 숨깁니다.",
+    explanations: [
+      "외부 문자열이 CSS identifier 일부로 들어가면 `CSS.escape(value)`로 identifier 문법에 맞게 serialize합니다. 이것은 HTML을 sanitize하는 API가 아니며 innerHTML XSS 방지와 다른 문제입니다. 복잡한 selector 전체를 사용자에게 받지 말고 application이 selector 구조를 소유하고 값 조각만 escape합니다.",
+      "`getElementById`는 Document에서 정확한 id string을 찾으므로 단일 id 조회에는 selector escape가 필요 없습니다. component root 내부로 제한해야 하면 root.querySelector와 escaped id를 사용하되 HTML 문서의 id는 원칙상 고유해야 합니다. data key가 더 적합하면 dataset value와 Map을 연결할 수 있습니다.",
+      "`:scope`는 현재 query root를 기준으로 직접 child selector를 표현할 때 유용합니다. root 없는 descendant selector는 nested component까지 과도하게 잡을 수 있습니다. component public element를 한 번 query하고 내부 세부 markup에 대한 selector 결합을 줄입니다.",
+      "ShadowRoot는 별도 tree root이므로 document.querySelector가 shadow 내부를 관통하지 않습니다. component가 shadowRoot reference와 query API를 제공하거나 공개 part/slot contract를 사용합니다. closed shadow root를 디버깅 우회로 접근하려 하지 않습니다.",
+      "DOM node를 cache하면 query 비용은 줄지만 rerender·remove 뒤 detached reference가 stale해질 수 있습니다. stable root lifetime 안에서만 cache하고, mutation 후 `isConnected`·root.contains를 검증하거나 render 단계에서 reference를 갱신합니다. WeakMap은 metadata lifetime에 도움되지만 stale business state를 자동 갱신하지 않습니다.",
+      "selector 성능은 보통 작은 component에서는 병목이 아닙니다. document 전체에서 scroll마다 반복 query하거나 selector 뒤 layout read/write를 섞는 실제 trace를 측정합니다. 한 event에서 같은 result를 여러 번 쓸 때 local cache하고, 오래 사는 global cache는 memory·stale 비용을 따집니다.",
+      "DOM tree와 accessibility tree는 동일하지 않습니다. query 결과가 존재해도 hidden·inert·aria-hidden·CSS 때문에 사용자에게 노출되지 않을 수 있고, accessible name은 textContent와 다를 수 있습니다. 접근성 검증은 browser Accessibility pane과 keyboard navigation으로 별도 수행합니다.",
+      "테스트는 0개·1개·여러 개 반환, invalid selector, escaped special id, root 밖 element, dynamic insertion/removal, shadow boundary를 포함합니다. browser 전용 API는 최소 HTML fixture가 실제 parser가 만든 tree를 사용하게 하고 expected output을 pre와 console에 동시에 남깁니다.",
+    ],
+    concepts: [
+      { term: "selector injection", definition: "외부 문자열이 selector grammar로 해석되어 의도하지 않은 element 집합을 선택하거나 SyntaxError를 만드는 문제입니다.", detail: ["CSS.escape는 identifier 조각을 serialize합니다.", "HTML injection과 별도 sink입니다."] },
+      { term: "query root", definition: "selector matching을 시작하고 결과 범위를 제한하는 Document·Element·DocumentFragment·ShadowRoot입니다.", detail: ["작은 stable root가 component 결합을 줄입니다.", "Shadow DOM boundary를 자동 관통하지 않습니다."] },
+      { term: "stale node reference", definition: "이전에 query한 node가 remove·rerender 뒤 현재 UI tree를 더 이상 대표하지 않지만 코드가 계속 보유한 reference입니다.", detail: ["isConnected와 root.contains로 진단합니다.", "listener·closure가 memory를 유지할 수 있습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "css-escape-root-scope",
+        title: "특수문자 id를 CSS.escape하고 component root를 제한",
+        language: "html",
+        filename: "selector-boundary.html",
+        purpose: "colon이 있는 id를 안전하게 selector에 넣고 invalid raw selector, root 밖 결과를 self-contained browser fixture로 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>selector boundary</title></head>\n<body>\n  <section id=\"scope\"><p id=\"lesson:1\">안쪽</p></section>\n  <p id=\"outside\">바깥</p>\n  <pre id=\"result\"></pre>\n  <script type=\"module\">\n    const scope = document.querySelector('#scope');\n    const rawId = 'lesson:1';\n    const byId = document.getElementById(rawId);\n    const escaped = scope.querySelector(`#${CSS.escape(rawId)}`);\n    const lines = [`same=${byId === escaped}`];\n\n    try {\n      scope.querySelector(`#${rawId}`);\n    } catch (error) {\n      lines.push(`unsafe=${error.name}`);\n    }\n    lines.push(`outside=${scope.querySelector('#outside')}`);\n    const output = lines.join('\\n');\n    document.querySelector('#result').textContent = output;\n    console.log(output);\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "colon이 포함된 id의 내부 element, root 밖 element, 결과 영역을 만듭니다." },
+          { lines: "8-13", explanation: "getElementById exact string 결과와 CSS.escape를 사용한 root-scoped selector 결과의 identity를 비교합니다." },
+          { lines: "15-20", explanation: "escape하지 않은 raw id selector의 SyntaxError와 root 밖 id가 선택되지 않는 결과를 수집합니다." },
+          { lines: "21-24", explanation: "세 관찰값을 화면과 console에 같은 순서로 기록합니다." },
+          { lines: "25-26", explanation: "script와 문서를 닫습니다. Accessibility pane에서 두 p의 tree 노출도 별도로 확인합니다." },
+        ],
+        run: { environment: ["CSS.escape를 지원하는 현대 브라우저", "selector-boundary.html을 UTF-8로 저장", "DevTools Console과 Accessibility pane을 엽니다"], command: "브라우저에서 selector-boundary.html을 열어 pre와 Console을 비교" },
+        output: { value: "same=true\nunsafe=SyntaxError\noutside=null", explanation: ["두 안전한 API는 같은 내부 p object를 반환합니다.", "raw colon은 selector grammar에서 pseudo-class처럼 해석되어 SyntaxError입니다.", "scope root query는 document의 outside element를 반환하지 않습니다."] },
+        experiments: [
+          { change: "scope를 document로 바꿉니다.", prediction: "#outside query도 element를 반환해 component boundary가 넓어집니다.", result: "가장 작은 query root를 선택하는 이유를 확인합니다." },
+          { change: "escaped.textContent를 untrusted string으로 설정합니다.", prediction: "문자열은 text로 표시되고 HTML로 실행되지 않습니다.", result: "selector escape와 safe text sink가 서로 다른 보안 단계를 담당함을 확인합니다." },
+        ],
+        sourceRefs: ["dom-standard", "selectors-4", "cssom-escape-05", "wai-keyboard-interface-05"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "사용자 id에 colon·space가 포함되면 querySelector가 SyntaxError다.", likelyCause: "외부 값을 CSS selector identifier에 escape 없이 보간했습니다.", checks: ["selector 전체와 raw 값 경계를 분리합니다.", "getElementById로 충분한지 확인합니다.", "CSS.escape 적용 전후를 특수문자 fixture로 비교합니다."], fix: "id exact 조회는 getElementById를 사용하고 selector identifier 조각에는 CSS.escape를 적용합니다.", prevention: "공백·colon·quote·backslash·leading digit selector corpus를 테스트합니다." },
+      { symptom: "rerender 뒤 query cache가 이전 detached element를 수정한다.", likelyCause: "오래 사는 closure/store가 remove된 node reference를 보유하고 현재 tree와 identity가 달라졌습니다.", checks: ["node.isConnected와 root.contains(node)를 확인합니다.", "render 전후 node identity를 비교합니다.", "heap snapshot retaining path에서 cache owner를 찾습니다."], fix: "stable lifetime 안에서만 cache하고 render가 새 node를 만들면 reference와 listener를 함께 갱신합니다.", prevention: "remove/rerender 뒤 stale reference가 current UI를 변경하지 않는 lifecycle 테스트를 둡니다." },
+    ],
+    expertNotes: ["CSS.escape는 selector identifier serialization 도구이지 URL encoding·HTML escaping·JavaScript string escaping을 대신하지 않습니다.", "MutationObserver는 변경 알림을 microtask checkpoint에 전달하므로 동기 mutation 직후 observer callback이 이미 실행됐다고 가정하지 않습니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "TreeWalker의 FILTER_SKIP과 FILTER_REJECT는 어떻게 다른가요?", answer: "SKIP은 현재 node를 결과에서 빼도 descendant traversal을 계속할 수 있고, TreeWalker의 REJECT는 해당 subtree까지 제외할 수 있습니다." },
+  { question: "CSS.escape는 XSS sanitizer인가요?", answer: "아닙니다. selector의 identifier 조각을 CSS 문법에 맞게 serialize할 뿐이며 HTML injection sink에는 textContent나 검증된 sanitizer/Trusted Types 정책이 필요합니다." },
+  { question: "document.querySelector가 shadow root 내부를 찾지 못하는 이유는 무엇인가요?", answer: "ShadowRoot가 별도 tree/query root 경계를 만들며 document selector가 그 boundary를 자동 관통하지 않기 때문입니다." },
+  { question: "DOM query 결과를 오래 cache할 때 확인할 것은 무엇인가요?", answer: "root lifetime, rerender의 node identity 교체, isConnected/root.contains, listener cleanup, detached node retaining path와 실제 profile을 확인합니다." },
+);
+expertSession.completionChecklist.push(
+  "TreeWalker·NodeIterator의 root·whatToShow·filter·cursor 계약을 설명할 수 있다.",
+  "순회 대상 snapshot과 mutation 단계를 분리해 누락·중복을 방지할 수 있다.",
+  "외부 identifier를 CSS.escape하고 가장 작은 query root 안에서 조회할 수 있다.",
+  "stale node·Shadow DOM·accessibility tree·selector 성능을 DevTools로 진단할 수 있다.",
+);
+expertSession.sources.push(
+  { id: "dom-traversal-standard-05", repository: "WHATWG DOM Standard", path: "#traversal", publicUrl: "https://dom.spec.whatwg.org/#traversal", usedFor: ["NodeIterator", "TreeWalker", "NodeFilter", "mutation 중 reference 조정"], evidence: "DOM Living Standard traversal interface와 ACCEPT·SKIP·REJECT filter 의미를 실행 예제와 진단 절에 반영했습니다." },
+  { id: "cssom-escape-05", repository: "CSS Working Group CSSOM", path: "#the-css.escape()-method", publicUrl: "https://drafts.csswg.org/cssom/#the-css.escape()-method", usedFor: ["CSS.escape", "identifier serialization", "selector 안전"], evidence: "CSS.escape가 identifier를 serialize해 selector 조각에 사용할 수 있다는 CSSOM 표준 알고리즘을 확인했습니다." },
+  { id: "wai-keyboard-interface-05", repository: "W3C WAI ARIA Authoring Practices", path: "practices/keyboard-interface", publicUrl: "https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/", usedFor: ["DOM과 접근성 tree 차이", "keyboard focus", "visible focus", "component test"], evidence: "DOM query 존재 여부와 실제 keyboard 접근성·focus 관리 검증이 별도라는 근거로 사용했습니다." },
+);

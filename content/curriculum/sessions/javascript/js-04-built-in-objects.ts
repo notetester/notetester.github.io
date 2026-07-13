@@ -389,3 +389,118 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 360;
+expertSession.chapters.push(
+  {
+    id: "map-set-weak-collections-intl-segmentation",
+    title: "Object·Map·Set·WeakMap과 Unicode segmentation을 데이터 계약에 맞춰 선택합니다",
+    lead: "built-in은 편의 함수 목록이 아니라 값 semantics와 자료구조 계약입니다. key 종류·중복·순서·열거·lifetime을 먼저 정하고 Object, Map, Set, WeakMap을 선택하며 사용자가 보는 문자열 단위는 code unit이 아니라 locale-aware grapheme·word일 수 있음을 연결합니다.",
+    explanations: [
+      "Object property key는 string 또는 symbol이며 일반 record와 JSON shape에 자연스럽습니다. Map은 모든 ECMAScript 값을 key로 사용할 수 있고 명시적 size·has·get·set·entries API와 insertion order iteration을 제공합니다. prototype 상속이나 `__proto__` 같은 이름과 섞이지 않는 dictionary가 필요하면 Map 또는 Object.create(null)을 검토합니다.",
+      "Map key 비교는 SameValueZero 계열 semantics를 사용해 NaN key를 다시 찾을 수 있고 +0/-0을 같은 key로 취급합니다. object key는 내용이 같은지가 아니라 identity가 같아야 합니다. `{id:1}` 두 객체는 서로 다른 key이므로 domain id string을 key로 쓸지 실제 instance metadata를 key로 쓸지 정합니다.",
+      "Set은 중복 없는 membership과 insertion order iteration을 제공합니다. 배열 중복 제거에는 `[...new Set(values)]`가 간단하지만 무엇이 같은 값인지 SameValueZero 기준이며 object 내용 중복은 제거하지 않습니다. case-insensitive string이나 domain composite key는 먼저 canonicalize하거나 Map으로 key를 구성합니다.",
+      "WeakMap·WeakSet은 object/symbol key를 약하게 보유해 metadata 때문에 key lifetime이 늘지 않도록 하지만 열거·size를 제공하지 않습니다. cache hit/miss를 정확히 count하거나 직렬화해야 하면 명시 cleanup Map이 더 적합할 수 있습니다. GC timing을 business logic으로 사용하지 않습니다.",
+      "Map과 Set의 평균 접근 성능은 specification이 구현 전략을 고정하지 않으므로 무조건 O(1)이라고 계약하지 않습니다. 배열 linear scan과 실제 workload를 profile하고 memory overhead·iteration·key construction 비용까지 봅니다. 작은 정적 목록은 배열이 더 단순할 수 있습니다.",
+      "JavaScript String.length와 index는 UTF-16 code unit 기준입니다. `Array.from`·spread는 code point 단위로 개선하지만 ZWJ emoji·combining mark 하나의 사용자 인식 문자가 여러 code point일 수 있습니다. `Intl.Segmenter`의 grapheme·word·sentence granularity로 locale-sensitive UI 커서·문자 수·검색 token 경계를 만듭니다.",
+      "locale formatting 결과 문자열을 다시 parse해 business 값으로 쓰지 않습니다. Intl.NumberFormat·DateTimeFormat은 표시 계층이며 저장·계산은 원래 number·instant·currency minor unit을 유지합니다. snapshot test는 실행 환경 ICU·locale data version이 바뀔 수 있으므로 지원 runtime을 고정하거나 핵심 parts를 검증합니다.",
+    ],
+    concepts: [
+      { term: "SameValueZero", definition: "Set membership과 Map key에서 사용되는 값 동일성 계열로 NaN을 자기 자신과 같게 보고 +0과 -0을 같은 값으로 취급합니다.", detail: ["object는 identity를 비교합니다.", "domain 내용 동등성은 canonical key가 필요합니다."] },
+      { term: "weak collection", definition: "key를 강하게 유지하지 않아 다른 strong reference가 사라질 때 key 회수를 방해하지 않는 WeakMap·WeakSet입니다.", detail: ["열거와 size가 없습니다.", "explicit resource cleanup을 대신하지 않습니다."] },
+      { term: "grapheme cluster", definition: "사용자가 한 문자로 인식하는 Unicode code point의 묶음입니다.", detail: ["emoji ZWJ sequence와 combining mark가 포함될 수 있습니다.", "Intl.Segmenter로 locale-aware boundary를 얻습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "map-set-intl-segmenter-contract",
+        title: "Map·Set 순서와 사용자 인식 문자 segmentation",
+        language: "javascript",
+        filename: "collections-segmenter.mjs",
+        purpose: "keyed collection의 insertion order·중복 제거와 Intl.Segmenter의 grapheme 단위를 Node에서 exact 출력으로 검증합니다.",
+        code: "const visits = new Map([['Ada', 2], ['Linus', 1]]);\nvisits.set('Ada', visits.get('Ada') + 1);\nvisits.set('Grace', 1);\n\nconst topics = new Set(['JS', 'DOM', 'JS', 'CSS']);\nconst segmenter = new Intl.Segmenter('ko', { granularity: 'grapheme' });\nconst graphemes = [...segmenter.segment('A👩‍💻한')].map((part) => part.segment);\n\nconsole.log(JSON.stringify([...visits]));\nconsole.log(JSON.stringify([...topics]));\nconsole.log(JSON.stringify(graphemes));",
+        walkthrough: [
+          { lines: "1-3", explanation: "기존 Ada key의 값을 갱신해도 원래 insertion 위치는 유지하고 새 Grace key를 끝에 추가합니다." },
+          { lines: "5-7", explanation: "Set은 중복 JS를 제거하고 Segmenter는 ZWJ emoji를 사용자 인식 grapheme 하나로 나눕니다." },
+          { lines: "9-11", explanation: "Map entries, Set values, grapheme 배열을 JSON으로 고정해 순서와 단위를 검증합니다." },
+        ],
+        run: { environment: ["Node.js 18 이상과 Intl.Segmenter 지원", "collections-segmenter.mjs를 UTF-8로 저장"], command: "node collections-segmenter.mjs" },
+        output: { value: "[[\"Ada\",3],[\"Linus\",1],[\"Grace\",1]]\n[\"JS\",\"DOM\",\"CSS\"]\n[\"A\",\"👩‍💻\",\"한\"]", explanation: ["Map update는 Ada의 위치를 옮기지 않습니다.", "Set은 첫 등장 순서를 유지하며 중복 JS 하나를 제거합니다.", "👩‍💻는 여러 code point지만 grapheme 하나입니다."] },
+        experiments: [
+          { change: "Map key를 매번 새 `{name:'Ada'}` object로 바꿉니다.", prediction: "내용이 같아 보여도 object identity가 달라 별도 entries가 생깁니다.", result: "instance metadata와 domain value key를 구분해야 함을 확인합니다." },
+          { change: "graphemes 대신 `[...'A👩‍💻한']`을 출력합니다.", prediction: "ZWJ와 emoji 구성 code point가 여러 항목으로 분리됩니다.", result: "code point iteration도 사용자 인식 문자 경계를 보장하지 않음을 확인합니다." },
+        ],
+        sourceRefs: ["ecma-keyed-collections-04", "ecma-data-structures-04", "ecma-intl"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "같은 id를 가진 object를 Map에서 조회했는데 undefined다.", likelyCause: "조회 때 새 object literal을 만들어 저장 당시 key와 identity가 다릅니다.", checks: ["set과 get에 사용한 key의 `===` 결과를 확인합니다.", "domain id와 instance identity 중 무엇이 key 계약인지 정합니다.", "직렬화·복원 뒤 object identity가 바뀌는지 봅니다."], fix: "value identity가 기준이면 안정적인 primitive id를 canonical key로 쓰고 instance metadata만 object key를 사용합니다.", prevention: "key 생성 함수를 중앙화하고 같은 내용/다른 identity fixture를 테스트합니다." },
+      { symptom: "문자 제한 3자를 통과한 emoji 문자열이 UI에서 잘린다.", likelyCause: "String.length의 UTF-16 code unit 수를 사용자 인식 grapheme 수로 오해했습니다.", checks: ["length·spread·Intl.Segmenter 결과를 비교합니다.", "ZWJ emoji와 combining mark fixture를 넣습니다.", "server와 client가 같은 길이 정책인지 확인합니다."], fix: "제품의 문자 단위를 명시하고 grapheme 기준이면 Intl.Segmenter 또는 합의된 Unicode library를 사용합니다.", prevention: "ASCII·한글·emoji·combining sequence 경계를 공유 validation test에 포함합니다." },
+    ],
+    expertNotes: ["Object.groupBy와 Map.groupBy 같은 최신 built-in은 지원 runtime matrix를 확인하고 fallback을 결정한 뒤 사용합니다.", "정렬·locale 비교에는 Intl.Collator를 재사용할 수 있지만 locale option과 sensitivity가 domain 동등성인지 표시 순서인지 구분합니다."],
+  },
+  {
+    id: "url-origin-popup-capability-security",
+    title: "URL parsing·origin allowlist·popup capability를 문자열 연결과 분리합니다",
+    lead: "window·location·open은 ECMAScript built-in이 아니라 browser host capability입니다. 외부 URL을 문자열 prefix로 검사하지 않고 URL parser로 구조화한 뒤 scheme·origin·path 정책을 적용하며, 새 창은 사용자 activation·opener 격리·실패 가능성을 계약화합니다.",
+    explanations: [
+      "`new URL(input, base)`는 상대 URL을 기준 URL에 resolve하고 protocol·hostname·port·origin·pathname을 구조화합니다. `startsWith('https://safe.example')`는 `https://safe.example.evil.test`를 오인할 수 있으므로 canonical `url.origin === allowedOrigin`처럼 component를 비교합니다.",
+      "허용 scheme을 먼저 제한합니다. navigation input에서 `javascript:`·`data:` 등 code/content 실행 가능 scheme을 막고 일반적으로 https를 allowlist합니다. URL constructor가 성공했다는 사실은 목적지가 신뢰된다는 뜻이 아닙니다. redirect와 DNS·server policy도 별도 경계입니다.",
+      "window.open은 popup blocker 때문에 null을 반환할 수 있고 user activation 안에서 호출해야 성공 가능성이 높습니다. 반환값을 검사하며 새 창이 원래 창을 제어할 필요가 없다면 noopener를 사용합니다. noreferrer는 referrer 전달도 막는 별도 privacy 선택입니다.",
+      "`target='_blank'`의 현대 browser 보호에만 의존하지 말고 application 정책에 noopener 의도를 명시합니다. 외부 링크는 사용자에게 목적지를 알리고 keyboard focus가 갑자기 새 context로 이동하는 경험을 고려합니다. popup을 핵심 workflow 유일 경로로 만들지 않습니다.",
+      "URLSearchParams는 query를 parse·serialize하지만 같은 key 여러 개, plus/space, empty value 의미를 제품 schema가 결정해야 합니다. auth token·개인정보를 query에 넣으면 history·referrer·log에 남을 수 있습니다.",
+      "테스트는 상대 URL, 정확한 origin, 비슷한 hostname, port 차이, http, javascript scheme, malformed input을 포함합니다. popup 자체는 synthetic click만으로 user activation을 재현할 수 없으므로 실제 browser에서 버튼 클릭과 null fallback을 확인합니다.",
+    ],
+    concepts: [
+      { term: "origin", definition: "URL의 scheme·host·port 조합으로 browser 보안 경계의 핵심 식별자입니다.", detail: ["path는 origin에 포함되지 않습니다.", "기본 port canonicalization을 URL parser에 맡깁니다."] },
+      { term: "opener capability", definition: "새 browsing context가 window.opener를 통해 원래 창에 접근할 수 있는 관계입니다.", detail: ["noopener로 불필요한 관계를 끊습니다.", "same-origin 여부에 따라 접근 범위가 달라집니다."] },
+      { term: "user activation", definition: "사용자의 실제 click·keyboard 동작에서 비롯된 제한 시간의 browser capability 상태입니다.", detail: ["popup·clipboard 같은 API 허용에 영향을 줍니다.", "synthetic event가 동일 권한을 만들지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "url-origin-popup-decision",
+        title: "URL parser와 origin allowlist 기반 popup 결정",
+        language: "html",
+        filename: "safe-popup-url.html",
+        purpose: "고정 base를 기준으로 상대·외부·javascript URL을 판정하고, 허용 URL만 실제 사용자 버튼에서 noopener popup으로 여는 최소 문서입니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>safe popup</title></head>\n<body>\n  <button id=\"open\" type=\"button\">가이드 열기</button>\n  <pre id=\"result\"></pre>\n  <script type=\"module\">\n    const base = new URL('https://learn.example/course/');\n    const decide = (raw) => {\n      const url = new URL(raw, base);\n      const allowed = url.protocol === 'https:' && url.origin === base.origin;\n      return { raw, protocol: url.protocol, allowed, url };\n    };\n    const cases = ['/guide', 'https://evil.example/', 'javascript:alert(1)'];\n    const lines = cases.map((raw) => {\n      const decision = decide(raw);\n      return `${decision.protocol}|${decision.allowed}`;\n    });\n    document.querySelector('#result').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n\n    document.querySelector('#open').addEventListener('click', () => {\n      const decision = decide('/guide');\n      const popup = window.open(decision.url, '_blank', 'noopener,noreferrer');\n      if (!popup) console.log('popup-blocked');\n    });\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "native button과 결과 영역이 있는 최소 문서를 만듭니다." },
+          { lines: "7-13", explanation: "고정 https base로 URL을 parse하고 protocol과 정확한 origin을 모두 검사합니다." },
+          { lines: "14-20", explanation: "상대 경로·외부 origin·javascript scheme의 구조화 판정을 화면과 console에 남깁니다." },
+          { lines: "22-26", explanation: "실제 사용자 click에서만 허용 URL을 noopener,noreferrer로 열고 popup blocker의 null 반환을 처리합니다." },
+          { lines: "27-29", explanation: "script와 문서를 닫습니다. popup 성공 여부는 browser 설정에 따라 달라지므로 첫 세 줄만 exact 결과입니다." },
+        ],
+        run: { environment: ["현대 브라우저", "safe-popup-url.html을 UTF-8로 저장", "popup 허용·차단 두 설정을 확인"], command: "브라우저에서 safe-popup-url.html을 열어 첫 세 줄을 확인하고 버튼을 실제 클릭" },
+        output: { value: "https:|true\nhttps:|false\njavascript:|false", explanation: ["상대 /guide는 base의 https origin 안으로 resolve되어 허용됩니다.", "외부 https origin은 scheme이 맞아도 거부됩니다.", "javascript scheme은 명시적으로 거부됩니다. popup 결과는 user activation과 browser policy 때문에 별도 관찰합니다."] },
+        experiments: [
+          { change: "origin 비교를 href.startsWith('https://learn.example')로 바꿉니다.", prediction: "비슷한 hostname이나 encoding corner case를 잘못 허용할 수 있습니다.", result: "문자열 prefix가 아니라 parser component를 비교해야 함을 확인합니다." },
+          { change: "noopener를 제거하고 same-origin test page를 엽니다.", prediction: "새 창이 opener reference를 가질 수 있습니다.", result: "필요 없는 browsing-context capability를 끊는 보안 원칙을 확인합니다." },
+        ],
+        sourceRefs: ["web-window-source", "html-window-open", "url-standard"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "허용 domain prefix를 쓴 피싱 URL이 통과한다.", likelyCause: "URL을 문자열 startsWith로 검사해 hostname component 경계를 구분하지 못했습니다.", checks: ["URL constructor로 protocol·hostname·port·origin을 출력합니다.", "allowed.example.evil.test fixture를 넣습니다.", "punycode와 default port canonicalization을 확인합니다."], fix: "URL parser 결과의 scheme과 canonical origin을 allowlist와 비교합니다.", prevention: "유사 hostname·port·scheme·malformed URL security corpus를 고정합니다." },
+      { symptom: "window.open 반환 객체를 사용하다 null dereference가 난다.", likelyCause: "popup blocker 또는 user activation 부족으로 open이 null을 반환할 수 있다는 계약을 처리하지 않았습니다.", checks: ["실제 사용자 click stack 안 호출인지 확인합니다.", "popup 차단 설정에서 재현합니다.", "핵심 workflow에 same-page fallback이 있는지 봅니다."], fix: "반환값을 검사하고 링크·현재 창 이동 같은 접근 가능한 fallback을 제공합니다.", prevention: "허용·차단 browser 통합 테스트와 keyboard activation을 함께 검증합니다." },
+    ],
+    expertNotes: ["외부 URL allowlist가 SSRF를 직접 막는 것은 아닙니다. browser navigation과 server-side fetch는 서로 다른 trust boundary입니다.", "새 창의 focus·announcement는 사용자 경험에 영향을 주므로 링크 텍스트에서 새 context를 예고하는 제품 정책을 검토합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "Map에서 내용이 같은 두 object가 다른 key인 이유는 무엇인가요?", answer: "object key는 구조 내용이 아니라 identity로 비교되므로 각각 새로 만든 object는 다른 key입니다." },
+  { question: "String.length가 사용자에게 보이는 문자 수가 아닐 수 있는 이유는 무엇인가요?", answer: "length는 UTF-16 code unit 수이고 emoji ZWJ·combining mark는 여러 code unit/code point가 하나의 grapheme을 만들 수 있기 때문입니다." },
+  { question: "URL allowlist에 startsWith 대신 origin 비교가 필요한 이유는 무엇인가요?", answer: "origin은 parser가 canonicalize한 scheme·host·port 경계를 비교하지만 문자열 prefix는 유사 hostname과 encoding 경계를 오인할 수 있기 때문입니다." },
+);
+expertSession.completionChecklist.push(
+  "Object·Map·Set·WeakMap을 key type·동등성·열거·lifetime 기준으로 선택할 수 있다.",
+  "Intl.Segmenter로 code unit·code point·grapheme 차이를 검증할 수 있다.",
+  "URL parser의 scheme·origin·path를 분리해 allowlist를 구현할 수 있다.",
+  "window.open의 user activation·null 반환·noopener·접근성 fallback을 설계할 수 있다.",
+);
+expertSession.sources.push(
+  { id: "ecma-keyed-collections-04", repository: "TC39 ECMAScript Language Specification", path: "multipage/keyed-collections.html", publicUrl: "https://tc39.es/ecma262/multipage/keyed-collections.html", usedFor: ["Map", "Set", "WeakMap", "WeakSet", "SameValueZero"], evidence: "keyed collection의 key semantics·iteration·weak lifetime을 자료구조 선택과 memory 설명에 사용했습니다." },
+  { id: "ecma-data-structures-04", repository: "TC39 ECMAScript Language Specification", path: "multipage/indexed-collections.html", publicUrl: "https://tc39.es/ecma262/multipage/indexed-collections.html", usedFor: ["Array iteration", "collection conversion", "insertion order 비교"], evidence: "indexed collection과 keyed collection의 API·iteration 차이를 실행 예제 근거로 교차 확인했습니다." },
+);

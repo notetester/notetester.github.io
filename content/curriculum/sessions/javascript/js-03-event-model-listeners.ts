@@ -412,3 +412,68 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 360;
+expertSession.chapters.push({
+  id: "event-contract-testing-accessibility-reentrancy",
+  title: "event를 접근성·재진입·성능·테스트 가능한 상호작용 계약으로 완성합니다",
+  lead: "capture와 bubble을 외웠다고 event 설계가 끝나지 않습니다. 어떤 semantic control이 어떤 입력에서 같은 행동을 제공하고, handler가 상태를 언제 commit하며, listener lifetime과 synthetic test의 한계를 어떻게 검증하는지까지 연결해야 실제 UI가 안전합니다.",
+  explanations: [
+    "먼저 semantic HTML을 선택합니다. 동작은 button, 이동은 link, 값 선택은 input 같은 native element를 쓰면 keyboard activation·focus·disabled·접근성 tree의 기본 행동을 얻습니다. div에 click을 붙이고 role만 추가하면 Space/Enter handling, tabindex, disabled 상태, focus style까지 직접 구현해야 합니다. ARIA는 native semantics가 없을 때 보완하며 잘못된 role은 오히려 정보를 훼손합니다.",
+    "click은 mouse만의 event가 아닙니다. native button은 pointer와 keyboard activation이 click으로 수렴할 수 있어 business action을 click handler 한 곳에 둡니다. drag·pressure·multi-touch가 필요하면 Pointer Events를 쓰고 pointerId·capture·cancel을 설계합니다. keydown에서 모든 key를 action으로 취급하지 말고 해당 widget의 WAI-ARIA keyboard pattern을 따릅니다.",
+    "handler는 event.currentTarget과 delegation으로 찾은 semantic action element를 신뢰하고, event.target의 tagName에 UI 구조를 결합하지 않습니다. `closest()` 결과가 delegation root 안에 있는지 확인해 중첩 portal·다른 subtree element를 오인하지 않습니다. data-action 값은 allowlist dispatch table로 연결하고 임의 property 이름이나 eval에 전달하지 않습니다.",
+    "event dispatch는 동기적이며 listener가 dispatchEvent를 다시 호출하면 재진입할 수 있습니다. 상태를 반쯤 변경한 뒤 custom event를 보내지 말고 next state와 DOM update를 완성한 다음 알림을 보냅니다. 같은 action의 중복 effect는 in-flight 상태·idempotency key·server invariant로 막고 stopPropagation을 전역 잠금처럼 사용하지 않습니다.",
+    "synthetic `dispatchEvent`와 element.click()은 event path·listener order를 테스트하는 데 유용하지만 `isTrusted`는 false이고 실제 keyboard focus 이동, browser default action, popup permission, IME 조합을 완전히 재현하지 않습니다. 단위 테스트는 순서·state를, 실제 browser 통합 테스트는 Tab/Shift+Tab·Enter·Space·pointer·IME·screen reader 이름을 검증합니다.",
+    "DevTools Event Listener Breakpoints에서 Mouse/Keyboard/Control 범주를 켜고 handler 진입 시 target·currentTarget·eventPhase·defaultPrevented·composedPath를 봅니다. Elements 패널의 Event Listeners와 `getEventListeners`는 개발 진단용이며 application logic에 사용하지 않습니다. 로그에는 전체 event/DOM 대신 type·action id·phase만 남깁니다.",
+    "고빈도 pointermove·scroll·input handler에서는 layout read와 write를 섞으면 강제 reflow가 반복될 수 있습니다. Performance trace로 handler duration과 layout을 측정하고 requestAnimationFrame에 한 frame당 update를 coalesce합니다. scroll 기본 동작을 막지 않는 listener는 passive option을 검토하되 preventDefault가 필요한 경우 passive를 쓰면 안 됩니다.",
+    "접근성 상태는 DOM 상태와 같은 transaction에서 갱신합니다. 토글 button이면 aria-pressed와 visible state, dialog면 focus 이동과 복귀, 동적 결과면 필요에 따라 live region을 업데이트합니다. 모든 변화에 aria-live를 붙이면 중복 안내가 되므로 사용자에게 새 정보가 필요한 최소 영역을 선택합니다.",
+  ],
+  concepts: [
+    { term: "activation behavior", definition: "button·link 같은 요소가 click 등 activation trigger를 받을 때 host가 수행하는 표준 기본 행동입니다.", detail: ["native keyboard support와 연결됩니다.", "synthetic event가 trusted user activation을 완전히 대신하지 않습니다."] },
+    { term: "event reentrancy", definition: "listener 실행 중 같은 target이나 상태 기계에 event dispatch가 다시 동기 진입하는 상황입니다.", detail: ["반쯤 갱신된 state를 노출할 수 있습니다.", "commit 후 notify 또는 queue로 제어합니다."] },
+    { term: "interaction contract", definition: "pointer·keyboard·focus·default action·상태·announcement가 동일한 사용자 의도를 일관되게 수행하도록 정한 규칙입니다.", detail: ["native semantics를 우선합니다.", "자동 테스트와 수동 접근성 절차를 함께 둡니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "browser-event-lifetime-order-harness",
+      title: "capture·once·AbortSignal·delegation 순서 harness",
+      language: "html",
+      filename: "event-contract-harness.html",
+      purpose: "self-contained 문서에서 중첩 span click의 event path와 listener lifetime을 자동 실행해 화면과 console에 같은 trace를 남깁니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>event contract</title></head>\n<body>\n  <main id=\"root\">\n    <button id=\"action\" type=\"button\"><span id=\"label\">저장</span></button>\n    <pre id=\"log\" aria-live=\"polite\"></pre>\n  </main>\n  <script type=\"module\">\n    const root = document.querySelector('#root');\n    const button = document.querySelector('#action');\n    const label = document.querySelector('#label');\n    const log = document.querySelector('#log');\n    const lines = [];\n    const record = (line) => lines.push(line);\n    const controller = new AbortController();\n\n    root.addEventListener('click', (event) => {\n      record(`capture:${event.target.id}`);\n    }, { capture: true });\n    button.addEventListener('click', () => record('once'), { once: true });\n    button.addEventListener('click', () => record('signal'), { signal: controller.signal });\n    root.addEventListener('click', (event) => {\n      const action = event.target.closest('button');\n      if (action && root.contains(action)) record(`delegate:${action.id}`);\n    });\n\n    label.click();\n    controller.abort();\n    label.click();\n    log.textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-8", explanation: "native button, 중첩 label, 결과 pre와 최소 한국어 문서를 구성합니다." },
+        { lines: "9-16", explanation: "module script에서 root·target·log를 조회하고 trace와 listener lifetime controller를 준비합니다." },
+        { lines: "18-26", explanation: "capture root, once target, signal target, closest 기반 bubble delegation을 등록합니다." },
+        { lines: "28-32", explanation: "첫 click 뒤 signal group을 abort하고 두 번째 click을 실행해 lifetime 차이를 만든 뒤 화면과 console에 같은 trace를 씁니다." },
+        { lines: "34-35", explanation: "script와 문서를 닫습니다. 실제 browser에서 Tab으로 button에 이동하고 Enter·Space activation도 별도로 확인합니다." },
+      ],
+      run: { environment: ["현대 브라우저", "event-contract-harness.html을 UTF-8로 저장", "DevTools Console과 Event Listener Breakpoints를 엽니다"], command: "브라우저에서 event-contract-harness.html을 열고 pre와 Console trace를 비교" },
+      output: { value: "capture:label\nonce\nsignal\ndelegate:action\ncapture:label\ndelegate:action", explanation: ["첫 click은 capture→target 등록 순서→bubble delegation으로 흐릅니다.", "once listener는 첫 dispatch 뒤, signal listener는 abort 뒤 제거됩니다.", "두 번째 click에는 capture와 delegation만 남습니다. synthetic click은 실제 keyboard focus·isTrusted 검증을 대신하지 않습니다."] },
+      experiments: [
+        { change: "label.click() 대신 실제로 Tab 후 Enter와 Space를 사용합니다.", prediction: "native button의 activation이 같은 click business path로 수렴하고 focus indicator가 보여야 합니다.", result: "WAI button keyboard pattern과 visible focus를 수동 관찰합니다." },
+        { change: "delegation에서 closest와 contains 검사를 제거하고 event.target.id만 사용합니다.", prediction: "중첩 span에서는 action button을 찾지 못하거나 다른 subtree target을 잘못 처리합니다.", result: "semantic ancestor와 delegation boundary 검사의 필요성을 확인합니다." },
+      ],
+      sourceRefs: ["web-basic-listener-source", "web-detail-js-source", "web-coffee-js-source", "dom-events", "pointer-events", "html-scripts-defer", "html-activation", "selectors-closest", "wai-button-pattern"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "마우스 클릭은 되지만 keyboard로 동작시키거나 focus를 찾을 수 없다.", likelyCause: "click 가능한 div/span을 사용하고 native button의 semantics·tab stop·keyboard activation을 재구현하지 않았습니다.", checks: ["Tab 순서와 visible focus를 keyboard만으로 확인합니다.", "Accessibility tree의 role·name·state를 봅니다.", "Enter와 Space의 기대 행동을 APG pattern과 비교합니다."], fix: "가능하면 native button/link/input으로 바꾸고 custom widget이면 해당 ARIA pattern의 keyboard·focus·state 전체를 구현합니다.", prevention: "pointer·keyboard·focus·screen reader smoke test를 완료 기준에 포함합니다." },
+    { symptom: "handler 안 dispatch 뒤 state가 가끔 이전 값과 새 값이 섞여 보인다.", likelyCause: "상태 갱신 중 동기 event가 재진입해 부분 invariant를 관찰했습니다.", checks: ["listener entry depth와 dispatch stack을 breakpoint로 봅니다.", "notify가 state commit보다 앞인지 확인합니다.", "동일 action을 handler 내부에서 다시 발생시키는 fixture를 만듭니다."], fix: "완성된 next state를 먼저 commit하고 DOM을 갱신한 뒤 event를 보내거나 queue·reentrancy guard를 사용합니다.", prevention: "재진입과 빠른 중복 입력을 상태 기계 테스트에 추가합니다." },
+  ],
+  expertNotes: ["element.click()은 일부 activation behavior를 실행하지만 trusted user activation이 필요한 popup·clipboard 정책까지 재현하지 않습니다.", "stopImmediatePropagation은 같은 target의 뒤 listener까지 막으므로 library 간 결합을 만들 수 있습니다. 명시 소유권 없는 전역 사용을 피합니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "동작 요소에 native button을 우선하는 이유는 무엇인가요?", answer: "keyboard activation, focusability, disabled semantics와 accessibility role을 browser가 일관되게 제공해 직접 재구현할 계약을 줄이기 때문입니다." },
+  { question: "synthetic event 테스트가 실제 사용자 입력을 완전히 대신하지 못하는 이유는 무엇인가요?", answer: "isTrusted·user activation·focus 이동·IME·browser default action과 screen reader 상호작용이 실제 입력과 다를 수 있기 때문입니다." },
+  { question: "event handler 재진입을 안전하게 다루는 기본 순서는 무엇인가요?", answer: "next state와 DOM invariant를 먼저 완성해 commit한 뒤 외부 event를 notify하거나 명시 queue로 후속 dispatch를 늦춥니다." },
+);
+expertSession.completionChecklist.push(
+  "native semantic element로 pointer·keyboard·focus interaction contract를 설계할 수 있다.",
+  "delegation에서 closest 결과가 root 내부인지 검증할 수 있다.",
+  "listener 재진입과 빠른 중복 action을 상태 기계·idempotency 정책으로 처리할 수 있다.",
+  "synthetic trace와 실제 keyboard·pointer·접근성 수동 검증의 범위를 구분할 수 있다.",
+);

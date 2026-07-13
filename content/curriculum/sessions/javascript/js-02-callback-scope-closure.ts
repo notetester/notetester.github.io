@@ -384,3 +384,100 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 340;
+expertSession.chapters.push(
+  {
+    id: "callback-ownership-cancellation-reentrancy",
+    title: "callback 등록을 소유권·취소·재진입·오류 격리 계약으로 설계합니다",
+    lead: "callback을 넘긴다는 것은 나중에 호출될 함수 reference뿐 아니라 누가 언제 몇 번 호출하고, 어떻게 해제하며, 실행 중 상태가 다시 바뀔 수 있는지를 함께 넘기는 일입니다. 이 절은 DOM·timer·구독 API 어디서든 적용되는 lifetime 계약을 독립적으로 정리합니다.",
+    explanations: [
+      "callback API 문서에는 호출 시점, 최대 호출 횟수, argument shape, this binding, 반환값 사용 여부, throw 처리, 취소 방법이 있어야 합니다. Array.map callback과 event listener는 둘 다 함수지만 map은 동기적으로 입력 수만큼 호출하고, listener는 host가 향후 event마다 호출하며 명시 해제 전까지 살아 있을 수 있습니다.",
+      "removeEventListener는 같은 type·callback identity·capture 조건을 사용해야 합니다. 매번 새 arrow를 만들면 원래 reference와 다르므로 제거되지 않습니다. listener group이 component lifetime과 같다면 AbortController 하나의 signal을 여러 등록에 전달하고 unmount에서 abort하는 방식이 해제 지점을 한 곳으로 모읍니다.",
+      "`once: true`는 첫 dispatch 뒤 listener를 제거하지만 callback 내부 async 작업이 중복되지 않는다는 뜻은 아닙니다. event가 빠르게 들어오고 callback이 Promise를 시작한다면 in-flight flag, queue, idempotency key가 별도로 필요합니다. disabled UI만으로 backend 중복 효과가 막히지는 않습니다.",
+      "재진입은 callback 실행 중 같은 event를 다시 dispatch하거나 observable state 변경이 또 callback을 호출하는 상황입니다. iteration 중 listener 목록을 바꾸거나 상태를 반쯤 갱신한 채 재진입하면 invariant가 깨집니다. 먼저 완성된 새 상태를 계산하고 commit한 뒤 외부 callback을 알리거나, dispatch queue로 다음 turn에 처리합니다.",
+      "한 listener의 throw가 다른 처리와 host에 미치는 효과는 API마다 다릅니다. 모든 callback을 `try/catch`로 삼켜서는 안 되며, plugin처럼 서로 격리가 필요한 경계에서는 각 오류에 plugin id·cause를 붙여 수집하고 핵심 invariant 위반은 상위 오류 채널로 전파합니다. 사용자 데이터 전체를 오류 메시지에 넣지 않습니다.",
+      "구독 함수가 unsubscribe 함수를 반환하면 closure가 정확한 target·callback identity를 보존할 수 있습니다. 반환된 cleanup은 여러 번 호출해도 같은 결과인 idempotent 동작이 좋습니다. 이미 abort된 signal로 새 listener를 등록하면 callback이 활성화되지 않는 경계도 테스트합니다.",
+    ],
+    concepts: [
+      { term: "callback ownership", definition: "callback reference의 등록·호출·해제를 어느 객체나 lifecycle이 책임지는지 정한 계약입니다.", detail: ["소유자가 cleanup을 호출합니다.", "listener identity와 capture 조건을 보존합니다."] },
+      { term: "reentrancy", definition: "현재 callback 실행이 끝나기 전에 같은 상태 기계나 callback 흐름이 다시 진입하는 현상입니다.", detail: ["동기 dispatch와 setter callback에서도 발생합니다.", "원자적 상태 commit 또는 queue가 필요할 수 있습니다."] },
+      { term: "idempotent cleanup", definition: "cleanup을 한 번 이상 호출해도 첫 호출 이후 상태가 더 나빠지지 않는 해제 동작입니다.", detail: ["AbortController.abort는 반복 호출을 안전하게 다룰 수 있습니다.", "component unmount 중복에 강합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "eventtarget-abort-once-lifetime",
+        title: "EventTarget의 signal cleanup과 once 호출 횟수",
+        language: "javascript",
+        filename: "listener-lifetime.mjs",
+        purpose: "Node가 제공하는 표준 EventTarget·AbortController로 여러 dispatch, once, 일괄 abort와 WeakMap lifetime metadata를 결정적으로 검증합니다.",
+        code: "class AmountEvent extends Event {\n  constructor(amount) {\n    super('amount');\n    this.amount = amount;\n  }\n}\n\nconst target = new EventTarget();\nconst controller = new AbortController();\nconst lifetimes = new WeakMap([[target, controller]]);\nlet total = 0;\nlet onceCalls = 0;\n\ntarget.addEventListener('amount', (event) => {\n  total += event.amount;\n}, { signal: controller.signal });\ntarget.addEventListener('amount', () => {\n  onceCalls += 1;\n}, { once: true });\n\ntarget.dispatchEvent(new AmountEvent(2));\ntarget.dispatchEvent(new AmountEvent(3));\nlifetimes.get(target).abort();\ntarget.dispatchEvent(new AmountEvent(5));\n\nconsole.log(`total=${total}`);\nconsole.log(`once=${onceCalls}`);",
+        walkthrough: [
+          { lines: "1-6", explanation: "Event를 상속해 amount payload를 가진 합성 event type을 만듭니다." },
+          { lines: "8-12", explanation: "target과 lifetime controller를 만들고 WeakMap에 target별 cleanup metadata를 연결합니다." },
+          { lines: "14-19", explanation: "누적 listener는 signal에, 호출 횟수 listener는 once option에 연결합니다." },
+          { lines: "21-24", explanation: "두 번 dispatch한 뒤 controller를 abort하고 세 번째 event가 누적 listener에 도달하지 않는지 확인합니다." },
+          { lines: "26-27", explanation: "누적 값과 once listener의 정확한 한 번 호출을 출력합니다." },
+        ],
+        run: { environment: ["Node.js 18 이상", "listener-lifetime.mjs를 UTF-8로 저장"], command: "node listener-lifetime.mjs" },
+        output: { value: "total=5\nonce=1", explanation: ["signal listener는 amount 2와 3만 처리해 total 5가 됩니다.", "once listener는 첫 event 뒤 제거되어 정확히 한 번 호출됩니다.", "abort 뒤 amount 5는 signal에 연결된 listener를 호출하지 않습니다."] },
+        experiments: [
+          { change: "abort 호출을 제거합니다.", prediction: "세 번째 amount 5도 누적되어 total=10이 됩니다.", result: "cleanup이 callback lifetime을 실제로 끝내는 지점임을 확인합니다." },
+          { change: "once option을 제거합니다.", prediction: "onceCalls가 세 번으로 증가합니다.", result: "listener reference와 호출 횟수 정책이 별도 option임을 확인합니다." },
+        ],
+        sourceRefs: ["dom-event-listener", "ecma-functions-arrow", "ecma-execution-environments", "ecma-keyed-collections-02"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "화면을 열고 닫을수록 한 번의 동작이 여러 번 실행된다.", likelyCause: "mount마다 listener를 등록하지만 같은 identity로 제거하거나 signal을 abort하지 않아 callback이 누적됐습니다.", checks: ["등록·cleanup 호출 횟수를 component instance id로 셉니다.", "remove에 전달한 callback과 capture가 원본과 같은지 확인합니다.", "이미 종료된 instance가 closure에 남는지 heap snapshot retaining path를 봅니다."], fix: "등록 소유자가 unsubscribe 또는 AbortController를 보관하고 lifecycle 종료에서 idempotent cleanup을 호출합니다.", prevention: "mount→event→unmount→event 통합 테스트에서 마지막 event가 이전 instance를 호출하지 않음을 검증합니다." },
+      { symptom: "callback 안에서 상태를 갱신하면 같은 callback이 재귀적으로 다시 실행된다.", likelyCause: "동기 observable setter나 dispatch가 현재 처리 중인 흐름에 재진입했습니다.", checks: ["callback entry depth를 개발 fixture로 기록합니다.", "외부 callback 호출 전에 상태 invariant가 완성되는지 봅니다.", "동기 dispatch와 queued dispatch를 구분합니다."], fix: "새 상태를 먼저 원자적으로 commit하고 알림을 나중에 보내거나 명시 queue와 reentrancy guard를 둡니다.", prevention: "재진입 입력과 cleanup 중 dispatch를 상태 기계 테스트에 포함합니다." },
+    ],
+    expertNotes: ["EventTarget listener가 error를 throw했을 때 보고 방식은 host 구현과 API 경계에 의존하므로 plugin 격리 요구는 자체 dispatcher에서 명시합니다.", "AbortSignal은 소유권을 표현하지만 business transaction rollback을 대신하지 않습니다. 이미 발생한 외부 효과의 보상은 별도입니다."],
+  },
+  {
+    id: "closure-reachability-weak-metadata-memory-profile",
+    title: "closure reachability와 WeakMap을 이해하고 메모리 누수를 retaining path로 진단합니다",
+    lead: "closure가 살아 있는 동안 캡처한 binding과 그 binding이 가리키는 객체도 도달 가능할 수 있습니다. ‘closure는 메모리 누수’가 아니라 필요 이상 긴 lifetime과 큰 object graph를 캡처하는 소유권 불일치가 문제입니다.",
+    explanations: [
+      "garbage collector는 scope가 끝났는지가 아니라 root에서 객체까지 도달 가능한지를 기준으로 회수 가능성을 판단합니다. 전역 registry→listener→closure→DOM subtree 경로가 남으면 화면에서 remove된 node도 메모리에 유지될 수 있습니다. 변수를 null로 만드는 것보다 registry 해제와 timer 취소처럼 실제 root 연결을 끊는 일이 우선입니다.",
+      "closure는 사용한 모든 lexical 이름을 개념적으로 기억하지만 engine의 최적화 세부에 의존해 메모리 크기를 추측하지 않습니다. callback이 필요한 primitive id만 캡처하도록 하고 큰 response·node·cache는 lifetime이 짧은 local 또는 명시 store에서 조회합니다.",
+      "Map은 key를 강하게 참조하므로 node/object별 metadata store가 key를 회수되지 못하게 할 수 있습니다. WeakMap은 key가 다른 곳에서 도달 불가능할 때 metadata 때문에 key가 살아남지 않도록 설계됐으며 key 열거를 제공하지 않습니다. 전체 항목을 순회·통계해야 한다면 WeakMap만으로 해결할 수 없고 명시 cleanup이 있는 Map이 필요할 수 있습니다.",
+      "WeakRef와 FinalizationRegistry는 GC 시점이 관찰 불가능하고 실행되지 않을 수도 있어 correctness·파일 close·구독 해제에 쓰지 않습니다. cache 최적화 같은 보조 기능에서도 strong fallback과 nondeterministic 테스트 한계를 이해해야 합니다.",
+      "Chrome DevTools Memory에서 반복 시나리오 전후 heap snapshot을 찍고, detached node 또는 큰 객체의 retaining path를 따라 root까지 올라갑니다. allocation instrumentation은 어느 사용자 행동에서 늘었는지 보여 줍니다. 강제 GC 뒤 감소 여부만으로 결론내지 말고 동일 시나리오를 여러 번 반복해 plateau를 봅니다.",
+      "메모리 테스트는 정확한 byte golden보다 lifecycle invariant가 안정적입니다. cleanup 뒤 registry size 0, listener가 더 호출되지 않음, timer id 해제, store에서 id 삭제를 검증합니다. WeakMap은 열거할 수 없으므로 동작 테스트와 heap profile을 함께 사용합니다.",
+    ],
+    concepts: [
+      { term: "reachability", definition: "global·실행 stack·host registry 같은 root에서 참조 경로를 따라 객체에 도달할 수 있는 상태입니다.", detail: ["도달 가능하면 보통 GC 대상이 아닙니다.", "closure도 참조 경로의 한 node입니다."] },
+      { term: "retaining path", definition: "회수될 것으로 기대한 객체를 root에서 계속 도달 가능하게 만드는 참조 연결의 연쇄입니다.", detail: ["heap snapshot에서 원인 소유자를 찾습니다.", "detached DOM 자체보다 누가 보유하는지가 핵심입니다."] },
+      { term: "weak keyed metadata", definition: "object key가 다른 곳에서 사라질 때 metadata store만으로 key 생존을 강제하지 않는 WeakMap/WeakSet 관계입니다.", detail: ["key를 열거할 수 없습니다.", "명시 자원 cleanup을 대체하지 않습니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "DOM에서는 제거된 component가 heap snapshot의 Detached 트리에 계속 남는다.", likelyCause: "전역 listener·timer·registry callback closure가 component node 또는 큰 state를 캡처한 채 root에서 도달 가능합니다.", checks: ["snapshot retaining path를 root까지 추적합니다.", "unmount 후 listener·timer·registry count를 확인합니다.", "callback이 실제 필요한 값보다 큰 object graph를 캡처하는지 봅니다."], fix: "lifecycle cleanup으로 root 연결을 끊고 metadata가 객체 lifetime을 따라야 하면 WeakMap을 검토합니다.", prevention: "반복 mount/unmount 후 호출 0·registry 0 lifecycle 테스트와 주기적 heap profile을 둡니다." },
+    ],
+    comparisons: [
+      { title: "객체별 metadata를 Map과 WeakMap 중 어디에 저장할까요?", options: [
+        { name: "Map", chooseWhen: "항목 열거·size·명시 lifecycle 관리가 필요하고 cleanup을 확실히 수행할 때", avoidWhen: "store만의 key 참조가 object lifetime을 불필요하게 늘릴 때", tradeoffs: ["관찰과 디버깅이 쉽습니다.", "key를 강하게 보유합니다.", "삭제 책임이 명시적입니다."] },
+        { name: "WeakMap", chooseWhen: "metadata lifetime이 object key lifetime과 같고 열거가 필요 없을 때", avoidWhen: "전체 metadata를 순회·직렬화·정확히 count해야 할 때", tradeoffs: ["store 때문에 key가 유지되지 않습니다.", "GC 시점을 관찰할 수 없습니다.", "열거 API가 없습니다."] },
+      ] },
+    ],
+    expertNotes: ["메모리 profile에 사용자 콘텐츠가 포함될 수 있으므로 공유 artifact는 합성 fixture로 재현하거나 민감 데이터를 제거합니다.", "WeakMap 도입은 강한 참조 하나를 약하게 바꿀 뿐이며 다른 listener·array가 key를 보유하면 객체는 계속 살아 있습니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "callback API가 문서화해야 할 lifetime 정보는 무엇인가요?", answer: "누가 언제 몇 번 호출하는지, arguments·this·반환·throw를 어떻게 다루는지, 어떤 identity와 방법으로 취소·cleanup하는지를 명시해야 합니다." },
+  { question: "closure가 scope 종료 후에도 데이터를 유지할 수 있는 이유는 무엇인가요?", answer: "함수 객체가 필요한 lexical binding을 참조하고 그 함수가 root에서 도달 가능한 동안 binding의 객체 graph도 도달 가능할 수 있기 때문입니다." },
+  { question: "WeakMap이 explicit cleanup을 대체하지 못하는 이유는 무엇인가요?", answer: "GC 시점이 보장되지 않고 listener·timer·외부 자원은 WeakMap key 회수와 별개이며, 다른 strong reference가 있으면 key도 계속 살아 있기 때문입니다." },
+);
+expertSession.completionChecklist.push(
+  "callback 등록의 호출 횟수·argument·this·오류·취소 계약을 작성할 수 있다.",
+  "listener identity와 AbortSignal을 이용해 idempotent cleanup을 구현할 수 있다.",
+  "재진입 전에 상태 invariant를 commit하거나 queue로 격리할 수 있다.",
+  "heap snapshot의 retaining path로 closure·listener·detached DOM 소유자를 찾을 수 있다.",
+);
+expertSession.sources.push(
+  { id: "ecma-keyed-collections-02", repository: "TC39 ECMAScript Language Specification", path: "multipage/keyed-collections.html", publicUrl: "https://tc39.es/ecma262/multipage/keyed-collections.html", usedFor: ["Map", "WeakMap", "weak key semantics", "열거 제한"], evidence: "Map과 WeakMap의 observable key 보유·열거 차이를 closure metadata와 memory lifetime 설명에 연결했습니다." },
+);

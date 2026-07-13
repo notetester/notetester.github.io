@@ -398,3 +398,96 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 400;
+expertSession.chapters.push(
+  {
+    id: "keyed-reconciliation-identity-focus-lifecycle",
+    title: "key 기반 incremental render로 node identity·focus·listener·cleanup을 보존합니다",
+    lead: "매 render마다 container.innerHTML을 통째로 바꾸면 화면은 같아 보여도 node identity, focus, selection, listener, media state가 사라질 수 있습니다. state의 stable key와 DOM node ownership을 연결해 필요한 create·move·update·remove만 수행합니다.",
+    explanations: [
+      "render의 source of truth는 state이며 DOM을 다시 읽어 업무 상태를 추측하지 않습니다. 각 item에 session 동안 안정적이고 고유한 key를 부여하고 `Map<id, Element>`로 기존 node를 찾습니다. 배열 index는 reorder·insert에서 다른 item이 같은 key를 차지해 입력값·focus가 잘못 이어질 수 있습니다.",
+      "기존 node를 append/insertBefore하면 clone이 아니라 같은 node object가 이동합니다. 직접 등록한 listener와 property state가 유지될 수 있고 activeElement도 같은 node라면 focus를 보존할 가능성이 높습니다. 하지만 다른 Document나 detached Fragment를 거치는 방식, browser behavior를 실제로 테스트해야 합니다.",
+      "reconciliation 한 pass는 새 state 순서로 기존 또는 새 node를 배치하고 내용을 갱신한 뒤, live key 집합에 없는 node를 remove하고 registry에서도 삭제합니다. DOM에서만 remove하고 Map에 남기면 detached node와 listener graph가 memory에 유지됩니다.",
+      "content update와 identity 교체를 구분합니다. label text가 바뀌면 기존 button.textContent를 바꾸고, element type·semantics 자체가 달라지면 새 node를 만들며 이전 focus를 합리적 후속 target으로 이동합니다. 강제로 focus를 매 render마다 첫 항목에 보내면 keyboard 사용자의 위치가 사라집니다.",
+      "stable key가 있어도 state 중복 key는 silent corruption을 만들 수 있습니다. 개발·test 경계에서 중복을 검출하고 production에서는 domain invariant를 보장합니다. key를 CSS selector에 보간하기보다 Map lookup을 사용하면 escaping과 query 결합도도 줄어듭니다.",
+      "전체 replace가 항상 나쁜 것은 아닙니다. 작은 정적 결과와 focus/selection/lifecycle이 없는 subtree는 단순 replace가 유지보수에 유리할 수 있습니다. 최적화는 실제 mutation count·layout·memory profile로 판단하며 수동 diff 알고리즘을 framework와 중복 구현하지 않습니다.",
+      "event delegation을 쓰면 새 child마다 listener를 붙이지 않아도 되지만 모든 lifetime 문제가 사라지는 것은 아닙니다. root listener cleanup, closest/contains boundary, action allowlist가 필요합니다. node별 custom resource·observer가 있다면 remove 전 dispose hook을 호출합니다.",
+    ],
+    concepts: [
+      { term: "reconciliation", definition: "이전 UI tree와 새 state를 key·type 기준으로 비교해 필요한 DOM mutation만 적용하는 과정입니다.", detail: ["identity 보존과 순서 이동을 분리합니다.", "stale node와 registry를 함께 cleanup합니다."] },
+      { term: "stable key", definition: "item의 위치나 label이 바뀌어도 같은 domain entity를 계속 식별하는 고유 값입니다.", detail: ["배열 index보다 domain id를 사용합니다.", "중복 key를 invariant 위반으로 검출합니다."] },
+      { term: "focus continuity", definition: "UI update 뒤에도 사용자가 작업하던 의미 있는 control 위치와 keyboard 흐름을 가능한 한 유지하는 원칙입니다.", detail: ["같은 node identity 재사용이 도움됩니다.", "삭제 시 예측 가능한 다음 focus target을 정합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "keyed-render-preserves-node-focus",
+        title: "keyed render가 기존 button identity와 focus를 보존",
+        language: "html",
+        filename: "keyed-render.html",
+        purpose: "state가 a,b에서 b,c로 바뀔 때 b node를 재사용하고 a를 DOM·registry에서 제거하며 focus와 order를 exact 관찰합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>keyed render</title></head>\n<body>\n  <ul id=\"list\"></ul>\n  <pre id=\"result\" aria-live=\"polite\"></pre>\n  <script type=\"module\">\n    const list = document.querySelector('#list');\n    const nodes = new Map();\n\n    function render(items) {\n      const live = new Set(items.map((item) => item.id));\n      for (const item of items) {\n        let row = nodes.get(item.id);\n        if (!row) {\n          row = document.createElement('li');\n          const button = document.createElement('button');\n          button.type = 'button';\n          row.append(button);\n          nodes.set(item.id, row);\n        }\n        row.dataset.id = item.id;\n        row.firstElementChild.textContent = item.label;\n        list.append(row);\n      }\n      for (const [id, row] of nodes) {\n        if (!live.has(id)) {\n          row.remove();\n          nodes.delete(id);\n        }\n      }\n    }\n\n    render([{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]);\n    const aRow = nodes.get('a');\n    const bButton = nodes.get('b').firstElementChild;\n    bButton.focus();\n    render([{ id: 'b', label: 'B2' }, { id: 'c', label: 'C' }]);\n\n    const lines = [\n      `order=${[...list.children].map((row) => row.dataset.id).join(',')}`,\n      `b-same=${nodes.get('b').firstElementChild === bButton}`,\n      `focus=${document.activeElement.closest('li').dataset.id}`,\n      `a-connected=${aRow.isConnected}`,\n    ];\n    document.querySelector('#result').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "list와 결과 live region이 있는 최소 문서를 구성합니다." },
+          { lines: "7-10", explanation: "list root와 id→li identity registry를 만듭니다." },
+          { lines: "11-25", explanation: "새 state의 live key를 만들고 기존 row를 재사용하거나 semantic li/button을 생성한 뒤 같은 parent에 새 순서로 append합니다." },
+          { lines: "26-31", explanation: "새 state에 없는 row는 DOM과 Map 모두에서 제거합니다." },
+          { lines: "34-38", explanation: "초기 a,b를 render하고 b button에 focus한 뒤 b,c state로 다시 render합니다." },
+          { lines: "40-47", explanation: "DOM 순서, b identity, activeElement, 제거된 a 연결 상태를 화면과 console에 기록합니다." },
+          { lines: "48-50", explanation: "script와 문서를 닫습니다. Tab 순서와 visible focus도 실제 keyboard로 확인합니다." },
+        ],
+        run: { environment: ["현대 브라우저", "keyed-render.html을 UTF-8로 저장", "DevTools Elements·Console·Accessibility pane을 엽니다"], command: "브라우저에서 keyed-render.html을 열어 pre·Console·focus ring을 비교" },
+        output: { value: "order=b,c\nb-same=true\nfocus=b\na-connected=false", explanation: ["새 state 순서대로 b,c만 남습니다.", "b button은 같은 object여서 identity와 focus가 유지됩니다.", "삭제된 a는 isConnected false이고 registry에서도 제거됐습니다."] },
+        experiments: [
+          { change: "매 render마다 list.replaceChildren로 모든 button을 새로 만듭니다.", prediction: "보이는 label은 같아도 b identity가 false가 되고 focus가 body 등으로 이동할 수 있습니다.", result: "전체 replace의 identity·focus 비용을 확인합니다." },
+          { change: "nodes.delete(id)를 제거합니다.", prediction: "a는 화면에서 사라져도 Map이 detached row를 계속 강하게 참조합니다.", result: "DOM remove와 application registry cleanup을 함께 해야 함을 확인합니다." },
+        ],
+        sourceRefs: ["dom-create-element", "dom-mutation", "dom-fragment", "web-dom-remove-source", "wcag-focus-order"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "목록 업데이트 때 입력 중이던 focus·selection이 사라진다.", likelyCause: "전체 subtree를 새 HTML/node로 교체해 active control의 identity를 파괴했습니다.", checks: ["render 전후 activeElement와 node identity를 비교합니다.", "stable domain key 대신 index를 쓰는지 확인합니다.", "Performance/Mutation breakpoint에서 실제 replace 범위를 봅니다."], fix: "stable key로 기존 semantic control을 재사용하고 삭제되는 control에는 예측 가능한 focus 이동 정책을 둡니다.", prevention: "reorder·insert·delete 후 identity·focus·Tab order 통합 테스트를 둡니다." },
+      { symptom: "삭제한 목록이 heap snapshot에서 계속 증가한다.", likelyCause: "DOM에서는 remove했지만 Map·listener·observer·closure registry가 detached node를 보유합니다.", checks: ["detached node retaining path를 확인합니다.", "DOM removal과 registry delete/dispose가 한 transaction인지 봅니다.", "반복 add/remove 뒤 registry size를 측정합니다."], fix: "remove 전에 node별 resource를 dispose하고 DOM·registry·state reference를 함께 제거합니다.", prevention: "CRUD lifecycle 테스트에서 DOM count·registry size·후속 listener 호출 0을 검증합니다." },
+    ],
+    expertNotes: ["append로 같은 parent 안 node를 재정렬하는 동안 browser focus 보존은 실제 지원 환경에서 검증하고, focus target이 삭제되면 제품별 다음 위치를 명시합니다.", "수동 reconciliation은 교육 모델이며 production framework가 identity를 관리한다면 그 key/lifecycle 규칙을 따르고 DOM을 외부에서 이중 수정하지 않습니다."],
+  },
+  {
+    id: "secure-sinks-observers-performance-accessible-feedback",
+    title: "DOM sink·observer·성능·접근성 피드백을 하나의 mutation 품질 경계로 관리합니다",
+    lead: "createElement와 textContent를 안다고 안전한 render가 자동으로 완성되지는 않습니다. 값이 들어가는 sink별 parser 의미, URL·style·event attribute 정책, observer lifecycle, mutation 성능과 사용자 피드백을 함께 검토합니다.",
+    explanations: [
+      "untrusted plain text는 textContent 또는 createTextNode에 넣습니다. class는 classList allowlist, URL은 URL parser와 scheme/origin 정책, style은 허용 property/value mapping을 사용합니다. `setAttribute('onclick', user)`·script text·innerHTML·insertAdjacentHTML은 code/markup injection sink가 될 수 있습니다.",
+      "Trusted Types enforcement는 innerHTML 같은 DOM XSS sink에 임의 string이 도달하는 것을 줄이지만, lax default policy에서 그대로 반환하면 보호를 무력화합니다. 가능하면 markup sink를 제거하고 정말 필요한 template만 작은 sanitizer+policy 경계에서 TrustedHTML로 만듭니다. CSP report-only로 기존 sink를 inventory한 뒤 enforce합니다.",
+      "template.content를 clone하면 markup 구조는 복제되지만 addEventListener로 등록한 listener와 JavaScript expando state는 복제되지 않습니다. listener는 delegation 또는 clone 후 명시 setup으로 연결하고, id 중복·label for 관계를 clone instance별로 갱신합니다.",
+      "MutationObserver는 DOM 변경 record를 microtask checkpoint에 batch 전달합니다. 자기 callback에서 다시 같은 변경을 만들어 feedback loop가 되지 않게 조건을 좁히고, component 종료에서 disconnect합니다. observer는 state source of truth를 대신하기보다 외부 mutation 감시·integration 경계에 사용합니다.",
+      "DocumentFragment는 여러 node를 한 번에 삽입하는 편리한 container지만 fragment append 한 번이 layout 한 번을 절대 보장하지 않습니다. 실제 style/layout/paint는 browser가 결정하므로 Performance panel과 User Timing으로 측정합니다. off-DOM에서 만드는 동안에도 비싼 JS와 sync measurement 비용은 남습니다.",
+      "동적 추가·삭제 결과는 screen reader와 keyboard 사용자에게 의미 있게 전달합니다. native control 이름, focus continuity, 필요 최소 live region status를 사용하고, 매 keystroke마다 긴 목록 전체를 aria-live로 재공지하지 않습니다. 삭제 후 focus가 사라지면 다음 item 또는 add control로 정책적으로 이동합니다.",
+      "테스트는 안전한 text가 literal `<img>`로 보이는지, URL scheme 거부, listener 중복 0, observer disconnect, 대량 CRUD의 mutation count, focus와 accessible name을 포함합니다. XSS payload 실행 여부만 보고 안전을 주장하지 말고 sink allowlist와 CSP/Trusted Types report를 함께 봅니다.",
+    ],
+    concepts: [
+      { term: "DOM sink", definition: "문자열이나 객체를 받아 text·URL·style·markup·script 등 특정 parser/실행 문맥에 적용하는 DOM API 위치입니다.", detail: ["문맥마다 안전한 encoding·validation이 다릅니다.", "textContent는 plain text sink입니다."] },
+      { term: "mutation feedback loop", definition: "MutationObserver나 render callback이 관찰하는 DOM을 다시 변경해 자기 자신을 반복 유발하는 흐름입니다.", detail: ["조건과 ownership을 좁힙니다.", "disconnect와 idempotent render가 필요합니다."] },
+      { term: "accessible status", definition: "focus를 강제로 옮기지 않고 작업 결과 변화가 필요한 사용자에게 전달되도록 role/status 또는 aria-live로 제공하는 짧은 피드백입니다.", detail: ["중복·과도한 announcement를 피합니다.", "visible text와 함께 제공하는 것이 좋습니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "MutationObserver callback이 계속 호출되어 CPU가 치솟는다.", likelyCause: "observer callback이 자신이 관찰하는 attribute/subtree를 매번 다시 변경해 feedback loop를 만들었습니다.", checks: ["record type·target·attributeName을 제한해 기록합니다.", "callback mutation이 이전 값과 실제로 다른지 확인합니다.", "observer disconnect 후 현상이 멈추는지 봅니다."], fix: "관찰 범위를 좁히고 동일 상태 write를 건너뛰며 내부 mutation 동안 disconnect/reconnect 또는 source flag를 설계합니다.", prevention: "observer callback 한 회당 최대 mutation과 종료 lifecycle을 테스트합니다." },
+      { symptom: "동적 목록 변경은 보이지만 screen reader가 결과를 모르거나 매번 전체를 반복 읽는다.", likelyCause: "상태 피드백이 없거나 너무 큰 container 전체에 aria-live를 적용했습니다.", checks: ["Accessibility tree의 live region과 이름을 봅니다.", "추가·삭제 한 건에서 실제 announcement를 확인합니다.", "focus가 의미 있는 control에 남는지 keyboard로 테스트합니다."], fix: "짧은 전용 status 영역에 변경 요약만 갱신하고 목록 자체는 semantic structure와 focus continuity를 유지합니다.", prevention: "keyboard와 screen reader로 CRUD 성공·빈 상태·오류 announcement를 완료 기준에 넣습니다." },
+    ],
+    expertNotes: ["sanitizer를 직접 정규식으로 만들지 말고 사용 환경에 맞는 검증된 library와 고정 configuration, Trusted Types policy review를 사용합니다.", "PerformanceObserver와 User Timing은 production telemetry에 도움되지만 element text·URL 같은 민감 값을 mark 이름이나 detail에 넣지 않습니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "stable key가 배열 index보다 나은 이유는 무엇인가요?", answer: "insert·delete·reorder 뒤에도 같은 domain entity와 같은 node identity를 연결해 focus·입력 state·listener가 다른 item으로 잘못 이동하지 않게 하기 때문입니다." },
+  { question: "textContent가 안전해도 URL·style mutation이 별도 검증을 요구하는 이유는 무엇인가요?", answer: "각 DOM sink가 다른 parser와 실행 의미를 가지므로 plain text escaping이 URL scheme·CSS value·script context 안전을 대신하지 못하기 때문입니다." },
+  { question: "MutationObserver를 state source of truth로 쓰기 어려운 이유는 무엇인가요?", answer: "변경 record가 batch/microtask로 전달되고 자기 mutation feedback·외부 mutation·lifecycle을 함께 다뤄야 하므로 application state가 더 명확한 source가 되는 경우가 많습니다." },
+);
+expertSession.completionChecklist.push(
+  "stable key로 DOM node identity와 order를 reconcile할 수 있다.",
+  "remove 시 DOM·state·registry·listener·observer resource를 함께 cleanup할 수 있다.",
+  "text·URL·style·markup sink별 validation과 Trusted Types 경계를 설명할 수 있다.",
+  "focus continuity·live status·mutation 성능을 browser 도구와 접근성 절차로 검증할 수 있다.",
+);
