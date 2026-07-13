@@ -887,7 +887,7 @@ public class LoopCostLab {
     "processed·rejected·terminal reason을 관측했다.",
     "raw input·secret을 log와 metric에 넣지 않았다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-09-arrays"],
   sources: [
     { id: "java-day06-while", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day06/Ex02.java", usedFor: ["while boundary·step", "post-increment state", "for/while heuristic caveat"], evidence: "JDK 21.0.11 clean run 50 non-empty lines; 0..10·10..20·evens·5단·a..h를 separator 없이 확인했습니다." },
     { id: "java-day06-do", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day06/Ex06.java", usedFor: ["do-while post-test", "0..10", "even 0..10"], evidence: "clean run 18 lines; 안내문 전 0..10과 뒤 0,2,4,6,8,10을 확인했습니다." },
