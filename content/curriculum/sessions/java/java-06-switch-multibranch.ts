@@ -89,7 +89,7 @@ const session = {
     "Scanner 빈 줄·Unicode code point와 메뉴 수량·금액 validation을 연결했다.",
     "경계·compile-fail·all-enum·all-sealed test matrix와 privacy-safe errors를 설계했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-07-for-nested"],
   sources: [
     { id: "java-day05-ex01", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day05/Ex01.java", usedFor: ["descending else-if", "ASCII classification", "unknown fallback", "menu calculation"], evidence: "B학점·소문자·대한민국·잔돈2300을 재현하고 범위·unknown·돈 정책 결함을 교정했습니다." },
     { id: "java-day05-ex02", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day05/Ex02.java", usedFor: ["Scanner grade input", "total average", "grade thresholds", "blank output line"], evidence: "홍 길동·100·90·80으로 총점270·평균90.0·A학점을 재현하고 범위 검증 누락을 확인했습니다." },
