@@ -265,7 +265,7 @@ try {
     "DTO transfer와 VO value semantics를 이름만으로 단정하지 않는다.",
     "모든 positive Java examples를 JDK21 -Xlint:all warning0와 exact output으로 검증한다.",
   ],
-  nextSessions: [],
+  nextSessions: ["io-01-file-bytes"],
   sources: [
     { id: "java-class13-ex01", repository: "javastudy2 classstudy", path: "src/com/java/class13/Ex01_StreamClass.java", usedFor: ["map uppercase", "forEach contrast", "exact9"], evidence: "source map1과 blank 포함 exact9 lines를 확인했습니다." },
     { id: "java-class13-ex02", repository: "javastudy2 classstudy", path: "src/com/java/class13/Ex02_VO.java", usedFor: ["final fields", "getter-only value carrier", "VO commentary"], evidence: "final fields2·setters0과 compile-only model role을 확인했습니다." },
