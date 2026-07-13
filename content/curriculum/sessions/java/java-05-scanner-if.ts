@@ -123,7 +123,69 @@ try {
         { term: "cursor state", definition: "다음 검색을 시작할 입력 위치와 parser 설정을 포함한 Scanner의 변경 가능한 상태입니다.", detail: ["읽을 때 전진합니다.", "method 혼합 결과를 설명합니다."] },
         { term: "charset boundary", definition: "byte source를 Unicode 문자로 decode하는 규칙입니다.", detail: ["delimiter 이전 단계입니다.", "명시하면 환경 drift가 줄어듭니다."] },
       ],
-      codeExamples: [],
+      codeExamples: [
+        {
+          id: "java-scanner-line-boundary-repair",
+          title: "token 뒤 남은 빈 line을 관찰하고 line-first 입력으로 같은 form을 고칩니다",
+          language: "java",
+          filename: "src/learning/java05/LineBoundaryRepair.java",
+          purpose: "nextInt→nextLine 혼합의 cursor 결과와 각 prompt를 한 줄로 소비하는 repair를 같은 고정 입력에서 비교합니다.",
+          code: String.raw`package learning.java05;
+
+import java.util.Scanner;
+
+public class LineBoundaryRepair {
+    static String mixed(String text) {
+        try (Scanner input = new Scanner(text)) {
+            int age = input.nextInt();
+            String remaining = input.nextLine();
+            String name = input.nextLine();
+            return age + "|<" + remaining + ">|<" + name + ">";
+        }
+    }
+
+    static String lineFirst(String text) {
+        try (Scanner input = new Scanner(text)) {
+            int age = Integer.parseInt(input.nextLine().strip());
+            String name = input.nextLine().strip();
+            if (name.isEmpty()) throw new IllegalArgumentException("blank name");
+            return age + "|<" + name + ">";
+        }
+    }
+
+    public static void main(String[] args) {
+        String form = "42\nHong Gil Dong\n";
+        System.out.println("mixed=" + mixed(form));
+        System.out.println("lineFirst=" + lineFirst(form));
+        boolean blankRejected;
+        try {
+            lineFirst("42\n   \n");
+            blankRejected = false;
+        } catch (IllegalArgumentException expected) {
+            blankRejected = true;
+        }
+        System.out.println("blankRejected=" + blankRejected);
+    }
+}`,
+          walkthrough: [
+            { lines: "1-3", explanation: "고정 String source를 token/line cursor로 읽기 위한 Scanner만 import합니다." },
+            { lines: "6-13", explanation: "nextInt가42 token만 소비한 뒤 첫 nextLine이 남은 빈 구간, 두 번째 nextLine이 실제 이름을 반환합니다." },
+            { lines: "15-22", explanation: "line-first version은 age와 name을 각각 한 줄씩 소비하고 parse·blank validation을 분리합니다." },
+            { lines: "25-36", explanation: "동일 form의 혼합/수정 결과와 공백 이름 negative fixture를 exact 출력합니다." },
+          ],
+          run: { environment: ["PowerShell 7+ 또는 POSIX shell", "Temurin JDK 21.0.11", "no console/network"], command: "javac -encoding UTF-8 -Xlint:all -d build/classes src/learning/java05/LineBoundaryRepair.java && java -cp build/classes learning.java05.LineBoundaryRepair" },
+          output: {
+            value: "mixed=42|<>|<Hong Gil Dong>\nlineFirst=42|<Hong Gil Dong>\nblankRejected=true",
+            explanation: ["혼합 flow의 빈 remaining line을 angle brackets로 보존합니다.", "line-first는 공백을 포함한 이름을 한 값으로 유지하고 blank를 domain failure로 거부합니다."],
+          },
+          experiments: [
+            { change: "mixed에서 첫 nextLine 호출을 제거합니다.", prediction: "name이 빈 문자열이 되어 실제 이름은 unread 상태로 남습니다.", result: "cursor 위치를 method 계약으로 추적합니다." },
+            { change: "age 줄을 42 years로 바꿉니다.", prediction: "line-first Integer.parseInt가 NumberFormatException을 내며 field syntax 오류가 드러납니다.", result: "raw line을 공개하지 않고 INVALID_INTEGER로 변환합니다." },
+            { change: "name에 앞뒤 공백을 유지해야 하는 업무 규칙을 적용합니다.", prediction: "strip이 의미 있는 공백을 제거할 수 있습니다.", result: "normalization은 field contract에 따라 선택합니다." },
+          ],
+          sourceRefs: ["java-scanner-api", "java-integer-api"],
+        },
+      ],
       diagnostics: [
         { symptom: "같은 byte 입력의 한글이 환경에 따라 깨진다.", likelyCause: "InputStream Scanner가 default charset에 의존합니다.", checks: ["source가 byte인지 char인지 봅니다.", "Charset.defaultCharset과 실제 protocol encoding을 확인합니다.", "UTF-8 fixture를 같은 방식으로 decode합니다."], fix: "byte source constructor에 StandardCharsets.UTF_8 같은 합의된 charset을 명시합니다.", prevention: "입력 protocol·source owner·charset을 API 계약과 테스트 이름에 적습니다." },
       ],
