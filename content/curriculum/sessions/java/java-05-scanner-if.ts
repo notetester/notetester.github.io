@@ -697,7 +697,7 @@ public class DecisionBoundaryLab {
     "오류 reason과 telemetry에서 raw PII·secret을 제거했다.",
     "정상·경계·연속 invalid·EOF·locale·Unicode·ownership test matrix를 작성했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-06-switch-multibranch"],
   sources: [
     { id: "java-conditional-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day04/Ex01.java", usedFor: ["conditional operator", "parity", "pass threshold", "discount", "work hours", "ASCII range", "maximum"], evidence: "JDK 21에서 홀수·짝수·홀수·합격·900·41280·대문자 아님·1900년대 태어남·14·14를 재현했습니다." },
     { id: "java-scanner-line-source", repository: "javastudy 학습 원본", path: "MyJavaProject/src/com/ictedu/day04/Ex02.java", usedFor: ["Scanner System.in", "nextLine", "full-name line", "close"], evidence: "홍 길동 line 입력으로 '이름 : 받은 정보 : 홍 길동'과 EOF NoSuchElementException을 재현했습니다." },
