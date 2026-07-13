@@ -48,7 +48,7 @@ const session = {
           language: "html",
           filename: "selector-matches.html",
           purpose: "specificity를 비교하기 전에 실제 DOM의 match set을 Element.matches와 querySelectorAll로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>선택자 매칭</title></head>\n<body>\n  <main id=\"content\" class=\"page theme-light\">\n    <h1 class=\"title accent\">선택자 실험</h1>\n    <p id=\"lead\" class=\"copy accent\">첫 문단</p>\n    <p class=\"copy\">둘째 문단</p>\n  </main>\n  <pre id=\"result\"></pre>\n  <script>\n    const lead = document.querySelector('#lead');\n    const selectors = ['*', 'p', '.accent', '.copy.accent', '#lead', '#missing'];\n    const matches = selectors.map((selector) => `${selector}=${lead.matches(selector)}`);\n    matches.push(`p-count=${document.querySelectorAll('p').length}`);\n    matches.push(`accent-count=${document.querySelectorAll('.accent').length}`);\n    document.querySelector('#result').textContent = matches.join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>선택자 매칭</title><style>.copy { color: #333; } .accent { font-weight: 700; } #content { font-family: system-ui, sans-serif; }</style></head>\n<body>\n  <main id=\"content\" class=\"page theme-light\">\n    <h1 class=\"title accent\">선택자 실험</h1>\n    <p id=\"lead\" class=\"copy accent\">첫 문단</p>\n    <p class=\"copy\">둘째 문단</p>\n  </main>\n  <pre id=\"result\"></pre>\n  <script>\n    const lead = document.querySelector('#lead');\n    const selectors = ['*', 'p', '.accent', '.copy.accent', '#lead', '#missing'];\n    const matches = selectors.map((selector) => `${selector}=${lead.matches(selector)}`);\n    matches.push(`p-count=${document.querySelectorAll('p').length}`);\n    matches.push(`accent-count=${document.querySelectorAll('.accent').length}`);\n    document.querySelector('#result').textContent = matches.join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "5-9", explanation: "main·h1·두 p에 id와 multiple class token을 의도적으로 다르게 배치합니다." },
             { lines: "13", explanation: "첫 p 하나를 기준 element로 선택합니다." },
@@ -328,5 +328,115 @@ const session = {
     ],
   },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "dynamic-selector-security-and-data-hooks",
+    title: "동적 selector 문자열과 data hook을 안전한 경계로 다룹니다",
+    lead: "selector는 단순 문자열 검색이 아니라 CSS grammar이므로 외부 ID를 querySelector에 결합할 때 CSS.escape를 사용하고 styling·testing·업무 state hook을 구분합니다.",
+    explanations: [
+      "querySelector는 Selectors grammar를 파싱하며 잘못된 selector면 null이 아니라 DOMException SyntaxError를 냅니다. ID에 colon·space·leading digit 같은 문자가 있어도 HTML ID로는 가능하므로 selector 삽입 전에 escaping이 필요합니다.",
+      "CSS.escape는 한 identifier 조각을 안전한 CSS identifier text로 만들지만 전체 selector template의 권한·복잡도·의미를 검증하지는 않습니다. 외부에서 selector 전체를 받는 API는 피합니다.",
+      "data-* attribute는 private page data와 state hook을 표현할 수 있지만 secret storage가 아닙니다. DOM·CSS selector·script에서 모두 읽히므로 비민감한 상태만 둡니다.",
+      "class는 재사용 가능한 styling contract, data-state는 명시 state, data-testid는 test 전용 hook으로 분리하면 CSS refactor와 test가 덜 결합됩니다. ID specificity로 상태를 강제하지 않습니다.",
+      "DevTools Console에서 CSS.escape 결과, querySelector match 수와 element.matches를 확인하고 Styles panel에서 attribute/class 후보가 실제 match하는지 먼저 검증합니다.",
+    ],
+    concepts: [
+      { term: "selector injection", definition: "외부 문자열을 escape·allowlist 없이 selector grammar에 삽입해 의도하지 않은 match·parse 실패·과도한 탐색이 생기는 문제입니다.", detail: ["identifier 조각은 CSS.escape를 사용합니다.", "외부 전체 selector는 허용하지 않습니다."] },
+      { term: "state hook", definition: "UI 상태를 CSS와 test가 명확히 관찰하도록 class·data attribute로 표현한 계약입니다.", detail: ["비민감 state만 둡니다.", "semantic ARIA state가 필요하면 함께 유지합니다."] },
+    ],
+    codeExamples: [{
+      id: "css-escape-data-state-contract",
+      title: "특수문자 ID를 CSS.escape로 조회하고 data-state style을 확인합니다",
+      language: "html",
+      filename: "selector-escape.html",
+      purpose: "raw selector parse 실패와 escaped exact match, non-secret data state의 computed style을 한 페이지에서 검증합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\"><title>selector escape</title>\n<style>\n  [data-state=\"active\"] { color: darkgreen; border-inline-start: 4px solid currentColor; }\n</style>\n</head>\n<body>\n<article id=\"course:1\" data-state=\"active\">CSS 과정</article>\n<pre id=\"result\"></pre>\n<script>\n  let rawError = \"none\";\n  try { document.querySelector(\"#course:1\"); }\n  catch (error) { rawError = error.name; }\n  const escapedSelector = \"#\" + CSS.escape(\"course:1\");\n  const target = document.querySelector(escapedSelector);\n  const style = getComputedStyle(target);\n  document.querySelector(\"#result\").textContent = [\n    \"raw-error=\" + rawError,\n    \"escaped=\" + escapedSelector,\n    \"safe-match=\" + (target.id === \"course:1\"),\n    \"state=\" + target.dataset.state,\n    \"color=\" + style.color,\n    \"border=\" + style.borderInlineStartWidth,\n  ].join(\"\\n\");\n</script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-7", explanation: "active data state를 styling hook으로 사용하고 currentColor border를 선언합니다." },
+        { lines: "10-17", explanation: "colon이 pseudo-class delimiter로 해석되는 raw selector 실패와 CSS.escape 결과를 비교합니다." },
+        { lines: "18-27", explanation: "escaped match의 ID/state와 computed color/border를 출력합니다." },
+      ],
+      run: { environment: ["CSS.escape와 dataset을 지원하는 현대 Chromium"], command: "browser에서 selector-escape.html을 열고 #result 확인" },
+      output: { value: "raw-error=SyntaxError\nescaped=#course\\:1\nsafe-match=true\nstate=active\ncolor=rgb(0, 100, 0)\nborder=4px", explanation: ["raw #course:1은 알 수 없는 :1 pseudo처럼 파싱되어 SyntaxError입니다.", "CSS.escape는 colon 앞에 backslash를 넣어 ID 하나를 정확히 찾습니다."] },
+      experiments: [
+        { change: "ID를 leading digit인 123으로 바꿉니다.", prediction: "CSS.escape는 digit 시작을 escape한 valid identifier를 만듭니다.", result: "HTML identifier와 selector serialization grammar를 구분합니다." },
+        { change: "data-state에 access token을 넣습니다.", prediction: "DOM inspection과 selector를 통해 노출됩니다.", result: "data-*는 secret storage가 아닙니다." },
+        { change: "전체 selector를 사용자에게 받습니다.", prediction: "escaping 한 조각만으로 match 범위·성능을 통제할 수 없습니다.", result: "허용된 ID/key API로 좁힙니다." },
+      ],
+      sourceRefs: ["web-attribute-selector-boundary-source", "dom-queryselector", "cssom-escape", "whatwg-data-attributes", "selectors-4"],
+    }],
+    diagnostics: [
+      { symptom: "querySelector가 특정 ID에서만 SyntaxError를 내거나 예상보다 많은 element를 찾는다.", likelyCause: "외부 identifier를 CSS grammar에 그대로 연결했습니다.", checks: ["raw ID와 CSS.escape 결과를 기록합니다.", "selector 전체가 아닌 identifier 조각인지 확인합니다.", "match count와 element.matches를 봅니다."], fix: "identifier는 CSS.escape하고 가능한 경우 getElementById·allowlist API를 사용합니다.", prevention: "colon·space·leading digit·bracket fixture와 untrusted selector 금지 lint를 둡니다." },
+    ],
+    expertNotes: ["CSS.escape는 XSS sanitizer가 아닙니다. HTML·URL·JavaScript context에는 각각의 안전한 DOM API와 encoding 정책이 필요합니다."],
+  },
+  {
+    id: "low-specificity-component-architecture",
+    title: "낮은 specificity·layer·짧은 selector로 override 가능한 component를 설계합니다",
+    lead: "selector를 강하게 만드는 대신 component boundary와 layer를 명시하고 :where로 기본값의 specificity를 낮춰 theme·responsive override가 예측 가능하게 작동하도록 합니다.",
+    explanations: [
+      ":where()는 match 조건을 유지하면서 자체와 argument specificity를 0으로 만듭니다. library 기본값에 사용하면 소비자가 class 하나로 override하기 쉽습니다.",
+      ":is()·:not()·:has()는 argument 중 가장 높은 specificity가 반영되므로 편의상 ID 후보를 섞으면 selector 전체가 강해집니다. match와 weight를 별도 review합니다.",
+      "cascade layer가 다르면 specificity보다 layer 순서가 먼저입니다. component와 theme layer를 나누면 긴 descendant chain 없이 override contract를 설명할 수 있습니다.",
+      "오른쪽에서 왼쪽으로 selector를 계산한다는 단순 성능 격언보다 실제 DOM 규모·style recalculation을 DevTools Performance에서 측정합니다. 깊은 범용 descendant·상태 변화가 넓은 :has를 피하는 것이 유지보수에도 유리합니다.",
+      "responsive와 writing-mode 차이는 DOM class를 복제하기보다 media/container query와 logical property로 같은 component contract 안에서 해결합니다.",
+    ],
+    concepts: [
+      { term: "specificity budget", definition: "component 기본값과 override가 사용할 수 있는 selector weight의 상한·규칙입니다.", detail: ["ID·important escalation을 막습니다.", "layer와 :where를 함께 사용할 수 있습니다."] },
+      { term: "selector invalidation", definition: "DOM attribute/class/state 변화 후 어떤 element style match를 다시 계산해야 하는지 browser가 결정하는 과정입니다.", detail: ["넓은 relational selector는 범위를 키울 수 있습니다.", "Performance trace로 측정합니다."] },
+    ],
+    codeExamples: [{
+      id: "where-layer-component-override",
+      title: "component 기본값을 :where로 낮추고 theme layer가 override하는 결과를 검증합니다",
+      language: "html",
+      filename: "selector-architecture.html",
+      purpose: "긴 specificity 경쟁 없이 layer와 낮은 기본값으로 deterministic theme override를 만듭니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\"><title>selector architecture</title>\n<style>\n  @layer components, themes;\n  @layer components {\n    :where(.study-card) > .title { color: slateblue; padding-inline: 8px; }\n    .study-card[data-state=\"warning\"] > .title { background: lemonchiffon; }\n  }\n  @layer themes {\n    .theme .title { color: firebrick; }\n  }\n</style>\n</head>\n<body class=\"theme\">\n<article class=\"study-card\" data-state=\"warning\">\n  <h1 id=\"title\" class=\"title\">주의 카드</h1>\n  <div><span class=\"title\">중첩 보조 제목</span></div>\n</article>\n<pre id=\"result\"></pre>\n<script>\n  const title = document.querySelector(\"#title\");\n  const style = getComputedStyle(title);\n  document.querySelector(\"#result\").textContent = [\n    \"child-count=\" + document.querySelectorAll(\".study-card > .title\").length,\n    \"descendant-count=\" + document.querySelectorAll(\".study-card .title\").length,\n    \"color=\" + style.color,\n    \"background=\" + style.backgroundColor,\n    \"padding-inline=\" + style.paddingInlineStart,\n  ].join(\"\\n\");\n</script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-14", explanation: "components와 themes layer, zero-specificity default와 explicit warning state를 선언합니다." },
+        { lines: "17-20", explanation: "직접 child title과 중첩 title을 함께 두어 child/descendant match 수를 구분합니다." },
+        { lines: "22-32", explanation: "match count와 theme color, component background/padding의 최종 computed 값을 읽습니다." },
+      ],
+      run: { environment: ["@layer와 :where를 지원하는 현대 Chromium"], command: "browser에서 selector-architecture.html을 열고 #result 확인" },
+      output: { value: "child-count=1\ndescendant-count=2\ncolor=rgb(178, 34, 34)\nbackground=rgb(255, 250, 205)\npadding-inline=8px", explanation: ["themes layer가 뒤라 slateblue보다 firebrick이 이깁니다.", "warning background와 :where 기본 padding은 다른 property라 함께 남습니다."] },
+      experiments: [
+        { change: "layer 선언 순서를 themes, components로 바꿉니다.", prediction: "components의 slateblue가 color를 이깁니다.", result: "layer가 specificity보다 먼저임을 확인합니다." },
+        { change: ":where를 :is로 바꿉니다.", prediction: "현재 layer 승자는 같지만 기본 selector specificity가 높아져 같은 layer override 비용이 커집니다.", result: "match와 specificity를 분리합니다." },
+        { change: "child combinator를 descendant로 바꿉니다.", prediction: "중첩 보조 제목에도 기본 style이 적용됩니다.", result: "DOM relation contract를 명시합니다." },
+      ],
+      sourceRefs: ["selectors-4", "css-cascade-6", "mdn-specificity"],
+    }],
+    diagnostics: [
+      { symptom: "theme override를 위해 selector를 계속 길게 하거나 !important를 추가한다.", likelyCause: "component 기본값의 specificity budget과 layer contract가 없습니다.", checks: ["winning layer와 specificity를 분리합니다.", ":where 적용 가능 지점을 봅니다.", "DOM descendant chain 의존을 측정합니다."], fix: "component/theme layer를 정의하고 기본 selector를 :where·단일 class 중심으로 낮춥니다.", prevention: "selector depth·ID·important lint와 override contract test를 둡니다." },
+    ],
+    expertNotes: ["selector micro-benchmark만으로 architecture를 결정하지 않습니다. DOM readability, invalidation 범위와 실제 interaction trace를 함께 봅니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "특수문자 ID를 querySelector에서 안전하게 찾는 방법은 무엇인가요?", answer: "ID 조각을 CSS.escape로 escape해 #과 결합하거나 getElementById를 사용합니다." },
+  { question: "CSS.escape가 전체 untrusted selector를 안전하게 만드나요?", answer: "아닙니다. identifier 조각용이며 전체 selector의 match 범위·복잡도·권한은 별도 제한해야 합니다." },
+  { question: "data-* attribute에 secret을 저장해도 되나요?", answer: "아닙니다. DOM과 CSS/script에서 읽히므로 비민감 UI state만 둡니다." },
+  { question: ":where와 :is의 specificity 차이는 무엇인가요?", answer: ":where 자체와 argument는 0이고 :is는 argument 중 가장 높은 specificity를 전달합니다." },
+  { question: "다른 layer selector끼리 경쟁할 때 specificity를 먼저 비교하나요?", answer: "아닙니다. layer 순서가 먼저이고 같은 layer 안에서 specificity를 비교합니다." },
+  { question: "selector 성능을 어떻게 진단하나요?", answer: "추측보다 DevTools Performance의 style recalculation과 실제 DOM/state mutation 범위를 측정합니다." },
+);
+session.completionChecklist.push(
+  "동적 identifier를 selector에 넣기 전 CSS.escape 또는 getElementById를 사용한다.",
+  "외부 전체 selector 입력을 허용하지 않고 match 범위를 allowlist한다.",
+  "class·data-state·data-testid와 semantic ARIA state 책임을 구분한다.",
+  ":where·:is·:not·:has의 match와 specificity를 따로 계산한다.",
+  "component/theme layer와 specificity budget을 문서화한다.",
+  "child/descendant 등 DOM relation을 짧고 명시적인 selector로 표현한다.",
+  "DevTools에서 match·winner·style recalculation을 실제 측정한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "dom-queryselector", repository: "WHATWG DOM", path: "#dom-parentnode-queryselector", publicUrl: "https://dom.spec.whatwg.org/#dom-parentnode-queryselector", usedFor: ["querySelector", "invalid selector SyntaxError"], evidence: "WHATWG DOM의 querySelector contract를 동적 selector 오류 경계의 기준으로 사용했습니다." },
+  { id: "cssom-escape", repository: "W3C CSS Working Group", path: "TR/cssom-1/#the-css.escape()-method", publicUrl: "https://www.w3.org/TR/cssom-1/#the-css.escape()-method", usedFor: ["CSS.escape", "identifier serialization"], evidence: "CSSOM의 CSS.escape algorithm을 특수문자 ID selector의 공식 근거로 사용했습니다." },
+  { id: "whatwg-data-attributes", repository: "WHATWG HTML", path: "multipage/dom.html#embedding-custom-non-visible-data-with-the-data-*-attributes", publicUrl: "https://html.spec.whatwg.org/multipage/dom.html#embedding-custom-non-visible-data-with-the-data-*-attributes", usedFor: ["data-*", "dataset", "non-secret custom data"], evidence: "WHATWG HTML의 custom data attribute 정의를 state hook과 보안 경계에 사용했습니다." },
+  { id: "mdn-specificity", repository: "MDN Web Docs", path: "Web/CSS/CSS_cascade/Specificity", publicUrl: "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_cascade/Specificity", usedFor: ["specificity 계산", ":where/:is", "override architecture"], evidence: "MDN specificity 문서를 실무 DevTools 설명과 W3C specification 보조 자료로 사용했습니다." },
+);
 
 export default session;

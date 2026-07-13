@@ -70,7 +70,7 @@ const session = {
           language: "html",
           filename: "cascade-locations.html",
           purpose: "원본과 같은 세 적용 위치를 한 page에서 충돌시키고 rule 순서와 inline 제거에 따른 승자를 관찰합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>CSS 적용 위치</title>\n  <!-- base.css 내용: .message { color: olive; } -->\n  <link rel=\"stylesheet\" href=\"base.css\">\n  <style>\n    .message { color: lightblue; }\n  </style>\n</head>\n<body>\n  <h1>CSS 적용 위치</h1>\n  <p id=\"plain\" class=\"message\">외부와 내부 규칙 경쟁</p>\n  <p id=\"inline\" class=\"message\" style=\"color: tomato\">inline까지 경쟁</p>\n  <pre id=\"result\"></pre>\n  <script>\n    const color = (id) => getComputedStyle(document.querySelector(id)).color;\n    document.querySelector('#result').textContent = [\n      `plain=${color('#plain')}`,\n      `inline=${color('#inline')}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>CSS 적용 위치</title>\n  <!-- base.css 내용: .message { color: olive; } -->\n  <link rel=\"stylesheet\" href=\"base.css\">\n  <style>\n    .message { color: lightblue; }\n  </style>\n</head>\n<body>\n  <h1>CSS 적용 위치</h1>\n  <p id=\"plain\" class=\"message\">외부와 내부 규칙 경쟁</p>\n  <p id=\"inline\" class=\"message\" style=\"color: tomato\">inline까지 경쟁</p>\n  <pre id=\"result\"></pre>\n  <script>\n    const color = (id) => getComputedStyle(document.querySelector(id)).color;\n    document.querySelector('#result').textContent = [\n      `plain=${color('#plain')}`,\n      `inline=${color('#inline')}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "6-10", explanation: "external base.css가 먼저, 같은 specificity의 internal .message가 나중에 나타나므로 plain element에서는 internal rule이 승리합니다." },
             { lines: "14-15", explanation: "둘 다 class가 match하지만 두 번째 p에는 normal inline color가 있어 stylesheet의 normal author rule보다 앞섭니다." },
@@ -140,7 +140,7 @@ const session = {
           language: "html",
           filename: "cascade-layers.html",
           purpose: "selector를 과도하게 강화하지 않고 named layer와 unlayered rule의 normal/important 순서를 실제 computed output으로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>캐스케이드 레이어</title>\n  <style>\n    @layer reset, base, components, utilities;\n\n    @layer components {\n      #demo.card { color: darkgreen; background: honeydew; }\n    }\n    @layer utilities {\n      .text-alert { color: firebrick; }\n    }\n    @layer base {\n      .card { border: 3px solid navy !important; }\n    }\n    @layer utilities {\n      .card { border-color: orange !important; }\n    }\n    .card { background: lavender; }\n  </style>\n</head>\n<body>\n  <p id=\"demo\" class=\"card text-alert\">레이어 결과</p>\n  <pre id=\"result\"></pre>\n  <script>\n    const style = getComputedStyle(document.querySelector('#demo'));\n    document.querySelector('#result').textContent = [\n      `color=${style.color}`,\n      `background=${style.backgroundColor}`,\n      `border=${style.borderTopColor}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>캐스케이드 레이어</title>\n  <style>\n    @layer reset, base, components, utilities;\n\n    @layer components {\n      #demo.card { color: darkgreen; background: honeydew; }\n    }\n    @layer utilities {\n      .text-alert { color: firebrick; }\n    }\n    @layer base {\n      .card { border: 3px solid navy !important; }\n    }\n    @layer utilities {\n      .card { border-color: orange !important; }\n    }\n    .card { background: lavender; }\n  </style>\n</head>\n<body>\n  <p id=\"demo\" class=\"card text-alert\">레이어 결과</p>\n  <pre id=\"result\"></pre>\n  <script>\n    const style = getComputedStyle(document.querySelector('#demo'));\n    document.querySelector('#result').textContent = [\n      `color=${style.color}`,\n      `background=${style.backgroundColor}`,\n      `border=${style.borderTopColor}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7", explanation: "normal layer 우선순위를 reset<base<components<utilities 순으로 선언합니다." },
             { lines: "9-14", explanation: "components의 매우 높은 #demo.card specificity보다 뒤 utilities의 짧은 .text-alert가 layer 단계에서 먼저 이겨 color는 firebrick입니다." },
@@ -312,5 +312,134 @@ const session = {
     ],
   },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "origin-layer-rollback-and-inline-boundary",
+    title: "origin·importance·layer·inline을 한 cascade 표에서 추적합니다",
+    lead: "selector specificity를 계산하기 전에 declaration이 어느 origin·importance·layer에 속하는지 분류하고 revert-layer로 현재 layer만 되돌리는 경계를 확인합니다.",
+    explanations: [
+      "cascade는 relevance 뒤 origin과 importance를 먼저 비교합니다. 같은 author origin에서도 transition, important, animation, normal의 우선순위가 다르고 user important는 author important보다 앞서 사용자 접근성 override를 보호합니다.",
+      "normal author declaration에서는 unlayered style이 named layer보다 뒤에 있어 이깁니다. important declaration에서는 layer order가 반전되어 먼저 선언한 layer의 important가 뒤 layer important보다 강합니다.",
+      "revert-layer는 현재 cascade layer의 값을 제거한 것처럼 이전 layer 또는 origin 결과로 돌아갑니다. revert는 현재 origin 전체를 건너뛰는 더 넓은 rollback이므로 둘을 theme reset에 섞지 않습니다.",
+      "style attribute는 author origin의 특정 declaration이며 normal inline은 stylesheet normal보다 강하지만 stylesheet의 author !important에는 집니다. 무조건 최상위라는 표는 user origin과 importance를 설명하지 못합니다.",
+      "DevTools에서는 Styles의 crossed-out declaration만 보지 말고 layer·inherited group·matched selector와 Computed의 최종 longhand를 함께 확인합니다. shorthand 한 줄이 여러 longhand를 덮을 수 있습니다.",
+    ],
+    concepts: [
+      { term: "cascade rollback", definition: "revert·revert-layer 같은 전역 keyword로 현재 cascade 범위의 declaration을 되돌리는 동작입니다.", detail: ["revert-layer는 현재 layer만 건너뜁니다.", "unset·initial·inherit와 의미가 다릅니다."] },
+      { term: "important layer inversion", definition: "important declaration에서는 normal과 반대로 앞 layer가 뒤 layer보다 높은 우선순위를 갖는 규칙입니다.", detail: ["초기 guard layer를 보호할 수 있습니다.", "layer 밖 important도 별도 위치를 가집니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "revert-layer-important-inversion-proof",
+        title: "revert-layer·unlayered normal·important layer 반전을 동시에 검증합니다",
+        language: "html",
+        filename: "cascade-rollback.html",
+        purpose: "specificity가 아닌 layer 단계에서 결정되는 color·background·border 결과를 computed style로 고정합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\"><title>cascade rollback</title>\n<style>\n  @layer reset, components, utilities;\n  @layer reset {\n    .card { color: gray; padding: 8px; border: 4px solid navy !important; }\n  }\n  @layer components {\n    #lesson.card { color: royalblue; background: honeydew; }\n  }\n  @layer utilities {\n    .card { color: tomato; border-color: orange !important; }\n    .rollback { color: revert-layer; }\n  }\n  .card { background: lavender; }\n</style>\n</head>\n<body>\n<article id=\"lesson\" class=\"card rollback\">레이어 카드</article>\n<pre id=\"result\"></pre>\n<script>\n  const style = getComputedStyle(document.querySelector(\"#lesson\"));\n  document.querySelector(\"#result\").textContent = [\n    \"color=\" + style.color,\n    \"background=\" + style.backgroundColor,\n    \"border=\" + style.borderTopColor + \" \" + style.borderTopWidth,\n    \"padding=\" + style.paddingTop,\n  ].join(\"\\n\");\n</script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-17", explanation: "세 layer 순서, normal color rollback, important border 반전과 unlayered background 후보를 선언합니다." },
+          { lines: "20-30", explanation: "한 element의 최종 color·background·border·padding longhand를 CSSOM canonical 값으로 출력합니다." },
+        ],
+        run: { environment: ["@layer와 revert-layer를 지원하는 현대 Chromium"], command: "browser에서 cascade-rollback.html을 열고 #result 확인" },
+        output: { value: "color=rgb(65, 105, 225)\nbackground=rgb(230, 230, 250)\nborder=rgb(0, 0, 128) 4px\npadding=8px", explanation: ["utilities의 revert-layer가 color를 components의 royalblue로 되돌립니다.", "unlayered lavender는 layered normal background보다 강하고 reset의 navy important는 utilities orange important보다 강합니다."] },
+        experiments: [
+          { change: "rollback class를 제거합니다.", prediction: "utilities의 tomato가 color가 됩니다.", result: "revert-layer가 현재 layer declaration만 제거함을 확인합니다." },
+          { change: "reset과 utilities layer 순서를 바꿉니다.", prediction: "important border 승자도 반대로 바뀝니다.", result: "important layer 순서 반전을 확인합니다." },
+          { change: "unlayered background를 삭제합니다.", prediction: "components의 honeydew가 보입니다.", result: "unlayered normal의 위치를 확인합니다." },
+        ],
+        sourceRefs: ["css-cascade-6", "css-cascade-5"],
+      },
+      {
+        id: "inline-important-cssom-evidence",
+        title: "inline normal과 stylesheet important의 승자·source serialization을 구분합니다",
+        language: "html",
+        filename: "inline-important.html",
+        purpose: "style attribute source와 getComputedStyle 결과가 다른 API 계층임을 exact output으로 보여 줍니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\"><title>inline boundary</title>\n<style>\n  #target.notice { color: royalblue !important; }\n  .notice { color: green; background: gold; }\n</style>\n</head>\n<body>\n<p id=\"target\" class=\"notice\" style=\"color: tomato; background: lightcyan\">알림</p>\n<pre id=\"result\"></pre>\n<script>\n  const target = document.querySelector(\"#target\");\n  const style = getComputedStyle(target);\n  document.querySelector(\"#result\").textContent = [\n    \"attribute=\" + target.getAttribute(\"style\"),\n    \"inline-color=\" + target.style.color,\n    \"inline-priority=\" + (target.style.getPropertyPriority(\"color\") || \"normal\"),\n    \"computed-color=\" + style.color,\n    \"computed-background=\" + style.backgroundColor,\n  ].join(\"\\n\");\n</script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-8", explanation: "author stylesheet의 important color와 normal background를 정의합니다." },
+          { lines: "11-23", explanation: "inline source text·CSSStyleDeclaration과 cascade 뒤 computed color/background를 별도로 읽습니다." },
+        ],
+        run: { environment: ["현대 Chromium", "외부 network 불필요"], command: "browser에서 inline-important.html을 열고 #result 확인" },
+        output: { value: "attribute=color: tomato; background: lightcyan\ninline-color=tomato\ninline-priority=normal\ncomputed-color=rgb(65, 105, 225)\ncomputed-background=rgb(224, 255, 255)", explanation: ["author important royalblue가 normal inline tomato를 이깁니다.", "background에는 important가 없어 inline lightcyan이 stylesheet gold보다 강합니다."] },
+        experiments: [
+          { change: "inline color에도 !important를 붙입니다.", prediction: "같은 author important에서 inline declaration이 royalblue rule을 이깁니다.", result: "importance가 같아진 뒤 inline precedence를 비교합니다." },
+          { change: "style attribute를 제거합니다.", prediction: "background는 gold가 됩니다.", result: "source API와 computed API의 차이를 확인합니다." },
+          { change: "사용자 입력을 style attribute에 문자열 결합합니다.", prediction: "허용하지 않은 property·url이 들어갈 수 있습니다.", result: "동적 style은 allowlist property API와 CSP 경계를 사용합니다." },
+        ],
+        sourceRefs: ["web-css-inline-source", "css-style-attributes", "css-cascade-6", "cssom"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "높은 specificity selector와 inline style이 있는데도 component guard가 이긴다.", likelyCause: "앞 layer의 important declaration 또는 user important를 specificity보다 뒤에서 확인했습니다.", checks: ["origin·importance·layer를 먼저 표로 만듭니다.", "DevTools layer와 important badge를 확인합니다.", "revert/revert-layer 후보를 봅니다."], fix: "cascade 단계 순서대로 원인을 수정하고 무분별한 specificity·important 경쟁을 중단합니다.", prevention: "layer contract와 important 허용 위치를 lint·architecture 문서로 고정합니다." },
+    ],
+    expertNotes: ["사용자 stylesheet와 forced colors는 제품 CSS가 임의로 이겨야 할 대상이 아닙니다. 사용자 설정을 견디는 semantic DOM과 system color/focus indicator를 함께 설계합니다."],
+  },
+  {
+    id: "logical-inheritance-loading-security-boundaries",
+    title: "상속·논리 방향·stylesheet loading을 접근성·성능·보안 경계로 연결합니다",
+    lead: "computed value 상속과 writing mode의 logical 축을 이해하고 CSS가 적용되지 않는 문제를 Network·CSP·MIME·cache와 cascade 문제로 분리합니다.",
+    explanations: [
+      "color·font 일부는 상속되지만 margin·border·background는 기본적으로 상속되지 않습니다. currentColor는 computed color를 다른 paint property에 연결해 theme와 forced-color 적응을 돕습니다.",
+      "inline-size·block-size와 margin-inline-start·border-block-start는 writing-mode와 direction에 따라 물리 축으로 매핑됩니다. left/right 고정은 세로쓰기·RTL localization에서 의미적 시작을 잃을 수 있습니다.",
+      "외부 stylesheet는 link href resolution, fetch status, redirect, MIME, CSP style-src, integrity/crossorigin과 cache 상태를 통과해야 cascade 후보가 됩니다. Styles panel에 rule이 아예 없으면 selector보다 Network부터 봅니다.",
+      "render-blocking CSS를 많은 origin·@import chain·거대 unused rule로 나누면 first paint가 늦어집니다. critical CSS와 cache를 측정하되 inline 남발로 CSP와 유지보수를 훼손하지 않습니다.",
+      "CSS는 데이터 보안 수단이 아닙니다. display:none·color:transparent로 숨긴 secret은 DOM·source·accessibility tooling에서 읽힐 수 있으므로 server authorization과 최소 데이터 전송이 필요합니다.",
+    ],
+    concepts: [
+      { term: "logical property", definition: "left/right 같은 물리 방향 대신 inline/block 흐름의 시작·끝에 맞춰 매핑되는 CSS property입니다.", detail: ["writing-mode와 direction에 반응합니다.", "다국어 layout 유지보수에 유리합니다."] },
+      { term: "stylesheet loading boundary", definition: "CSS resource가 cascade에 참여하기 전에 URL·network·MIME·CSP·cache를 통과하는 단계입니다.", detail: ["selector debug보다 앞선 문제일 수 있습니다.", "DevTools Network와 Security 정책을 봅니다."] },
+    ],
+    codeExamples: [{
+      id: "writing-mode-logical-inheritance-proof",
+      title: "vertical-rl에서 논리 크기·margin·border와 currentColor 상속을 측정합니다",
+      language: "html",
+      filename: "logical-cascade.html",
+      purpose: "logical property가 물리 top/right와 geometry로 변환되는 과정을 computed style로 검증합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\"><title>logical cascade</title>\n<style>\n  .parent { color: #123456; writing-mode: vertical-rl; --space: 12px; }\n  .child {\n    box-sizing: border-box;\n    color: inherit;\n    inline-size: 100px;\n    block-size: 60px;\n    margin-inline-start: var(--space);\n    border-block-start: 4px solid currentColor;\n  }\n</style>\n</head>\n<body>\n<div class=\"parent\"><div id=\"child\" class=\"child\">세로 카드</div></div>\n<pre id=\"result\"></pre>\n<script>\n  const child = document.querySelector(\"#child\");\n  const style = getComputedStyle(child);\n  const rect = child.getBoundingClientRect();\n  document.querySelector(\"#result\").textContent = [\n    \"writing-mode=\" + style.writingMode,\n    \"color=\" + style.color,\n    \"logical-margin=\" + style.marginInlineStart,\n    \"physical-margin-top=\" + style.marginTop,\n    \"logical-border=\" + style.borderBlockStartWidth,\n    \"physical-border-right=\" + style.borderRightWidth,\n    \"rect=\" + Math.round(rect.width) + \"x\" + Math.round(rect.height),\n  ].join(\"\\n\");\n</script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-14", explanation: "부모의 color·writing mode·custom property와 자식의 logical size/margin/border를 선언합니다." },
+        { lines: "17-31", explanation: "logical longhand, 매핑된 physical top/right와 60×100 border-box geometry를 한 번에 측정합니다." },
+      ],
+      run: { environment: ["writing-mode와 logical property를 지원하는 현대 Chromium"], command: "browser에서 logical-cascade.html을 열고 #result 확인" },
+      output: { value: "writing-mode=vertical-rl\ncolor=rgb(18, 52, 86)\nlogical-margin=12px\nphysical-margin-top=12px\nlogical-border=4px\nphysical-border-right=4px\nrect=60x100", explanation: ["vertical-rl에서 inline 축은 위→아래라 inline-start margin이 top에 매핑됩니다.", "block-start는 오른쪽이므로 borderBlockStart가 borderRight가 되고 inline/block 크기는 물리 height/width가 됩니다."] },
+      experiments: [
+        { change: "writing-mode를 horizontal-tb로 바꿉니다.", prediction: "inline-start margin은 left, block-start border는 top으로 매핑되고 rect는 100×60입니다.", result: "논리 축이 writing mode에 반응합니다." },
+        { change: "부모 color를 바꿉니다.", prediction: "inherit와 currentColor를 통해 자식 text와 border가 함께 바뀝니다.", result: "상속과 paint token 연결을 확인합니다." },
+        { change: "외부 stylesheet로 옮기고 CSP style-src를 위반합니다.", prediction: "rule이 cascade 후보에 들어오지 않습니다.", result: "Network/Console/CSP와 cascade diagnostics를 분리합니다." },
+      ],
+      sourceRefs: ["whatwg-stylesheet-link", "css-writing-modes-4", "csp-style-src", "css-cascade-6", "cssom"],
+    }],
+    diagnostics: [
+      { symptom: "LTR에서는 맞지만 RTL·세로쓰기에서 간격과 강조 border가 반대쪽에 나타난다.", likelyCause: "left/right/top을 의미적 inline/block 시작으로 오해했습니다.", checks: ["writing-mode와 direction computed 값을 확인합니다.", "logical/physical longhand를 나란히 봅니다.", "실제 rect와 localization fixture를 측정합니다."], fix: "의미적 방향은 logical property로 바꾸고 필요한 물리 좌표만 명시합니다.", prevention: "LTR·RTL·vertical writing mode visual/computed regression을 둡니다." },
+    ],
+    expertNotes: ["getComputedStyle 호출은 style/layout flush를 유발할 수 있습니다. 반복 animation loop에서 read/write를 섞지 말고 DevTools Performance로 forced reflow를 측정합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "normal declaration과 important declaration에서 layer 순서는 어떻게 다른가요?", answer: "normal은 뒤 layer가 강하지만 important는 순서가 반전되어 앞 layer가 강합니다." },
+  { question: "revert와 revert-layer의 차이는 무엇인가요?", answer: "revert-layer는 현재 cascade layer만 건너뛰고 revert는 현재 origin 수준을 되돌려 더 이전 origin 결과를 찾습니다." },
+  { question: "normal inline style이 stylesheet !important를 이기나요?", answer: "아닙니다. 같은 author origin에서 important declaration이 normal inline보다 먼저 비교됩니다." },
+  { question: "논리 속성의 inline-start는 항상 왼쪽인가요?", answer: "아닙니다. writing-mode와 direction에 따라 top·right 등 다른 물리 면으로 매핑됩니다." },
+  { question: "Styles panel에 기대 rule이 전혀 없다면 무엇부터 확인하나요?", answer: "selector보다 link URL, Network status, MIME, CSP, cache와 stylesheet parse 여부를 먼저 확인합니다." },
+  { question: "display:none으로 민감 데이터를 숨기면 안전한가요?", answer: "아닙니다. DOM/source로 읽을 수 있으므로 authorization 후 필요한 데이터만 server에서 전달해야 합니다." },
+);
+session.completionChecklist.push(
+  "cascade 후보를 origin·importance·layer·specificity·scope·order 순서로 표로 만든다.",
+  "normal/important layer 순서 반전과 unlayered 위치를 설명한다.",
+  "revert·revert-layer·unset·initial·inherit를 목적에 맞게 선택한다.",
+  "inline source declaration과 CSSOM computed serialization을 분리해 테스트한다.",
+  "LTR·RTL·vertical writing mode에서 logical property mapping을 검증한다.",
+  "CSS 미적용 시 Network·MIME·CSP·cache와 selector 문제를 분리한다.",
+  "사용자 override·forced colors를 존중하고 CSS를 보안 은닉 수단으로 사용하지 않는다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "css-style-attributes", repository: "W3C CSS Working Group", path: "TR/css-style-attr/", publicUrl: "https://www.w3.org/TR/css-style-attr/", usedFor: ["style attribute", "inline declaration parsing"], evidence: "W3C CSS Style Attributes specification을 inline author declaration의 공식 근거로 사용했습니다." },
+  { id: "css-writing-modes-4", repository: "W3C CSS Working Group", path: "TR/css-writing-modes-4/#block-flow", publicUrl: "https://www.w3.org/TR/css-writing-modes-4/#block-flow", usedFor: ["writing-mode", "inline/block axis", "logical mapping"], evidence: "CSS Writing Modes의 block/inline flow 정의를 logical property 계산 기준으로 사용했습니다." },
+  { id: "csp-style-src", repository: "W3C Web Application Security", path: "TR/CSP3/#directive-style-src", publicUrl: "https://www.w3.org/TR/CSP3/#directive-style-src", usedFor: ["style-src", "inline/external CSS 보안", "loading failure"], evidence: "CSP Level 3 style-src directive를 stylesheet loading 보안 경계의 근거로 사용했습니다." },
+);
 
 export default session;

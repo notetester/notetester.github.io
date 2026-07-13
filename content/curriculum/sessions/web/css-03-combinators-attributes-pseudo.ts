@@ -49,7 +49,7 @@ const session = {
           language: "html",
           filename: "combinators.html",
           purpose: "원본의 nested paragraph/list 관계를 네 combinator의 exact query count로 검증합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>관계 선택자</title></head>\n<body>\n  <section class=\"panel\">\n    <h1>관계 실험</h1>\n    <p class=\"note\">직계 문단 A</p>\n    <div class=\"group\"><p class=\"note\">손자 문단 B</p></div>\n    <p>직계 문단 C</p>\n    <p>직계 문단 D</p>\n  </section>\n  <pre id=\"result\"></pre>\n  <script>\n    const selectors = [\n      '.panel > p',\n      '.panel p',\n      '.panel h1 + p',\n      '.panel h1 ~ p'\n    ];\n    document.querySelector('#result').textContent = selectors\n      .map((selector) => `${selector}=${document.querySelectorAll(selector).length}`)\n      .join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>관계 선택자</title><style>.panel > p { border-inline-start: 3px solid navy; } .panel p { padding-inline-start: .25rem; } .panel h1 + p { font-weight: 700; } .panel h1 ~ p { color: #333; }</style></head>\n<body>\n  <section class=\"panel\">\n    <h1>관계 실험</h1>\n    <p class=\"note\">직계 문단 A</p>\n    <div class=\"group\"><p class=\"note\">손자 문단 B</p></div>\n    <p>직계 문단 C</p>\n    <p>직계 문단 D</p>\n  </section>\n  <pre id=\"result\"></pre>\n  <script>\n    const selectors = [\n      '.panel > p',\n      '.panel p',\n      '.panel h1 + p',\n      '.panel h1 ~ p'\n    ];\n    document.querySelector('#result').textContent = selectors\n      .map((selector) => `${selector}=${document.querySelectorAll(selector).length}`)\n      .join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "5-11", explanation: "panel 아래 h1, direct p 세 개와 group 안 nested p 하나를 의도적으로 배치합니다." },
             { lines: "15-20", explanation: "네 relationship selector를 같은 querySelectorAll API로 평가합니다." },
@@ -92,7 +92,7 @@ const session = {
           language: "html",
           filename: "attributes.html",
           purpose: "원본 mailto/domain/input type selector를 안전한 token/state 예제로 확장하고 exact match count를 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>속성 선택자</title></head>\n<body>\n  <a href=\"mailto:student@example.com\" rel=\"contact external\">메일 문의</a>\n  <a href=\"https://example.com/course\" rel=\"external help\">외부 도움말</a>\n  <a href=\"/redirect?next=daum.example\" rel=\"help\">내부 redirect</a>\n  <button data-state=\"OPEN\" aria-expanded=\"true\">목차</button>\n  <input type=\"password\" required>\n  <pre id=\"result\"></pre>\n  <script>\n    const selectors = [\n      '[href^=\"mailto:\"]',\n      '[href*=\"daum\"]',\n      '[rel~=\"external\"]',\n      '[data-state=\"open\" i]',\n      'input[type=\"password\"][required]'\n    ];\n    document.querySelector('#result').textContent = selectors\n      .map((s) => `${s}=${document.querySelectorAll(s).length}`).join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>속성 선택자</title><style>[rel~=\"external\"] { text-decoration: underline; } [data-state=\"open\" i] { font-weight: 700; } input[type=\"password\"][required] { border: 2px solid firebrick; }</style></head>\n<body>\n  <a href=\"mailto:student@example.com\" rel=\"contact external\">메일 문의</a>\n  <a href=\"https://example.com/course\" rel=\"external help\">외부 도움말</a>\n  <a href=\"/redirect?next=daum.example\" rel=\"help\">내부 redirect</a>\n  <button data-state=\"OPEN\" aria-expanded=\"true\">목차</button>\n  <input type=\"password\" required>\n  <pre id=\"result\"></pre>\n  <script>\n    const selectors = [\n      '[href^=\"mailto:\"]',\n      '[href*=\"daum\"]',\n      '[rel~=\"external\"]',\n      '[data-state=\"open\" i]',\n      'input[type=\"password\"][required]'\n    ];\n    document.querySelector('#result').textContent = selectors\n      .map((s) => `${s}=${document.querySelectorAll(s).length}`).join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "5-7", explanation: "mailto/external/redirect URL과 rel token을 분리해 substring과 token matching 차이를 드러냅니다." },
             { lines: "8-9", explanation: "case가 다른 data state와 두 attribute를 동시에 가진 password input을 준비합니다." },
@@ -135,7 +135,7 @@ const session = {
           language: "html",
           filename: "interaction-states.html",
           purpose: "mouse 없이도 focus가 보이고 field group·validation state를 CSS로 표현하되 error 의미는 DOM text에 유지합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>상태 선택자</title>\n  <style>\n    .field { padding: .75rem; border: 2px solid #aaa; }\n    .field:focus-within { border-color: #165a9e; background: #eef7ff; }\n    input:focus-visible, button:focus-visible { outline: 3px solid #a33b00; outline-offset: 3px; }\n    button:hover { background: #def; }\n    form.was-submitted input:invalid { border-color: #b00020; }\n    form:not(.was-submitted) .error { display: none; }\n  </style>\n</head>\n<body>\n  <main>\n    <h1>과정 검색</h1>\n    <form id=\"search\" novalidate>\n      <div class=\"field\">\n        <label for=\"query\">검색어</label>\n        <input id=\"query\" name=\"q\" required aria-describedby=\"query-error\">\n        <p id=\"query-error\" class=\"error\">검색어를 입력하세요.</p>\n      </div>\n      <button>검색</button>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector('#search');\n    form.addEventListener('submit', (event) => {\n      event.preventDefault();\n      form.classList.add('was-submitted');\n      const input = document.querySelector('#query');\n      input.setAttribute('aria-invalid', String(!input.validity.valid));\n      document.querySelector('#result').textContent = [\n        `valid=${input.validity.valid}`,\n        `field-focus-within=${document.querySelector('.field').matches(':focus-within')}`,\n        `submitted=${form.classList.contains('was-submitted')}`\n      ].join('\n');\n      if (!input.validity.valid) input.focus();\n    });\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>상태 선택자</title>\n  <style>\n    .field { padding: .75rem; border: 2px solid #aaa; }\n    .field:focus-within { border-color: #165a9e; background: #eef7ff; }\n    input:focus-visible, button:focus-visible { outline: 3px solid #a33b00; outline-offset: 3px; }\n    button:hover { background: #def; }\n    form.was-submitted input:invalid { border-color: #b00020; }\n    form:not(.was-submitted) .error { display: none; }\n  </style>\n</head>\n<body>\n  <main>\n    <h1>과정 검색</h1>\n    <form id=\"search\" novalidate>\n      <div class=\"field\">\n        <label for=\"query\">검색어</label>\n        <input id=\"query\" name=\"q\" required aria-describedby=\"query-error\">\n        <p id=\"query-error\" class=\"error\">검색어를 입력하세요.</p>\n      </div>\n      <button>검색</button>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector('#search');\n    form.addEventListener('submit', (event) => {\n      event.preventDefault();\n      form.classList.add('was-submitted');\n      const input = document.querySelector('#query');\n      input.setAttribute('aria-invalid', String(!input.validity.valid));\n      if (!input.validity.valid) input.focus();\n      const field = document.querySelector('.field');\n      const error = document.querySelector('.error');\n      const inputStyle = getComputedStyle(input);\n      const fieldStyle = getComputedStyle(field);\n      document.querySelector('#result').textContent = [\n        `valid=${input.validity.valid}`,\n        `field-focus-within=${field.matches(':focus-within')}`,\n        `submitted=${form.classList.contains('was-submitted')}`,\n        `화면: 검색어를 입력하세요. ${getComputedStyle(error).display === 'none' ? '숨김' : '표시'}`,\n        `focus: ${document.activeElement === input ? '빈 검색어 input' : '다른 요소'}, ${inputStyle.outlineColor === 'rgb(163, 59, 0)' ? 'orange outline' : inputStyle.outlineColor}과 ${fieldStyle.borderTopColor === 'rgb(22, 90, 158)' ? 'blue field border' : fieldStyle.borderTopColor}`\n      ].join('\\n');\n    });\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-12", explanation: "group focus, keyboard focus, mouse hover, submitted invalid, pre-submit error visibility를 서로 다른 selector로 분리합니다." },
             { lines: "19-24", explanation: "visible label·required·DOM error text와 aria-describedby를 유지해 CSS generated content에 오류를 숨기지 않습니다." },
@@ -222,7 +222,7 @@ const session = {
           language: "html",
           filename: "pseudo-elements.html",
           purpose: "원본 badge/icon/underline 예제를 CSS 실패와 accessibility에도 의미가 남는 pattern으로 교정합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>가상 요소</title>\n  <style>\n    .product-title { position: relative; display: inline-block; padding-inline-start: 1rem; }\n    .product-title::before { content: ''; position: absolute; inline-size: .5rem; block-size: .5rem; border-radius: 50%; background: #b00020; inset-inline-start: 0; inset-block-start: .65em; }\n    .product-title::after { content: ''; display: block; block-size: .15rem; background: currentColor; transform: scaleX(.35); transform-origin: left; }\n    .status { margin-inline-start: .5rem; font-size: .75em; font-weight: 700; }\n    .items li::marker { color: #8a1743; font-size: 1.2em; }\n    ::selection { color: #fff; background: #51327a; }\n  </style>\n</head>\n<body>\n  <main>\n    <h1 class=\"product-title\">HTML 학습 카드 <span class=\"status\">신규</span></h1>\n    <ul class=\"items\"><li>문서 구조</li><li>선택자</li></ul>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const title = document.querySelector('.product-title');\n    document.querySelector('#result').textContent = [\n      `dom-text=${JSON.stringify(title.textContent.trim().replace(/\\s+/g, ' '))}`,\n      `before=${JSON.stringify(getComputedStyle(title, '::before').content)}`,\n      `after-display=${getComputedStyle(title, '::after').display}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>가상 요소</title>\n  <style>\n    .product-title { position: relative; display: inline-block; padding-inline-start: 1rem; }\n    .product-title::before { content: ''; position: absolute; inline-size: .5rem; block-size: .5rem; border-radius: 50%; background: #b00020; inset-inline-start: 0; inset-block-start: .65em; }\n    .product-title::after { content: ''; display: block; block-size: .15rem; background: currentColor; transform: scaleX(.35); transform-origin: left; }\n    .status { margin-inline-start: .5rem; font-size: .75em; font-weight: 700; }\n    .items li::marker { color: #8a1743; font-size: 1.2em; }\n    ::selection { color: #fff; background: #51327a; }\n  </style>\n</head>\n<body>\n  <main>\n    <h1 class=\"product-title\">HTML 학습 카드 <span class=\"status\">신규</span></h1>\n    <ul class=\"items\"><li>문서 구조</li><li>선택자</li></ul>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const title = document.querySelector('.product-title');\n    document.querySelector('#result').textContent = [\n      `dom-text=${JSON.stringify(title.textContent.trim().replace(/\\s+/g, ' '))}`,\n      `before=${getComputedStyle(title, '::before').content}`,\n      `after-display=${getComputedStyle(title, '::after').display}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-9", explanation: "before는 empty decorative dot, after는 empty underline box입니다. 핵심 text를 content property에 넣지 않습니다." },
             { lines: "10-12", explanation: "신규 DOM text style, native list marker, selection highlight를 각각 적절한 pseudo-element 범위로 처리합니다." },
@@ -241,6 +241,92 @@ const session = {
       ],
       diagnostics: [
         { symptom: "NEW badge나 필수 표시가 화면에는 보이지만 CSS off·copy·translation·screen reader output에서 사라진다.", likelyCause: "핵심 상태 text를 ::before/after content에만 넣었습니다.", checks: ["element.textContent와 accessibility tree를 확인합니다.", "stylesheet를 disable하고 task를 수행합니다.", "generated content의 localization source를 확인합니다."], fix: "의미 있는 상태/label을 DOM text·ARIA/native attribute로 제공하고 pseudo-element는 시각 장식에 제한합니다.", prevention: "CSS-generated non-empty 문자열을 lint/report하고 content owner/accessibility review를 요구합니다." },
+      ],
+    },
+    {
+      id: "relational-has-progressive-performance",
+      title: ":has()는 후손을 검사해 부모를 꾸미지만 범위·fallback·무효화 비용까지 설계해야 합니다",
+      lead: "relational pseudo-class는 오래 필요했던 parent selection을 제공하지만 JavaScript state machine을 자동으로 대체하지 않으며, 좁은 component anchor와 검증 가능한 baseline이 핵심입니다.",
+      explanations: [
+        "`:has(relative-selector-list)`는 각 element를 anchor로 삼아 argument의 relative selector가 하나라도 성립하면 그 anchor를 match합니다. `.choice:has(> input:checked)`는 checked input 자체가 아니라 그 input을 direct child로 둔 choice를 선택합니다. 앞에서 배운 descendant와 child 관계가 argument 안에서도 그대로 적용되므로 DOM 계약을 먼저 그려야 합니다.",
+        "`:has()`의 specificity는 argument 안에서 가장 높은 specificity로 대체됩니다. `.card:has(#danger:checked)`는 id가 섞여 override가 매우 어려워질 수 있습니다. 공개 component API에는 class·data state를 사용하고, 필요하면 `:where()`로 baseline specificity를 낮춘 뒤 cascade layer에서 override 순서를 관리합니다.",
+        "지원하지 않는 browser에서 selector list 전체가 무효가 되는 시나리오를 고려합니다. 필수 기능은 native checked·disabled·details/summary 또는 JavaScript가 부여하는 명시적 state class로 먼저 동작하게 하고, `@supports selector(.choice:has(input:checked))` 안에서 parent highlight만 enhancement합니다. CSS 지원 여부가 submit·validation·disclosure의 동작 여부를 결정하면 안 됩니다.",
+        "browser는 descendant mutation이 생길 때 어떤 ancestor의 `:has()` 결과가 달라지는지 다시 평가해야 합니다. `body:has(.error)`처럼 넓은 anchor와 deep descendant, universal selector를 결합하면 큰 문서에서 style invalidation 후보가 많아집니다. `.checkout-field:has(> input:user-invalid)`처럼 component boundary와 direct relationship을 좁히고 실제 Performance trace에서 Recalculate Style을 비교합니다.",
+        "`:has()`는 security 검사기가 아닙니다. DOM에 `.admin`이나 `[data-secret]`가 있는지 감지해 화면만 숨겨도 data와 control은 이미 client에 전달되었습니다. authorization은 server/API에서 강제하고 CSS selector는 허가된 DOM의 표현만 맡습니다. DevTools에서 rule match, selector specificity, invalidation과 accessibility tree를 함께 확인합니다.",
+      ],
+      concepts: [
+        { term: "relational pseudo-class", definition: "anchor element를 기준으로 relative selector가 성립하는지 검사해 anchor 자체를 match하는 pseudo-class입니다.", detail: ["`:has()`가 대표적입니다.", "argument의 관계는 anchor에서 출발합니다."] },
+        { term: "progressive enhancement", definition: "지원 여부와 무관하게 핵심 task가 가능한 baseline 위에 최신 selector의 시각적 편의를 추가하는 전략입니다.", detail: ["`@supports selector(...)`로 enhancement를 격리합니다.", "native state와 semantic DOM을 baseline으로 둡니다."] },
+        { term: "style invalidation", definition: "DOM·attribute·state 변경 뒤 어떤 element의 selector match와 computed style을 다시 계산할지 정하는 browser 작업입니다.", detail: ["anchor 범위가 넓을수록 후보가 늘 수 있습니다.", "추측 대신 실제 trace로 측정합니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "has-checked-disabled-nth-of-proof",
+          title: ":has checked·disabled parent와 `nth-child(of S)`의 실제 match 증명",
+          language: "html",
+          filename: "has-and-nth-of.html",
+          purpose: "접근 가능한 native checkbox를 유지하면서 parent card enhancement와 filtered sibling index를 computed style·match count로 확인합니다.",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>관계형 선택자 검증</title>\n  <style>\n    .choice { display: block; border: 2px solid #777; padding: .5rem; }\n    .choice:has(> input:checked) { border: 4px solid #006400; background: honeydew; }\n    .choice:has(> input:disabled) { opacity: .55; }\n    .task-list > li:nth-child(2 of .active) { font-weight: 700; }\n  </style>\n</head>\n<body>\n  <main>\n    <h1>학습 과정 선택</h1>\n    <label class=\"choice\" id=\"selected-card\"><input type=\"checkbox\" checked> CSS 선택자</label>\n    <label class=\"choice\" id=\"disabled-card\"><input type=\"checkbox\" disabled> 준비 중 과정</label>\n    <ol class=\"task-list\"><li class=\"active\">첫 번째</li><li class=\"paused\">보류</li><li class=\"active\">세 번째</li></ol>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const selected = document.querySelector('#selected-card');\n    const disabled = document.querySelector('#disabled-card');\n    const secondActive = document.querySelector('.task-list > li:nth-child(2 of .active)');\n    const selectedStyle = getComputedStyle(selected);\n    document.querySelector('#result').textContent = [\n      `checked-card=${selected.matches('.choice:has(> input:checked)')}`,\n      `disabled-card=${disabled.matches('.choice:has(> input:disabled)')}`,\n      `active-second-count=${document.querySelectorAll('.task-list > li:nth-child(2 of .active)').length}`,\n      `active-second-text=${secondActive.textContent}`,\n      `border=${selectedStyle.borderTopColor} ${selectedStyle.borderTopWidth}`,\n      `background=${selectedStyle.backgroundColor}`,\n      `opacity=${getComputedStyle(disabled).opacity}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
+          walkthrough: [
+            { lines: "6-10", explanation: "baseline border와 parent `:has()` enhancement, disabled opacity, filtered sibling index를 서로 독립된 rule로 선언합니다." },
+            { lines: "13-19", explanation: "visible label 안 native checkbox를 두고 active가 아닌 sibling을 끼워 DOM index와 filtered index를 구분합니다." },
+            { lines: "22-26", explanation: "선택된 card·disabled card·두 번째 active item을 selector API로 직접 찾습니다." },
+            { lines: "27-36", explanation: "matches·count·text와 실제 computed border/background/opacity를 직렬화해 screenshot 추측을 제거합니다." },
+          ],
+          run: { environment: ["Selectors Level 4 :has와 nth-child(of S)를 지원하는 현대 browser"], command: "browser에서 has-and-nth-of.html을 열고 결과 확인" },
+          output: { value: "checked-card=true\ndisabled-card=true\nactive-second-count=1\nactive-second-text=세 번째\nborder=rgb(0, 100, 0) 4px\nbackground=rgb(240, 255, 240)\nopacity=0.55", explanation: ["checked input의 parent card만 4px dark-green border와 honeydew background를 얻습니다.", "disabled native control을 가진 두 번째 card는 opacity .55 enhancement를 얻지만 label과 disabled semantics는 DOM에 남습니다.", "`2 of .active`는 전체 세 번째 li이지만 active subset에서는 두 번째인 항목 하나를 고릅니다."] },
+          experiments: [
+            { change: "첫 checkbox의 checked attribute를 제거합니다.", prediction: "checked-card=false이고 baseline 2px gray border와 transparent background가 됩니다.", result: "`:has()` 결과는 descendant의 native state 변화에 따라 다시 계산됩니다." },
+            { change: "`:has(> input:checked)`에서 `>`를 제거하고 nested wrapper 안에 input을 옮깁니다.", prediction: "descendant version은 계속 match하지만 direct-child version은 match하지 않습니다.", result: "relative selector 안 combinator도 component DOM contract입니다." },
+            { change: "paused li에 active class를 추가합니다.", prediction: "두 번째 li가 active subset의 두 번째가 되어 bold target이 바뀝니다.", result: "`of S`는 먼저 S로 sibling set을 filter한 뒤 index를 계산합니다." },
+          ],
+          sourceRefs: ["web-structural-source", "selectors-4", "selectors-relational-has", "wai-forms"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "checkbox를 바꿀 때 page 전체의 style recalculation이 커지고 scroll이 끊긴다.", likelyCause: "body 같은 광범위 anchor에 deep `:has()`를 여러 개 적용해 mutation마다 많은 ancestor 후보를 다시 평가합니다.", checks: ["Performance panel에서 interaction 전후 Recalculate Style duration과 affected node 수를 기록합니다.", "`:has()` rule을 disable해 baseline과 비교합니다.", "anchor를 component class와 direct child로 좁힌 variant를 측정합니다."], fix: "relational selector를 가장 가까운 component boundary로 제한하고 빈번한 cross-tree state는 owner가 data/class로 명시합니다.", prevention: "대표 large-DOM fixture에 selector invalidation budget과 interaction trace regression을 둡니다." },
+      ],
+    },
+    {
+      id: "form-state-accessibility-lifecycle",
+      title: "form pseudo-class는 validation 수명주기와 접근 가능한 오류 전달을 함께 표현합니다",
+      lead: "`:required`·`:disabled`·`:checked`·`:invalid`는 native state를 잘 보여 주지만, 언제 오류를 노출하고 사용자가 무엇을 고쳐야 하는지는 별도의 interaction 설계가 필요합니다.",
+      explanations: [
+        "`:enabled`와 `:disabled`는 해당 HTML element가 실제로 enable/disable semantics를 가질 때 match합니다. `aria-disabled='true'`는 native `:disabled`가 아니며 focus·click·form submission도 자동으로 막지 않습니다. 가능한 경우 native disabled를 사용하고, custom widget이면 behavior·ARIA·style을 같은 state owner에서 동기화합니다.",
+        "`:checked`는 checkbox·radio·option의 선택 state를 표현합니다. label을 input과 연결하면 pointer target과 accessible name을 함께 얻습니다. 시각적으로 input을 감출 때 `display:none`으로 keyboard/accessibility tree에서 제거하지 말고, robust visually-hidden pattern과 high-contrast·zoom에서 focus indicator를 시험합니다.",
+        "`:valid`와 `:invalid`는 constraint validation 결과이며 required field는 page load 직후에도 invalid일 수 있습니다. 사용자가 아직 입력하지 않았는데 모든 field를 빨갛게 만들면 오류인지 필수 표시인지 구분하기 어렵습니다. submit attempt·blur·`:user-invalid` 지원 정책을 정하고 DOM error text를 `aria-describedby`로 연결합니다.",
+        "`:focus-visible`은 keyboard modality의 focus indicator를 보존하는 데 쓰되 `outline: none`을 global로 선언하지 않습니다. forced-colors mode에서는 author color가 조정될 수 있으므로 outline/border thickness와 system color fallback을 확인합니다. focus order는 CSS visual reorder가 아니라 DOM order와 interaction logic을 따라야 합니다.",
+        "DevTools에서는 Elements의 Force state로 `:focus`, `:hover`, `:active`를 고정하고 Styles의 matched rule·Computed의 최종 outline을 확인합니다. 그러나 `:user-invalid`나 실제 keyboard heuristic은 강제 state만으로 충분하지 않으므로 Tab·submit·reset 시나리오를 실제로 수행하고 accessibility tree의 name/description/state도 기록합니다.",
+      ],
+      concepts: [
+        { term: "constraint validation", definition: "required·type·pattern·min/max 같은 HTML 제약으로 form control의 validity를 계산하는 native mechanism입니다.", detail: ["`:valid`/`:invalid`가 결과를 표현합니다.", "오류 message와 노출 timing은 별도 설계가 필요합니다."] },
+        { term: ":user-invalid", definition: "사용자 interaction 뒤 invalid로 판단된 control을 대상으로 하려는 user-action pseudo-class입니다.", detail: ["지원 범위를 확인합니다.", "server error와 native constraint error를 혼동하지 않습니다."] },
+        { term: "accessible error", definition: "화면에 보이고 programmatic relation으로 control과 연결되며 수정 방법을 전달하는 오류 message입니다.", detail: ["색만으로 알리지 않습니다.", "focus 이동과 live announcement를 과도하게 만들지 않습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [
+        { symptom: "필수 form이 처음 열리자마자 전부 빨갛고 screen reader는 어떤 오류를 고칠지 설명하지 않는다.", likelyCause: "`:invalid` 색 rule만 사용하고 submit/touched lifecycle과 DOM error description을 만들지 않았습니다.", checks: ["load 전후 validity와 was-submitted state를 확인합니다.", "error text의 id와 aria-describedby 연결을 검사합니다.", "색을 제거하거나 forced-colors에서 의미가 남는지 확인합니다."], fix: "오류 노출 시점을 정의하고 visible error text·summary·focus policy를 추가하며 CSS는 그 authoritative state를 표현합니다.", prevention: "empty load·keyboard submit·server error·reset 시나리오를 접근성 통합 test로 유지합니다." },
+      ],
+    },
+    {
+      id: "generated-content-writing-modes-privacy-security",
+      title: "pseudo-element는 writing mode와 privacy·security 경계 안에서 장식 box로 사용합니다",
+      lead: "generated box는 DOM 없이 유연한 장식을 만들지만 의미·보안·레이아웃 방향을 대신하지 못하며, logical property와 CSS failure 기준으로 검토해야 합니다.",
+      explanations: [
+        "`::before`와 `::after`는 originating element의 formatting context에 참여하는 generated box입니다. badge·required text·버튼 이름을 `content`에만 넣으면 CSS download 실패, user stylesheet, translation, copy/paste, 일부 accessibility 조합에서 의미가 사라질 수 있습니다. 핵심 문자열은 HTML에 두고 empty pseudo-element로 dot·line·shape를 만듭니다.",
+        "horizontal writing을 가정한 `left`, `right`, `border-left`는 `writing-mode: vertical-rl`이나 RTL locale에서 의도와 다른 쪽에 배치됩니다. `inset-inline-start`, `margin-inline`, `border-block-start` 같은 logical property를 사용하고 horizontal-tb/vertical-rl 및 ltr/rtl matrix에서 실제 containing block과 computed physical mapping을 확인합니다.",
+        "`::marker`는 list semantics를 보존하면서 marker의 제한된 style을 꾸미는 데 적합합니다. list-style:none 뒤 decorative pseudo-element로 bullet을 재구현하면 high-contrast·zoom·wrapped line alignment와 semantics를 다시 해결해야 합니다. native list가 목적에 맞는지 먼저 판단합니다.",
+        "`:visited`는 history sniffing을 막기 위해 허용 property와 computed-style observation이 제한됩니다. 방문 여부에 따라 `content`, display, size, URL icon을 바꾸거나 script가 pseudo-element style을 읽어 business logic을 결정해서는 안 됩니다. visited color도 다른 state와 충분한 contrast를 유지하는 단순한 affordance로만 씁니다.",
+        "CSS는 secret masking이나 authorization layer가 아닙니다. `content: attr(data-token)`, DOM attribute 속 비밀, `display:none` admin control은 DevTools와 source에서 읽힙니다. 민감한 data는 client에 보내지 않고 server가 권한을 강제합니다. 성능 면에서는 수천 개 row의 heavy pseudo-element shadow/filter를 paint profile로 측정하고 reduced-motion·forced-colors fallback을 둡니다.",
+      ],
+      concepts: [
+        { term: "originating element", definition: "pseudo-element가 생성되고 style·formatting context의 기준이 되는 실제 element입니다.", detail: ["pseudo-element는 DOM child와 동일하지 않습니다.", "positioning containing block을 명시적으로 확인합니다."] },
+        { term: "logical property", definition: "left/right/top/bottom 대신 inline/block 축과 start/end를 기준으로 표현하는 CSS property입니다.", detail: ["writing mode와 direction에 적응합니다.", "computed physical mapping을 DevTools에서 확인합니다."] },
+        { term: "history sniffing", definition: "visited style 차이를 관찰해 사용자의 browsing history를 추론하려는 privacy attack입니다.", detail: ["browser가 style/observation을 제한합니다.", "visited state를 logic source로 쓰지 않습니다."] },
+      ],
+      codeExamples: [],
+      diagnostics: [
+        { symptom: "세로쓰기 또는 RTL에서 pseudo-element badge가 text를 덮고 반대쪽에 붙는다.", likelyCause: "absolute position을 left/top과 고정 physical margin으로 작성해 inline/block 축 변화를 무시했습니다.", checks: ["writing-mode와 direction을 각각 강제합니다.", "containing block과 inset computed physical value를 확인합니다.", "200% zoom과 줄바꿈에서 overlap을 검사합니다."], fix: "originating element를 명확한 containing block으로 만들고 logical inset/size/margin으로 배치하며 의미 text는 normal flow에 둡니다.", prevention: "horizontal/vertical·LTR/RTL·zoom·forced-colors visual fixture를 component CI에 둡니다." },
       ],
     },
     {
@@ -301,6 +387,12 @@ const session = {
     { question: "display:none item은 nth-child count에서 빠지나요?", answer: "아닙니다. DOM sibling으로 남아 selector index에 포함됩니다. of selector나 rendering/state 전략을 사용합니다." },
     { question: ":has()는 무엇을 선택하나요?", answer: "argument 관계를 만족하는 descendant/child/sibling을 가진 anchor element 자체를 match하는 relational pseudo-class입니다." },
     { question: "::before content로 오류·NEW text를 넣어도 되나요?", answer: "핵심 의미는 DOM text/ARIA/native state에 두고 pseudo-element는 장식에 제한해야 CSS 실패·번역·복사·보조기술에 견고합니다." },
+    { question: "`.choice:has(> input:checked)`에서 match되는 element는 input인가요?", answer: "아닙니다. direct child checked input을 가진 `.choice` anchor가 match됩니다. input을 고르려면 별도 selector가 필요합니다." },
+    { question: "`:has()`가 지원되지 않으면 form 제출도 막아야 하나요?", answer: "아닙니다. native form semantics와 JavaScript behavior가 baseline task를 담당하고 `:has()`는 parent highlight 같은 progressive enhancement만 맡아야 합니다." },
+    { question: "`:has()`가 느리다는 말만 듣고 전부 금지해야 하나요?", answer: "일률 금지보다 component anchor·relationship을 좁히고 실제 large-DOM interaction의 Recalculate Style을 측정해 budget으로 판단합니다." },
+    { question: "`aria-disabled='true'`가 있으면 `:disabled`도 match하나요?", answer: "아닙니다. native disabled state와 ARIA attribute는 다릅니다. custom control이면 click·focus·ARIA·style을 직접 동기화해야 합니다." },
+    { question: "required input에 `:invalid` rule만 있으면 접근 가능한 오류가 완성되나요?", answer: "아닙니다. 적절한 노출 시점, visible error text, programmatic description, 색 이외의 표시와 keyboard focus 정책이 필요합니다." },
+    { question: "`:visited`에 `::after { content: '방문함' }`을 넣어도 되나요?", answer: "방문 이력 privacy 제한 때문에 기대대로 적용·관찰할 수 없고 history를 의미 source로 사용해서도 안 됩니다. 허용된 단순 color affordance만 사용합니다." },
   ],
   completionChecklist: [
     "descendant·child·adjacent·subsequent combinator의 exact DOM match set을 검증했다.",
@@ -311,6 +403,13 @@ const session = {
     "핵심 상태·label·error는 DOM에 두고 pseudo-element를 장식/typography에 제한했다.",
     "ARIA/data attribute visual state와 actual behavior/focus/controlled region을 동기화했다.",
     "wrapper·insert·filter·CSS off·large DOM fixture에서 selector 회귀와 성능을 확인했다.",
+    "`:has()` anchor를 component boundary로 제한하고 unsupported browser에서도 핵심 task가 가능한 baseline을 확인했다.",
+    "`:has()` argument의 combinator와 specificity를 계산하고 high-specificity id가 섞이지 않았는지 검토했다.",
+    "large DOM에서 descendant mutation 전후 Recalculate Style을 측정해 relational selector budget을 기록했다.",
+    "native checked·disabled·validity와 ARIA/data state의 semantic·behavior 차이를 test했다.",
+    "오류는 submit/touched lifecycle에 맞춰 visible DOM text와 programmatic description으로 전달했다.",
+    "horizontal/vertical writing mode와 LTR/RTL에서 pseudo-element logical inset·size·margin을 확인했다.",
+    "visited style·generated content·hidden DOM을 history 판정이나 secret/authorization 수단으로 사용하지 않았다.",
   ],
   nextSessions: ["css-04-typography-color-icons"],
   sources: [
@@ -323,6 +422,7 @@ const session = {
     { id: "css-pseudo-4", repository: "W3C CSS Working Group", path: "TR/css-pseudo-4/", publicUrl: "https://www.w3.org/TR/css-pseudo-4/", usedFor: ["before/after", "first-line/letter", "marker", "selection", "originating element"], evidence: "CSS Pseudo-Elements Level 4의 generated/typographic/highlight pseudo-element 정의를 사용했습니다." },
     { id: "css-content-3", repository: "W3C CSS Working Group", path: "TR/css-content-3/", publicUrl: "https://www.w3.org/TR/css-content-3/", usedFor: ["content property", "generated content", "counter/content functions"], evidence: "generated content의 범위와 CSS failure/semantic boundary 설명의 표준 근거로 사용했습니다." },
     { id: "wai-forms", repository: "W3C Web Accessibility Initiative", path: "tutorials/forms/", publicUrl: "https://www.w3.org/WAI/tutorials/forms/", usedFor: ["label/error text", "keyboard focus", "validation notification"], evidence: "focus/invalid selector example에서 visible label·DOM error·programmatic relation을 유지하는 기준으로 반영했습니다." },
+    { id: "selectors-relational-has", repository: "W3C CSS Working Group", path: "TR/selectors-4/#relational", publicUrl: "https://www.w3.org/TR/selectors-4/#relational", usedFor: [":has relative selector", "anchor matching", "specificity", "progressive enhancement"], evidence: "checked·disabled descendant를 가진 parent card와 scoped performance/fallback 설명을 Selectors Level 4 relational pseudo-class 정의에 맞춰 검증했습니다." },
   ],
   sourceCoverage: {
     filesRead: 5,
