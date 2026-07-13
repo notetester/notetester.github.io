@@ -151,7 +151,7 @@ const session = {
             { lines: "3-15", explanation: "root object, 정확한 field 집합, non-empty name, non-empty scores, bool을 제외한 정확한 int와 0~100 범위를 순서대로 검증합니다." },
             { lines: "16", explanation: "검증된 값만 정제된 내부 결과로 변환합니다." },
             { lines: "18-23", explanation: "정상, bool-as-int 경계, field 누락, JSON 문법 오류 네 payload를 준비합니다." },
-            { lines: "25-32", explanation: "parsing 오류 JSONDecodeError와 domain ValueError를 분리하고 원문 전체 대신 위치·분류만 출력합니다." },
+            { lines: "24-31", explanation: "parsing 오류 JSONDecodeError와 domain ValueError를 분리하고 원문 전체 대신 위치·분류만 출력합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "json_validation.py로 저장"], command: "python json_validation.py" },
           output: { value: "1: OK {'name': '둘리', 'average': 85.0}\n2: SCHEMA_ERROR each score must be an integer from 0 to 100\n3: SCHEMA_ERROR fields must be name and scores\n4: JSON_ERROR line=1 col=2", explanation: ["첫 payload는 name 공백을 정제하고 평균을 계산합니다.", "JSON true는 Python True로 parse되지만 type(score) is not int 검사로 점수에서 거부됩니다.", "누락 field는 우연한 KeyError 전에 schema 오류가 되고 문법 오류는 line·column으로 구분됩니다."] },
@@ -257,3 +257,173 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedJsonChapters: DetailedSession["chapters"] = [
+  {
+    id: "strict-json-interoperability-numbers-unicode",
+    title: "Python 타입 매핑을 RFC JSON 값 모델과 맞추고 NaN·Unicode·숫자 정밀도를 명시합니다",
+    lead: "json.dumps가 성공했다는 사실만으로 다른 언어와 왕복 가능한 것은 아니며 표준 JSON 값, 숫자 범위, Unicode 표현과 중복 키 정책을 계약으로 정해야 합니다.",
+    explanations: [
+      "JSON object·array·string·number·true·false·null은 Python에서 보통 dict·list·str·int/float·True/False·None으로 매핑됩니다. tuple은 array로 쓰인 뒤 list로 돌아오므로 Python 객체 identity와 구체 container 타입까지 자동 보존하지 않습니다.",
+      "object key는 JSON에서 string이어야 합니다. dumps의 `skipkeys=False` 기본값은 지원하지 않는 key를 TypeError로 거부하지만 int key는 문자열로 변환될 수 있어 load 뒤 key 타입이 달라집니다. protocol schema에서는 처음부터 string key만 허용합니다.",
+      "`ensure_ascii=False`는 한글을 사람이 읽는 Unicode 문자로 내보내고 True는 `\\uXXXX` escape를 사용할 수 있습니다. 둘은 decode 뒤 같은 str이 될 수 있지만 파일은 UTF-8로 명시해 쓰고 HTTP Content-Type·DB encoding도 일치시킵니다.",
+      "Python 기본 encoder는 JavaScript 이름의 NaN·Infinity를 허용할 수 있지만 RFC JSON number가 아닙니다. 외부 교환에는 `allow_nan=False`로 즉시 실패시키고 missing·overflow·계산 오류를 업무 정책으로 처리합니다.",
+      "JSON number 하나가 모든 시스템에서 같은 정밀도를 뜻하지 않습니다. Python int는 임의 정밀도지만 소비자가 IEEE-754 double만 쓰면 큰 정수가 반올림될 수 있습니다. 식별자·금액·고정 정밀도는 schema에 범위를 두거나 문자열 tag와 명시 변환을 사용합니다.",
+      "loads의 `parse_float=Decimal`은 decimal token을 정확한 Decimal로 읽게 할 수 있지만 다시 dumps하려면 custom encoder가 필요합니다. parse 단계의 정확성과 serialization 표현을 한 쌍으로 설계합니다.",
+      "`sort_keys=True`와 compact separators는 재현 가능한 데모·diff에 유용하지만 canonical JSON 서명 규격을 자동 충족하지 않습니다. Unicode normalization, number representation, duplicate key와 whitespace까지 서명 표준이 정한 방식으로 처리합니다.",
+    ],
+    concepts: [
+      { term: "JSON data model", definition: "object·array·string·number·boolean·null로 구성된 언어 독립 값 모델입니다.", detail: ["Python 전용 tuple·set·date는 직접 포함되지 않습니다.", "schema가 의미와 범위를 보완합니다."] },
+      { term: "non-finite number", definition: "NaN과 양·음 Infinity처럼 유한한 실수가 아닌 값입니다.", detail: ["표준 JSON number가 아닙니다.", "allow_nan=False로 경계에서 거부할 수 있습니다."] },
+      { term: "interoperability budget", definition: "모든 소비자가 안전하게 표현할 수 있는 숫자 범위·문자·크기·중첩 깊이 제한입니다.", detail: ["가장 약한 소비자와 합의합니다.", "schema와 테스트에 기록합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-json-strict-types-unicode-nan",
+      title: "표준 타입과 한글을 compact JSON으로 왕복하고 NaN을 거부합니다",
+      language: "python",
+      filename: "json_strict_types.py",
+      purpose: "JSON token과 Python runtime 타입 mapping을 확인하고 비표준 non-finite number가 boundary를 넘지 않게 합니다.",
+      code: "import json\n\npayload = {\n    'active': True,\n    'count': 2,\n    'items': ['가', None],\n    'ratio': 0.5,\n}\nencoded = json.dumps(payload, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':'))\ndecoded = json.loads(encoded)\nprint(encoded)\nprint(f'types={type(decoded[\"active\"]).__name__},{type(decoded[\"count\"]).__name__},{type(decoded[\"items\"]).__name__},{type(decoded[\"ratio\"]).__name__}')\n\ntry:\n    json.dumps({'bad': float('nan')}, allow_nan=False)\nexcept ValueError as error:\n    print(f'nan={type(error).__name__}|out_of_range={\"Out of range\" in str(error)}')",
+      walkthrough: [
+        { lines: "1-8", explanation: "JSON이 직접 표현할 수 있는 bool·int·list·str·null·float만으로 payload를 만듭니다." },
+        { lines: "9-12", explanation: "Unicode를 보존하고 NaN을 금지한 compact output을 다시 load해 runtime 타입을 확인합니다." },
+        { lines: "14-17", explanation: "NaN serialization을 strict boundary에서 ValueError로 포착해 stderr 없이 진단합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python json_strict_types.py" },
+      output: { value: "{\"active\":true,\"count\":2,\"items\":[\"가\",null],\"ratio\":0.5}\ntypes=bool,int,list,float\nnan=ValueError|out_of_range=True", explanation: ["JSON true·null은 Python bool·None으로 복원됩니다.", "ensure_ascii=False라 한글이 직접 보입니다.", "allow_nan=False가 비표준 number를 차단합니다."] },
+      experiments: [
+        { change: "tuple을 payload에 넣습니다.", prediction: "array로 encode되고 load 뒤 list가 됩니다.", result: "구체 Python container 타입은 별도 tag 없이는 보존되지 않습니다." },
+        { change: "int key 1을 넣습니다.", prediction: "load 뒤 string key '1'이 되어 원본 dict와 같지 않을 수 있습니다.", result: "protocol object key를 string으로 제한합니다." },
+        { change: "ensure_ascii=True로 바꿉니다.", prediction: "가는 Unicode escape로 표시되지만 load 뒤 같은 str입니다.", result: "wire representation과 decoded value를 구분합니다." },
+      ],
+      sourceRefs: ["python-json-encoder-027", "python-json-loads-hooks-027", "rfc8259-027"],
+    }],
+    diagnostics: [
+      { symptom: "Python에서는 저장됐는데 다른 JSON parser가 NaN에서 실패합니다.", likelyCause: "기본 allow_nan 동작으로 RFC JSON에 없는 token을 내보냈습니다.", checks: ["output에서 NaN·Infinity를 검색합니다.", "encoder allow_nan 설정을 봅니다.", "발생한 계산 단계와 missing 정책을 확인합니다."], fix: "외부 경계에 allow_nan=False를 적용하고 non-finite 값을 schema 오류나 명시적 null/tag로 처리합니다.", prevention: "NaN·±Infinity fixture와 타 언어 parser compatibility test를 둡니다." },
+      { symptom: "큰 정수 ID가 JavaScript 소비자에서 다른 값이 됩니다.", likelyCause: "소비자의 안전 정수 범위를 넘는 Python int를 JSON number로 보냈습니다.", checks: ["원본 자릿수와 소비자 numeric model을 확인합니다.", "왕복 뒤 문자열 표현과 equality를 비교합니다.", "schema maximum을 봅니다."], fix: "식별자는 string으로 계약하고 계산 숫자는 합의 범위·정밀도로 제한합니다.", prevention: "2^53 전후와 업무 최대값을 cross-runtime contract test에 포함합니다." },
+    ],
+  },
+  {
+    id: "custom-domain-encoder-decoder-roundtrip",
+    title: "Decimal·date 같은 도메인 타입은 명시적 tag와 대칭 decoder로 왕복합니다",
+    lead: "`default=str`은 오류를 숨기고 타입 정보를 잃기 쉬우므로 지원 타입만 tag object로 encode하고 object_hook에서 정확한 shape를 검증해 복원합니다.",
+    explanations: [
+      "JSONEncoder의 `default`는 기본 encoder가 모르는 객체에서 호출됩니다. 모든 값을 str로 바꾸지 말고 Decimal·date처럼 허용한 타입만 처리하고 나머지는 TypeError를 발생시켜 누락된 계약을 드러냅니다.",
+      "tag는 `{'$decimal':'12.50'}`처럼 충돌 가능성을 줄이는 명시적 object shape로 설계합니다. 사용자 데이터가 같은 key를 가질 수 있으면 envelope namespace·schema discriminator와 version을 사용합니다.",
+      "`object_hook`은 가장 안쪽 object부터 모든 JSON object에 호출됩니다. key 하나만 보고 무조건 domain object로 바꾸지 말고 key 집합·value 타입·형식을 확인하며 잘못된 tag는 명시적으로 거부합니다.",
+      "Decimal은 문자열로 tag해 scale과 정확한 값을 보존할 수 있지만 소비자도 같은 규칙을 알아야 합니다. 금액 currency·rounding·허용 소수 자릿수는 Decimal 타입만으로 충분하지 않아 schema에 추가합니다.",
+      "date와 datetime을 구분하고 timezone-aware datetime에는 offset·UTC 정책을 둡니다. `default=str`의 임의 표현보다 ISO 8601 profile과 명시적 tag가 버전 이행과 검증에 유리합니다.",
+      "round-trip 검사는 `decode(encode(value)) == value`뿐 아니라 encode→decode→encode의 안정된 wire representation, 잘못된 tag 거부, unknown field 보존/거부 정책을 함께 봅니다.",
+      "custom encoder가 객체의 `__dict__` 전체를 직렬화하면 비밀번호·cache·내부 구현 필드가 유출될 수 있습니다. 공개 schema 필드만 새 dict에 복사하고 secrets가 결과에 없는지 검사합니다.",
+    ],
+    concepts: [
+      { term: "tagged value", definition: "JSON 기본 타입 밖의 도메인 값을 discriminator key와 표준 JSON 값으로 표현한 구조입니다.", detail: ["decoder와 version 계약이 필요합니다.", "사용자 key 충돌을 방지합니다."] },
+      { term: "object hook", definition: "JSON object가 dict로 만들어질 때 검증·도메인 복원을 수행하는 loads callback입니다.", detail: ["모든 object에 적용됩니다.", "정확한 shape를 검사합니다."] },
+      { term: "symmetric codec", definition: "지원 domain type마다 encode 표현과 decode 복원이 한 쌍으로 정의된 변환입니다.", detail: ["unknown type은 실패시킵니다.", "round-trip property로 검증합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-json-tagged-decimal-date",
+      title: "Decimal과 date를 tag object로 encode하고 원래 타입으로 복원합니다",
+      language: "python",
+      filename: "json_tagged_types.py",
+      purpose: "custom default와 object_hook이 대칭으로 작동하며 정밀도·날짜 타입이 왕복되는지 exact output으로 검증합니다.",
+      code: "import json\nfrom datetime import date\nfrom decimal import Decimal\n\ndef encode_domain(value):\n    if isinstance(value, Decimal):\n        return {'$decimal': str(value)}\n    if isinstance(value, date):\n        return {'$date': value.isoformat()}\n    raise TypeError(f'unsupported type: {type(value).__name__}')\n\ndef decode_domain(value):\n    if set(value) == {'$decimal'}:\n        return Decimal(value['$decimal'])\n    if set(value) == {'$date'}:\n        return date.fromisoformat(value['$date'])\n    return value\n\npayload = {'amount': Decimal('12.50'), 'day': date(2026, 7, 14)}\nencoded = json.dumps(payload, default=encode_domain, sort_keys=True, separators=(',', ':'))\ndecoded = json.loads(encoded, object_hook=decode_domain)\nprint(encoded)\nprint(f'types={type(decoded[\"amount\"]).__name__},{type(decoded[\"day\"]).__name__}|equal={decoded == payload}')",
+      walkthrough: [
+        { lines: "1-3", explanation: "JSON·date·Decimal 표준 타입을 준비합니다." },
+        { lines: "5-10", explanation: "허용한 두 타입만 tag dict로 바꾸고 unknown type은 TypeError로 거부합니다." },
+        { lines: "12-17", explanation: "정확히 tag key 하나인 object만 원래 domain type으로 복원합니다." },
+        { lines: "19-23", explanation: "고정 payload를 compact JSON으로 encode·decode하고 wire와 타입·equality를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python json_tagged_types.py" },
+      output: { value: "{\"amount\":{\"$decimal\":\"12.50\"},\"day\":{\"$date\":\"2026-07-14\"}}\ntypes=Decimal,date|equal=True", explanation: ["Decimal의 trailing zero가 tag string에 보존됩니다.", "date는 ISO 문자열과 discriminator로 구분됩니다.", "object_hook 뒤 원본 payload와 같습니다."] },
+      experiments: [
+        { change: "payload에 set을 추가합니다.", prediction: "지원하지 않아 TypeError가 납니다.", result: "조용한 문자열화 대신 schema 누락을 발견합니다." },
+        { change: "`{'$decimal':'bad'}`를 decode합니다.", prediction: "Decimal 변환 오류가 납니다.", result: "잘못된 tag를 validation 오류로 래핑합니다." },
+        { change: "datetime을 date handler보다 먼저 별도 검사하지 않고 넣습니다.", prediction: "datetime도 date의 subclass라 날짜 정보만 남길 수 있습니다.", result: "구체 타입 검사 순서를 계약에 포함합니다." },
+      ],
+      sourceRefs: ["python-json-encoder-027", "python-json-loads-hooks-027", "json-schema-core-027"],
+    }],
+    diagnostics: [
+      { symptom: "모든 custom 객체가 문자열로 저장되어 load 뒤 타입을 알 수 없습니다.", likelyCause: "`default=str`로 unsupported type을 전부 숨겼습니다.", checks: ["encoder default를 확인합니다.", "wire에 discriminator가 있는지 봅니다.", "round-trip type assertions를 실행합니다."], fix: "지원 타입별 tag encoder와 대칭 object_hook을 만들고 unknown type은 TypeError로 실패시킵니다.", prevention: "지원·미지원 타입 표와 encode/decode property test를 둡니다." },
+      { symptom: "일반 사용자 object가 object_hook에서 Decimal로 잘못 바뀝니다.", likelyCause: "`$decimal` key 존재만 보고 다른 field가 있는 object까지 변환했습니다.", checks: ["hook의 key 집합 조건을 봅니다.", "사용자 데이터와 tag namespace 충돌을 찾습니다.", "중첩 object 호출 순서를 기록합니다."], fix: "정확한 envelope shape와 version·value validation을 요구하고 collision-resistant namespace를 사용합니다.", prevention: "tag와 같은 사용자 key, extra field, invalid value fixture를 둡니다." },
+    ],
+  },
+  {
+    id: "framed-stream-version-schema-security",
+    title: "JSON stream에는 framing을 추가하고 version migration·schema·resource limit를 입구에서 적용합니다",
+    lead: "JSON 문서를 단순 연결하면 경계를 찾을 수 없으므로 JSON Lines나 길이 prefix를 선택하고 각 record를 독립 검증·이행해야 합니다.",
+    explanations: [
+      "`dump(obj1, file); dump(obj2, file)`처럼 JSON 문서를 바로 이어 쓰면 하나의 유효 JSON document가 아닙니다. array 하나로 묶거나 record마다 LF를 쓰는 JSON Lines, protocol length prefix처럼 명시적 framing을 선택합니다.",
+      "JSON Lines에서는 각 물리 줄이 완전한 JSON value이고 UTF-8을 사용하며 빈 줄을 record로 취급하지 않는 등 별도 형식 계약이 있습니다. 문자열 내부 newline은 JSON escape로 표현되므로 line delimiter와 구분됩니다.",
+      "large array를 json.load하면 전체 object graph가 메모리에 만들어집니다. producer의 `JSONEncoder.iterencode`는 output chunk를 만들 수 있지만 표준 decoder가 arbitrary stream array를 자동 incremental parse해 주는 것은 아닙니다. JSON Lines parser나 검증된 streaming library를 선택합니다.",
+      "각 record에 `version` discriminator를 두고 현재 schema로 migration한 뒤 domain validation을 수행합니다. migration은 입력 dict를 몰래 공유 변경하지 않고 새 record를 반환하며 unknown future version은 추측하지 말고 격리합니다.",
+      "JSON object의 duplicate key는 parser에 따라 마지막 값이 이전 값을 덮을 수 있습니다. 보안·서명·설정 파일은 `object_pairs_hook`으로 중복을 거부하거나 protocol 표준이 정한 정책을 적용합니다.",
+      "신뢰하지 않는 JSON에는 byte size, nesting depth, array/object cardinality, string 길이와 number digits 제한이 필요합니다. Python은 int digit limit 같은 보호가 있어도 application budget을 대신하지 않으므로 읽기 전 Content-Length와 streaming count를 검사합니다.",
+      "JSON decoder는 pickle처럼 임의 Python 코드를 기본 실행하지 않지만 custom object_hook·schema format handler가 외부 I/O나 동적 import를 수행하면 공격면이 생깁니다. hook은 pure conversion으로 제한하고 파일 경로·URL·class 이름을 실행 지시로 사용하지 않습니다.",
+      "round-trip과 migration test는 version별 golden documents, unknown/duplicate/missing field, 최대 크기 전후, truncated line, invalid UTF-8과 secret field 비출력을 포함합니다. 오류에는 record number를 붙이되 전체 민감 payload를 로그에 남기지 않습니다.",
+    ],
+    concepts: [
+      { term: "framing", definition: "연속 byte/text stream에서 각 JSON document의 시작과 끝을 식별하는 규칙입니다.", detail: ["JSON Lines는 LF를 사용합니다.", "단순 document 연결은 framing이 아닙니다."] },
+      { term: "schema migration", definition: "과거 version record를 검증 가능한 단계로 현재 domain shape에 변환하는 과정입니다.", detail: ["원본 version을 인지합니다.", "future version은 명시적으로 거부합니다."] },
+      { term: "resource limit", definition: "입력 bytes·깊이·원소 수·문자열·숫자 크기에 두는 처리 예산입니다.", detail: ["파싱 전후 모두 필요합니다.", "거부 metrics를 수집합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-json-lines-version-duplicates",
+      title: "JSON Lines record를 version 2로 이행하고 duplicate key를 거부합니다",
+      language: "python",
+      filename: "json_lines_versions.py",
+      purpose: "각 줄의 framing, 순수 migration, object_pairs_hook 중복 key 방어를 deterministic output으로 확인합니다.",
+      code: "import json\n\ndef reject_duplicates(pairs):\n    result = {}\n    for key, value in pairs:\n        if key in result:\n            raise ValueError('duplicate key')\n        result[key] = value\n    return result\n\ndef migrate(record):\n    if record.get('version') == 1:\n        return {'id': record['id'], 'name': record['name'], 'tags': [], 'version': 2}\n    if record.get('version') == 2:\n        return record.copy()\n    raise ValueError('unsupported version')\n\nlines = (\n    '{\"id\":1,\"name\":\"Python\",\"version\":1}',\n    '{\"id\":2,\"name\":\"JSON\",\"tags\":[\"io\"],\"version\":2}',\n)\nrecords = [migrate(json.loads(line, object_pairs_hook=reject_duplicates)) for line in lines]\nprint(f'records={len(records)}|versions={[item[\"version\"] for item in records]}|tags={[item[\"tags\"] for item in records]}')\n\ntry:\n    json.loads('{\"id\":1,\"id\":2}', object_pairs_hook=reject_duplicates)\nexcept ValueError as error:\n    print(f'duplicate={type(error).__name__}:{error}')",
+      walkthrough: [
+        { lines: "1-9", explanation: "object pair 순서를 받아 같은 key가 두 번 나오면 dict overwrite 전에 거부합니다." },
+        { lines: "11-16", explanation: "version1은 새 version2 dict로 이행하고 version2도 copy하며 unknown은 실패시킵니다." },
+        { lines: "18-23", explanation: "두 독립 JSON Lines record를 parse·migrate해 version과 tags shape를 맞춥니다." },
+        { lines: "25-28", explanation: "duplicate id payload가 controlled ValueError인지 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python json_lines_versions.py" },
+      output: { value: "records=2|versions=[2, 2]|tags=[[], ['io']]\nduplicate=ValueError:duplicate key", explanation: ["version1 record에 empty tags가 추가됩니다.", "version2 shape는 copy되어 유지됩니다.", "중복 id가 마지막 값으로 조용히 덮이지 않습니다."] },
+      experiments: [
+        { change: "version3 record를 추가합니다.", prediction: "unsupported version 오류가 납니다.", result: "future data를 과거 schema로 추측하지 않습니다." },
+        { change: "두 JSON document를 newline 없이 연결합니다.", prediction: "loads가 Extra data 오류를 냅니다.", result: "명시적 framing 필요성을 확인합니다." },
+        { change: "한 line을 중간에서 자릅니다.", prediction: "JSONDecodeError가 나고 record 번호와 함께 격리할 수 있습니다.", result: "stream 전체를 민감 로그에 남기지 않습니다." },
+      ],
+      sourceRefs: ["json-lines-027", "python-json-loads-hooks-027", "json-schema-core-027", "rfc8259-027"],
+    }],
+    diagnostics: [
+      { symptom: "여러 object를 dump한 파일을 load하면 Extra data 오류가 납니다.", likelyCause: "독립 JSON documents를 framing 없이 연속 기록했습니다.", checks: ["첫 document 종료 뒤 non-whitespace가 있는지 봅니다.", "array·JSON Lines·length prefix 중 계약을 확인합니다.", "producer의 write 호출을 추적합니다."], fix: "하나의 array 또는 명시적 JSON Lines/length framing으로 다시 설계합니다.", prevention: "0·1·여러 records와 truncated 마지막 record를 parser contract test에 둡니다." },
+      { symptom: "설정 JSON의 duplicate key가 조용히 마지막 값으로 바뀝니다.", likelyCause: "기본 dict decoding의 overwrite 동작을 중복 거부 정책 없이 사용했습니다.", checks: ["raw object pairs를 보존해 중복을 찾습니다.", "서명·설정 protocol의 duplicate 정책을 확인합니다.", "object_pairs_hook 사용 여부를 봅니다."], fix: "중복이 허용되지 않는 경계에서 object_pairs_hook으로 즉시 거부합니다.", prevention: "첫·중간·마지막 위치 duplicate key fixture를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedJsonChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-json-encoder-027", repository: "Python Standard Library", path: "json.JSONEncoder", publicUrl: "https://docs.python.org/3/library/json.html#json.JSONEncoder", usedFor: ["type mapping", "default hook", "allow_nan", "iterencode"], evidence: "표준 encoder의 지원 타입·확장 hook·non-finite number 동작을 공식 문서로 확인했습니다." },
+  { id: "python-json-decoder-027", repository: "Python Standard Library", path: "json.JSONDecoder", publicUrl: "https://docs.python.org/3/library/json.html#json.JSONDecoder", usedFor: ["decoder hooks", "raw_decode", "strict parsing"], evidence: "decoder의 object/number hook과 raw decoding 범위를 공식 문서로 확인했습니다." },
+  { id: "python-json-loads-hooks-027", repository: "Python Standard Library", path: "json.loads", publicUrl: "https://docs.python.org/3/library/json.html#json.loads", usedFor: ["object_hook", "object_pairs_hook", "parse_float", "duplicate handling"], evidence: "loads callback 우선순위와 사용자 정의 decode 경계를 공식 문서로 확인했습니다." },
+  { id: "python-io-text-027", repository: "Python Standard Library", path: "Text I/O", publicUrl: "https://docs.python.org/3/library/io.html#text-i-o", usedFor: ["UTF-8 text files", "stream lifecycle", "size boundary"], evidence: "JSON text의 encoding과 stream 책임을 공식 I/O 문서로 확인했습니다." },
+  { id: "rfc8259-027", repository: "IETF", path: "RFC 8259 The JavaScript Object Notation Data Interchange Format", publicUrl: "https://datatracker.ietf.org/doc/html/rfc8259", usedFor: ["JSON grammar", "numbers", "Unicode", "object member interoperability"], evidence: "JSON 교환 문법과 interoperability 요구를 표준 RFC 원문으로 확인했습니다." },
+  { id: "json-schema-core-027", repository: "JSON Schema", path: "Draft 2020-12 Core Specification", publicUrl: "https://json-schema.org/draft/2020-12/json-schema-core", usedFor: ["schema vocabulary", "versioned validation", "annotations and assertions"], evidence: "JSON data shape와 version별 validation을 기술하는 공식 core specification을 확인했습니다." },
+  { id: "json-lines-027", repository: "JSON Lines", path: "JSON Lines format", publicUrl: "https://jsonlines.org/", usedFor: ["UTF-8", "one JSON value per line", "line terminator framing"], evidence: "newline-framed JSON stream의 세 가지 핵심 요구를 형식 공식 사이트에서 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "Python tuple을 JSON 왕복하면 다시 tuple인가요?", answer: "아닙니다. JSON array로 기록되고 기본 loads 뒤 list가 됩니다." },
+  { question: "ensure_ascii=False는 JSON을 비표준으로 만드나요?", answer: "아닙니다. JSON text는 Unicode를 지원하며 파일·전송 encoding을 UTF-8로 명시하면 됩니다." },
+  { question: "allow_nan=False를 외부 교환에서 권하는 이유는 무엇인가요?", answer: "NaN과 Infinity는 RFC JSON number가 아니어서 다른 parser와 interoperability를 깨뜨릴 수 있기 때문입니다." },
+  { question: "default=str의 가장 큰 문제는 무엇인가요?", answer: "지원하지 않는 객체를 조용히 문자열화해 타입·정밀도·누락된 schema를 숨깁니다." },
+  { question: "object_hook은 tag object에만 호출되나요?", answer: "아닙니다. 모든 decoded object에 안쪽부터 호출되므로 정확한 shape 검증이 필요합니다." },
+  { question: "여러 JSON object를 파일에 연속 dump해도 하나의 문서인가요?", answer: "아닙니다. array, JSON Lines, 길이 prefix 같은 framing이 필요합니다." },
+  { question: "기본 loads가 duplicate key를 반드시 오류로 처리하나요?", answer: "아닙니다. dict로 만들며 마지막 값이 남을 수 있어 object_pairs_hook 등 명시 정책이 필요합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "JSON 기본 타입과 Python runtime 타입 mapping을 표로 검증했다.",
+  "외부 교환에서 NaN·Infinity를 allow_nan=False로 거부한다.",
+  "Unicode 표현과 UTF-8 stream encoding 책임을 구분한다.",
+  "Decimal·date를 명시적 tag와 대칭 hook으로 왕복한다.",
+  "unknown custom type을 default=str로 숨기지 않는다.",
+  "JSON Lines 또는 다른 framing을 여러 record 계약에 적용한다.",
+  "version migration·duplicate key·resource limit를 입구에서 검사한다.",
+);

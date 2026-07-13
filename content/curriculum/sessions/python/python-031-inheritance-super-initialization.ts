@@ -74,7 +74,7 @@ const session = {
             { lines: "9-14", explanation: "BrokenDoctor는 부모 초기화를 건너뛰고 address만 만들어 info 계약을 만족하지 못합니다." },
             { lines: "16-22", explanation: "Doctor는 super().__init__으로 base invariant를 먼저 만든 뒤 고유 address를 추가합니다." },
             { lines: "24-29", explanation: "broken의 실제 __dict__를 보고 info 실패에서 누락 attribute 이름만 안전하게 출력합니다." },
-            { lines: "31-33", explanation: "수정 객체는 세 attribute와 정상 info 결과를 가집니다." },
+            { lines: "30-32", explanation: "수정 객체는 세 attribute와 정상 info 결과를 가집니다." },
           ],
           run: { environment: ["Python 3.11 이상", "super_init_fix.py로 저장"], command: "python super_init_fix.py" },
           output: { value: "broken attrs=['address']\nERROR: missing name\ndoctor attrs=['address', 'age', 'name']\n마이콜/13/제주도", explanation: ["BrokenDoctor 생성 자체는 성공하지만 name·age가 없어 나중에 실패합니다.", "AttributeError.name으로 전체 민감 객체 repr 없이 누락 이름을 진단합니다.", "Doctor는 base와 subclass state를 모두 완성합니다."] },
@@ -152,7 +152,7 @@ const session = {
             { lines: "1-5", explanation: "Root는 chain 끝에서 남은 keyword를 거부하고 공통 steps를 한 번 만듭니다." },
             { lines: "7-17", explanation: "Named와 Timed는 각 keyword만 소비하고 나머지를 super에 넘긴 뒤 돌아오는 순서로 state와 marker를 추가합니다." },
             { lines: "19-24", explanation: "StudyTask base 순서가 MRO를 정하고 topic을 추가합니다." },
-            { lines: "26-29", explanation: "한 호출로 전체 chain을 실행해 MRO, 실제 완료 순서, 세 domain attribute를 출력합니다." },
+            { lines: "25-28", explanation: "한 호출로 전체 chain을 실행해 MRO, 실제 완료 순서, 세 domain attribute를 출력합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "cooperative_super.py로 저장"], command: "python cooperative_super.py" },
           output: { value: "StudyTask -> Named -> Timed -> Root -> object\n['Root', 'Timed', 'Named', 'StudyTask']\nPython/함수 복습/45", explanation: ["호출 진행은 StudyTask→Named→Timed→Root이고 super에서 돌아오며 marker가 Root→Timed→Named→StudyTask 순서로 쌓입니다.", "공통 Root 초기화는 한 번만 실행됩니다.", "모든 keyword가 소비되어 Root에 unknown 옵션이 남지 않습니다."] },
@@ -258,3 +258,167 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedInheritanceChapters: DetailedSession["chapters"] = [
+  {
+    id: "cooperative-signatures-keyword-consumption",
+    title: "cooperative multiple inheritance는 MRO와 호환 signature·한 번의 super 호출로 완성합니다",
+    lead: "diamond에서 각 class가 자기 keyword만 소비하고 나머지를 같은 형태로 super에 전달해야 모든 initializer가 MRO 순서대로 정확히 한 번 실행됩니다.",
+    explanations: [
+      "`super()`는 고정된 부모 이름이 아니라 현재 class 다음 MRO 위치부터 attribute를 찾는 proxy입니다. 따라서 Named의 super가 직접 base만 부르는 것이 아니라 실제 object type의 다음 sibling mixin을 호출할 수 있습니다.",
+      "cooperative `__init__`은 각 class가 처리할 keyword를 keyword-only parameter로 꺼내고 나머지 `**kwargs`를 super로 전달하는 공통 protocol을 가질 수 있습니다. signature가 서로 호환되지 않으면 MRO 변경에서 unexpected/missing argument가 납니다.",
+      "leaf class도 같은 방식으로 super를 한 번 호출하고 root class가 남은 kwargs가 비었는지 확인하면 오타와 누락을 빠르게 발견합니다. `object.__init__`에는 불필요한 arguments를 전달하지 않습니다.",
+      "부모 이름을 직접 호출하면 diamond의 shared ancestor가 두 번 초기화되거나 sibling initializer가 건너뛰어집니다. cooperative hierarchy 안에서는 모든 참여 class가 super protocol을 지켜야 한 class의 직접 호출이 chain 전체를 깨지 않습니다.",
+      "MRO는 C3 linearization으로 local precedence와 monotonicity를 지키며 `Class.__mro__` 또는 `Class.mro()`로 확인합니다. base order를 바꾸면 method/initializer 순서가 바뀌므로 API와 test에 명시합니다.",
+      "mixin은 작고 독립적인 behavior를 제공하고 일반적으로 독자적인 identity·복잡한 constructor state를 최소화합니다. 여러 mixin이 같은 method를 제공하면 cooperative super와 반환 계약을 모두 문서화합니다.",
+      "초기화 event가 중요한 resource class는 constructor보다 context manager·factory를 고려합니다. `__init__` 중간 실패에서 이미 연 file·lock을 안전하게 정리하기 어렵기 때문입니다.",
+    ],
+    concepts: [
+      { term: "cooperative signature", definition: "MRO chain의 각 method가 자기 인자를 소비하고 남은 인자를 super에 전달할 수 있도록 맞춘 호출 규약입니다.", detail: ["keyword-only arguments가 유용합니다.", "root가 잔여 kwargs를 검증합니다."] },
+      { term: "C3 linearization", definition: "Python이 multiple inheritance의 일관된 method resolution order를 계산하는 알고리즘입니다.", detail: ["local base order를 존중합니다.", "monotonic MRO를 만듭니다."] },
+      { term: "diamond initialization", definition: "두 상속 경로가 같은 ancestor에서 만나는 hierarchy의 초기화 문제입니다.", detail: ["직접 부모 호출은 중복 위험이 있습니다.", "cooperative super가 한 번씩 방문합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-cooperative-keyword-mro",
+      title: "keyword를 단계별로 소비하며 diamond MRO의 모든 initializer를 한 번씩 호출합니다",
+      language: "python",
+      filename: "cooperative_keywords.py",
+      purpose: "호환 signature와 zero-argument super가 실제 MRO event 순서와 instance invariant를 완성하는지 확인합니다.",
+      code: "events = []\n\nclass Root:\n    def __init__(self, **kwargs):\n        if kwargs:\n            raise TypeError(f'unused arguments: {sorted(kwargs)}')\n        events.append('Root')\n\nclass Tagged(Root):\n    def __init__(self, *, tag, **kwargs):\n        self.tag = tag\n        events.append('Tagged')\n        super().__init__(**kwargs)\n\nclass Named(Root):\n    def __init__(self, *, name, **kwargs):\n        self.name = name\n        events.append('Named')\n        super().__init__(**kwargs)\n\nclass Item(Named, Tagged):\n    def __init__(self, **kwargs):\n        events.append('Item')\n        super().__init__(**kwargs)\n\nitem = Item(name='book', tag='study')\nprint(f'mro={[cls.__name__ for cls in Item.__mro__]}')\nprint(f'events={events}|state={item.name},{item.tag}')",
+      walkthrough: [
+        { lines: "1-7", explanation: "Root가 cooperative chain의 끝에서 남은 keyword를 거부하고 자신의 event를 남깁니다." },
+        { lines: "9-21", explanation: "Tagged와 Named가 자기 keyword만 소비하고 나머지를 MRO 다음 class로 전달합니다." },
+        { lines: "21-24", explanation: "Item도 부모 이름을 고정하지 않고 super chain을 시작합니다." },
+        { lines: "26-28", explanation: "Item의 C3 MRO, initializer events와 완성된 state를 exact 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python cooperative_keywords.py" },
+      output: { value: "mro=['Item', 'Named', 'Tagged', 'Root', 'object']\nevents=['Item', 'Named', 'Tagged', 'Root']|state=book,study", explanation: ["base order 때문에 Named 뒤 Tagged가 실행됩니다.", "각 initializer가 한 번씩 실행됩니다.", "Root에 남은 keyword가 없습니다."] },
+      experiments: [
+        { change: "Item의 base 순서를 Tagged, Named로 바꿉니다.", prediction: "MRO와 event 중 두 mixin 순서가 바뀌지만 state는 완성됩니다.", result: "base order가 public behavior임을 확인합니다." },
+        { change: "Named에서 super 호출을 제거합니다.", prediction: "Tagged와 Root가 실행되지 않아 tag가 없습니다.", result: "한 class의 비협조가 chain 전체를 끊습니다." },
+        { change: "Item에 unknown=1을 전달합니다.", prediction: "Root가 unused arguments를 TypeError로 거부합니다.", result: "keyword 오타가 조용히 유실되지 않습니다." },
+      ],
+      sourceRefs: ["python-super-doc", "python-mro-doc", "python-type-mro-031", "python-classes-inheritance-031"],
+    }],
+    diagnostics: [
+      { symptom: "diamond hierarchy에서 공통 base initializer가 두 번 실행됩니다.", likelyCause: "각 branch가 base 이름을 직접 호출해 MRO cooperative chain을 우회했습니다.", checks: ["Class.__mro__를 출력합니다.", "모든 __init__의 direct Base.__init__ 호출을 찾습니다.", "event/call count를 기록합니다."], fix: "참여 class 모두 호환 signature와 super 한 번 호출 규약으로 통일합니다.", prevention: "각 initializer exactly-once contract test를 둡니다." },
+      { symptom: "base 순서를 바꾸자 unexpected keyword argument가 납니다.", likelyCause: "한 class가 자기 인자 외 kwargs를 받거나 다음 super로 전달하는 cooperative signature를 지키지 않았습니다.", checks: ["MRO의 모든 __init__ signature를 나열합니다.", "각 단계가 소비·전달하는 key를 추적합니다.", "root 잔여 kwargs를 봅니다."], fix: "keyword-only own arguments와 **kwargs forwarding protocol을 맞추거나 multiple inheritance 대신 composition을 사용합니다.", prevention: "지원 base order와 keyword matrix를 type/runtime test에 고정합니다." },
+    ],
+  },
+  {
+    id: "inheritance-versus-composition-substitutability",
+    title: "코드 재사용보다 substitutability를 먼저 묻고 정책 조립에는 composition을 선택합니다",
+    lead: "상속은 public contract 전체를 물려받는 강한 관계이고 composition은 필요한 collaborator만 명시적으로 위임하는 관계입니다.",
+    explanations: [
+      "자식이 부모를 상속하면 부모를 받는 모든 함수에서 의미 있게 동작해야 합니다. 단지 method 몇 줄을 재사용하려고 상속하면 자식이 지원하지 못하는 public operations와 state invariant까지 노출됩니다.",
+      "composition은 formatter·repository·clock 같은 collaborator를 constructor로 받아 behavior를 조립합니다. wrapper는 inner object의 작은 Protocol에만 의존할 수 있어 class hierarchy를 고치지 않고 조합 순서를 바꿀 수 있습니다.",
+      "inheritance는 framework hook, stable is-a domain relation, shared template method처럼 override contract가 명확할 때 유용합니다. composition은 runtime 교체, 여러 독립 정책 조합, test fake, lifecycle 분리에 유리합니다.",
+      "delegation을 무작정 모든 method에 forwarding하면 wrapper가 inner API와 강하게 결합됩니다. 소비자가 필요한 최소 interface만 노출하고 inner object 자체를 public으로 새지 않게 합니다.",
+      "decorator pattern의 wrapper 순서는 behavior입니다. Prefix(Upper(Json))와 Upper(Prefix(Json))가 다를 수 있으므로 composition root에서 조합하고 integration test에 순서를 기록합니다.",
+      "subclass explosion은 region×format×cache처럼 독립 차원을 상속 조합으로 표현할 때 나타납니다. 각 차원을 strategy object로 분리하면 N×M subclasses 대신 N+M implementations와 조합으로 줄일 수 있습니다.",
+      "성능 때문에 inheritance를 선택하기 전에 실제 profile을 측정합니다. 한 번의 delegation call보다 잘못된 public contract와 test coupling 비용이 더 클 수 있습니다.",
+    ],
+    concepts: [
+      { term: "substitutability", definition: "하위 타입 객체가 상위 타입을 기대하는 위치에서 계약을 깨지 않고 사용될 수 있는 성질입니다.", detail: ["method 존재만으로 충분하지 않습니다.", "행동·오류·불변식을 포함합니다."] },
+      { term: "delegation", definition: "한 객체가 보유한 collaborator에게 일부 작업을 명시적으로 맡기는 composition 방식입니다.", detail: ["최소 interface에 의존합니다.", "runtime 조합이 가능합니다."] },
+      { term: "strategy object", definition: "교체 가능한 한 가지 정책·알고리즘을 작은 객체로 캡슐화한 collaborator입니다.", detail: ["subclass 수를 줄입니다.", "test fake를 주입할 수 있습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-composed-formatter-strategies",
+      title: "JSON formatter와 prefix 정책을 상속 없이 조합합니다",
+      language: "python",
+      filename: "formatter_composition.py",
+      purpose: "Report가 concrete hierarchy가 아니라 format method를 가진 collaborator를 사용하고 wrapper가 동작을 추가하는 구조를 보여 줍니다.",
+      code: "import json\n\nclass JsonFormatter:\n    def format(self, payload):\n        return json.dumps(payload, sort_keys=True, separators=(',', ':'))\n\nclass PrefixFormatter:\n    def __init__(self, inner, prefix):\n        self.inner = inner\n        self.prefix = prefix\n\n    def format(self, payload):\n        return self.prefix + self.inner.format(payload)\n\nclass Report:\n    def __init__(self, formatter):\n        self.formatter = formatter\n\n    def render(self, payload):\n        return self.formatter.format(payload)\n\nformatter = PrefixFormatter(JsonFormatter(), 'REPORT:')\nreport = Report(formatter)\nprint(report.render({'score': 90, 'name': 'Kim'}))\nprint(f'wrapper={type(report.formatter).__name__}|inner={type(report.formatter.inner).__name__}')",
+      walkthrough: [
+        { lines: "1-5", explanation: "JsonFormatter가 deterministic JSON serialization policy 하나를 구현합니다." },
+        { lines: "7-13", explanation: "PrefixFormatter가 inner formatter를 포함하고 같은 작은 format interface로 behavior를 감쌉니다." },
+        { lines: "15-20", explanation: "Report는 formatter concrete base class를 상속 요구하지 않고 collaborator에 위임합니다." },
+        { lines: "22-25", explanation: "composition root에서 두 policies를 조립해 output과 runtime 구조를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 json"], command: "python formatter_composition.py" },
+      output: { value: "REPORT:{\"name\":\"Kim\",\"score\":90}\nwrapper=PrefixFormatter|inner=JsonFormatter", explanation: ["Report는 formatter 구현의 상속 관계를 알지 못합니다.", "wrapper와 inner policy를 runtime에 조합합니다.", "sort_keys로 exact JSON 순서를 고정합니다."] },
+      experiments: [
+        { change: "JsonFormatter 대신 FakeFormatter를 주입합니다.", prediction: "Report class 변경 없이 deterministic test 결과를 만들 수 있습니다.", result: "constructor injection이 test seam을 제공합니다." },
+        { change: "PrefixFormatter 두 개를 중첩합니다.", prediction: "바깥 prefix부터 순서대로 결과에 붙습니다.", result: "조합 순서를 composition root에서 관리합니다." },
+        { change: "Report가 JsonFormatter를 상속하게 바꿉니다.", prediction: "Report가 JSON formatter의 한 종류라는 잘못된 is-a contract가 생깁니다.", result: "has-a relation에는 composition을 유지합니다." },
+      ],
+      sourceRefs: ["python-typing-protocol-031", "python-classes-inheritance-031", "python-abc-031"],
+    }],
+    diagnostics: [
+      { symptom: "독립 정책 조합마다 subclass가 기하급수적으로 늘어납니다.", likelyCause: "format·cache·region 같은 orthogonal variations를 단일 inheritance tree에 넣었습니다.", checks: ["변화 축을 나열합니다.", "각 subclass가 override하는 책임을 비교합니다.", "작은 strategy interface로 분리 가능한지 봅니다."], fix: "독립 정책을 collaborator objects로 분리하고 composition root에서 조합합니다.", prevention: "새 variation 추가 시 기존 classes 수정 수와 조합 수를 architecture test/review에서 봅니다." },
+    ],
+  },
+  {
+    id: "subclass-creation-hooks-registration",
+    title: "`__init_subclass__` hook으로 subclass 선언 시점의 contract와 registry를 검증합니다",
+    lead: "instance __init__보다 앞선 class creation lifecycle에서 plugin key·required metadata를 검사할 수 있지만 import-time side effect와 global registry 수명을 관리해야 합니다.",
+    explanations: [
+      "base class의 `__init_subclass__`는 직접 subclass가 만들어질 때 호출됩니다. class header keyword를 받아 metadata를 검증하고 super로 나머지를 전달하면 metaclass보다 가벼운 extension hook이 됩니다.",
+      "cooperative multiple inheritance에서 __init_subclass__도 keyword를 자기 몫만 소비하고 `super().__init_subclass__(**kwargs)`를 호출해야 다른 bases가 hook에 참여합니다.",
+      "plugin registry는 class definition, 즉 module import 시간에 변경됩니다. optional plugin이 import되지 않으면 등록도 되지 않으며 reload·중복 import name·test isolation 정책이 필요합니다.",
+      "동일 key를 조용히 overwrite하면 import 순서에 따라 구현이 바뀝니다. duplicate를 class creation error로 거부하고 error에 key와 class 이름을 명확히 남깁니다.",
+      "registry가 untrusted module을 자동 import하거나 class name 문자열을 eval하지 않게 합니다. plugin discovery는 설치 metadata entry points 같은 명시적 mechanism과 allowlist를 사용합니다.",
+      "subclass hook은 instance invariant를 대신하지 않습니다. class metadata는 hook에서, 각 object 값·resource는 __init__/factory/context manager에서 검증합니다.",
+      "runtime subclass 생성이 많으면 registry가 classes를 강하게 참조해 unload를 막을 수 있습니다. application lifecycle에 맞춰 registry owner·weak reference·cleanup 필요성을 검토합니다.",
+    ],
+    concepts: [
+      { term: "class creation hook", definition: "subclass 객체가 만들어지는 시점에 base class가 metadata와 선언 계약을 검사하는 __init_subclass__ 확장점입니다.", detail: ["instance 생성 전입니다.", "cooperative super를 사용합니다."] },
+      { term: "plugin registry", definition: "안정된 key를 구현 class에 연결해 factory가 선택할 수 있게 하는 mapping입니다.", detail: ["import lifecycle과 연결됩니다.", "중복·신뢰 정책이 필요합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-init-subclass-plugin-registry",
+      title: "subclass key를 선언 시점에 검증하고 plugin registry에 등록합니다",
+      language: "python",
+      filename: "plugin_registry.py",
+      purpose: "__init_subclass__의 class header keyword·cooperative super·duplicate policy를 작은 deterministic registry로 확인합니다.",
+      code: "class Plugin:\n    registry = {}\n\n    def __init_subclass__(cls, *, key, **kwargs):\n        super().__init_subclass__(**kwargs)\n        if not key:\n            raise ValueError('plugin key required')\n        if key in Plugin.registry:\n            raise ValueError(f'duplicate plugin: {key}')\n        cls.key = key\n        Plugin.registry[key] = cls\n\nclass JsonPlugin(Plugin, key='json'):\n    def render(self, value):\n        return f'json:{value}'\n\nclass TextPlugin(Plugin, key='text'):\n    def render(self, value):\n        return f'text:{value}'\n\nselected = Plugin.registry['json']()\nprint(f'keys={sorted(Plugin.registry)}|types={[Plugin.registry[key].__name__ for key in sorted(Plugin.registry)]}')\nprint(f'selected={type(selected).__name__}|result={selected.render(42)}')",
+      walkthrough: [
+        { lines: "1-11", explanation: "base hook이 key를 소비하고 super에 나머지를 전달한 뒤 empty·duplicate를 거부해 registry를 갱신합니다." },
+        { lines: "13-19", explanation: "두 subclass가 class header keyword로 서로 다른 stable key를 선언합니다." },
+        { lines: "21-23", explanation: "registry factory로 json implementation을 만들고 sorted metadata와 behavior를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python plugin_registry.py" },
+      output: { value: "keys=['json', 'text']|types=['JsonPlugin', 'TextPlugin']\nselected=JsonPlugin|result=json:42", explanation: ["class definitions가 실행될 때 두 registrations가 완료됩니다.", "sorted key 순서로 exact metadata를 출력합니다.", "registry에서 선택한 class를 instance화합니다."] },
+      experiments: [
+        { change: "key='json'인 subclass를 하나 더 선언합니다.", prediction: "class creation 중 duplicate ValueError가 납니다.", result: "import 순서 overwrite를 차단합니다." },
+        { change: "한 subclass에서 super hook 호출을 가로막는 다른 base를 섞습니다.", prediction: "다음 hook이 실행되지 않을 수 있습니다.", result: "모든 participating bases가 cooperative protocol을 지켜야 합니다." },
+        { change: "plugin module을 import하지 않습니다.", prediction: "registry에 그 implementation이 없습니다.", result: "discovery/import lifecycle을 entrypoint에서 명시합니다." },
+      ],
+      sourceRefs: ["python-init-subclass-031", "python-super-doc", "python-type-mro-031"],
+    }],
+    diagnostics: [
+      { symptom: "plugin이 어떤 실행에서는 registry에 있고 다른 실행에서는 없습니다.", likelyCause: "registration이 module import-time class definition에 의존하지만 plugin discovery/import 순서가 명시되지 않았습니다.", checks: ["등록 class module이 실제 import됐는지 봅니다.", "registry 초기화·reload·test cleanup을 추적합니다.", "entry point metadata를 확인합니다."], fix: "composition root에서 plugin discovery를 명시적으로 실행하고 duplicate·missing key를 startup validation으로 거부합니다.", prevention: "clean process에서 설치된 plugins 목록과 registry snapshot을 integration test합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedInheritanceChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-init-subclass-031", repository: "Python Language Reference", path: "object.__init_subclass__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__init_subclass__", usedFor: ["class creation hook", "class keywords", "cooperative super", "registration"], evidence: "subclass 생성 시 hook 호출과 class header keyword 전달 규칙을 공식 데이터 모델로 확인했습니다." },
+  { id: "python-type-mro-031", repository: "Python Standard Library", path: "type.mro", publicUrl: "https://docs.python.org/3/library/stdtypes.html#class.__mro__", usedFor: ["__mro__", "method lookup order", "multiple inheritance diagnostics"], evidence: "class의 method resolution order를 관찰하는 표준 attribute를 공식 문서로 확인했습니다." },
+  { id: "python-abc-031", repository: "Python Standard Library", path: "abc — Abstract Base Classes", publicUrl: "https://docs.python.org/3/library/abc.html", usedFor: ["nominal contracts", "abstract methods", "subclass hooks", "composition comparison"], evidence: "ABC의 nominal interface와 subclass customization 범위를 공식 문서로 확인했습니다." },
+  { id: "python-typing-protocol-031", repository: "Python Standard Library", path: "typing.Protocol", publicUrl: "https://docs.python.org/3/library/typing.html#typing.Protocol", usedFor: ["structural interface", "strategy typing", "composition", "substitutability"], evidence: "상속 없이 format method 계약을 표현하는 structural typing API를 공식 문서로 확인했습니다." },
+  { id: "python-classes-inheritance-031", repository: "Python Tutorial", path: "Inheritance and Multiple Inheritance", publicUrl: "https://docs.python.org/3/tutorial/classes.html#inheritance", usedFor: ["isinstance", "issubclass", "method lookup", "multiple inheritance"], evidence: "Python class inheritance와 dynamic MRO 개요를 공식 tutorial로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "super()는 항상 소스에 적힌 직접 부모만 호출하나요?", answer: "아닙니다. 현재 class 다음 MRO 위치부터 lookup하므로 sibling class가 다음일 수 있습니다." },
+  { question: "cooperative __init__에서 각 class는 kwargs를 어떻게 처리하나요?", answer: "자기 keyword만 소비하고 나머지를 super로 전달하며 root가 잔여값을 검증합니다." },
+  { question: "diamond에서 부모 이름 직접 호출이 위험한 이유는 무엇인가요?", answer: "shared ancestor를 두 번 호출하거나 MRO의 sibling initializer를 건너뛸 수 있기 때문입니다." },
+  { question: "코드 재사용이 있으면 상속을 선택해도 되나요?", answer: "먼저 semantic is-a와 substitutability가 성립해야 하며 단순 재사용에는 composition이 더 적합할 수 있습니다." },
+  { question: "strategy composition이 subclass explosion을 줄이는 이유는 무엇인가요?", answer: "독립 변화 축을 각각 객체로 구현해 모든 조합을 별도 subclass로 만들지 않아도 되기 때문입니다." },
+  { question: "__init_subclass__는 instance가 만들어질 때 호출되나요?", answer: "아닙니다. subclass class 객체가 선언·생성될 때 호출됩니다." },
+  { question: "plugin registry가 import lifecycle과 결합되는 이유는 무엇인가요?", answer: "class definition이 module import 때 실행되어 그 시점에 registration side effect가 발생하기 때문입니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "MRO를 출력하고 super의 다음 lookup 위치를 설명한다.",
+  "cooperative signature로 keyword를 소비·전달한다.",
+  "diamond initializer가 정확히 한 번씩 실행됨을 검증했다.",
+  "상속 선택 전에 semantic is-a와 substitutability를 검사한다.",
+  "독립 정책은 strategy composition으로 조립한다.",
+  "__init_subclass__ hook에서 class metadata를 검증한다.",
+  "plugin registry의 import·duplicate·cleanup lifecycle을 관리한다.",
+);

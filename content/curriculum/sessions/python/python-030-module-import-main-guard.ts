@@ -94,7 +94,7 @@ const session = {
             { lines: "10-14", explanation: "messages module에 한글 greeting function을 작성합니다." },
             { lines: "15-21", explanation: "cli module은 .messages relative import, main 함수, main guard를 가집니다." },
             { lines: "23-27", explanation: "temporary root를 cwd로 두고 현재 Python executable의 -m 옵션으로 fully qualified module을 실행해 package context를 유지합니다." },
-            { lines: "28-29", explanation: "stdout 결과와 stderr가 비었음을 안정적으로 확인합니다." },
+            { lines: "26-27", explanation: "stdout 결과와 stderr가 비었음을 안정적으로 확인합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "run_package_demo.py로 저장"], command: "python run_package_demo.py" },
           output: { value: "안녕, 둘리\nstderr-empty=True", explanation: ["python -m이 studyapp.cli를 __main__으로 실행해 guard의 main이 호출됩니다.", ".messages는 studyapp package context에서 정상 해석됩니다.", "격리 package root를 subprocess cwd로 명시해 search path를 예측 가능하게 했습니다."] },
@@ -155,7 +155,7 @@ const session = {
             { lines: "8-13", explanation: "tool body는 언제나 __name__을 한 번 출력하고 main 함수 정의 뒤 guard가 참일 때만 main-called를 출력합니다." },
             { lines: "16-19", explanation: "첫 subprocess는 파일을 직접 실행해 tool의 __name__이 __main__입니다." },
             { lines: "20-23", explanation: "두 번째 process는 같은 module을 두 번 import하지만 sys.modules cache로 body는 한 번이고 guard는 거짓입니다." },
-            { lines: "25-29", explanation: "두 process 출력을 label과 함께 비교합니다." },
+            { lines: "25-28", explanation: "두 process 출력을 label과 함께 비교합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "main_guard_demo.py로 저장"], command: "python main_guard_demo.py" },
           output: { value: "DIRECT\nbody:__main__\nmain-called\nIMPORTED\nbody:tool\nrunner-done", explanation: ["직접 실행은 body와 guard main을 모두 실행합니다.", "import는 body 정의를 실행하지만 main guard를 건너뜁니다.", "같은 process의 두 번째 import는 cached tool을 재사용해 body를 다시 출력하지 않습니다."] },
@@ -262,3 +262,170 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedImportChapters: DetailedSession["chapters"] = [
+  {
+    id: "module-spec-resolution-cache-reload",
+    title: "import를 resolve→spec→module creation→execution→sys.modules cache 단계로 추적합니다",
+    lead: "같은 이름을 두 번 import할 때 파일을 두 번 실행하지 않는 이유와 shadowing·partial initialization을 이해하려면 name binding보다 import machinery lifecycle을 봐야 합니다.",
+    explanations: [
+      "import는 먼저 fully qualified name을 정하고 `sys.modules` cache를 확인합니다. 없으면 meta path finders가 ModuleSpec을 찾고 loader가 module object를 준비·실행한 뒤 cache와 importing namespace에 binding합니다.",
+      "module code는 첫 정상 import에서 위에서 아래로 실행됩니다. function·class definition도 실행되어 이름을 만들고 module-level print·network·file access도 즉시 일어납니다. import-safe library는 정의와 cheap constants 위주로 두고 startup side effect는 main/composition root로 옮깁니다.",
+      "두 번째 import는 보통 sys.modules의 같은 module object를 반환해 top-level code를 다시 실행하지 않습니다. singleton cache·registry·mutable module globals도 같은 object를 공유하므로 test isolation과 process lifecycle을 명시합니다.",
+      "import가 실행 중 실패하면 partially initialized module과 이미 실행된 dependency side effect가 남을 수 있습니다. broad retry보다 root exception을 고치고 process/test state를 새로 시작하며 idempotent cleanup을 설계합니다.",
+      "`importlib.reload(module)`은 기존 module object의 dictionary를 재사용하며 외부에서 `from mod import name`으로 복사한 binding을 자동 갱신하지 않습니다. production hot reload 도구로 단순 가정하지 말고 개발·plugin lifecycle을 별도 설계합니다.",
+      "현재 directory나 프로젝트 파일이 `json.py`, `typing.py`, `csv.py` 같은 표준 모듈 이름을 shadow하면 예상하지 않은 spec이 선택됩니다. `module.__spec__`, `__file__`, `importlib.util.find_spec`로 실제 origin을 확인하되 로컬 절대 경로를 공개 로그에 노출하지 않습니다.",
+      "`-I` isolated mode는 current working directory와 사용자 site 등 일부 환경 영향을 제거해 예제 재현성을 높이지만 설치된 package와 application entrypoint 조건을 대신하지 않습니다. CI에서는 wheel을 설치해 import하는 test도 수행합니다.",
+    ],
+    concepts: [
+      { term: "ModuleSpec", definition: "module의 이름·loader·origin·package 정보 등 import machinery가 load에 사용하는 명세 객체입니다.", detail: ["module.__spec__에 연결됩니다.", "finders가 생성합니다."] },
+      { term: "module cache", definition: "fully qualified name에서 이미 생성된 module object로 연결하는 sys.modules mapping입니다.", detail: ["같은 process import를 재사용합니다.", "partial initialization과 state 공유에 주의합니다."] },
+      { term: "import side effect", definition: "module top-level 실행 중 이름 정의 외에 발생하는 출력·I/O·등록·상태 변경입니다.", detail: ["첫 import 시간에 발생합니다.", "최소화하고 entrypoint로 옮깁니다."] },
+    ],
+    codeExamples: [{
+      id: "python-import-cache-spec-side-effect",
+      title: "임시 module을 두 번 import해 실행 횟수·identity·spec·cache를 확인합니다",
+      language: "python",
+      filename: "import_cache_trace.py",
+      purpose: "module top-level side effect는 한 번이고 같은 object가 sys.modules에서 재사용되는 lifecycle을 deterministic하게 관찰합니다.",
+      code: "import contextlib\nimport importlib\nimport io\nimport sys\nimport tempfile\nfrom pathlib import Path\n\nwith tempfile.TemporaryDirectory() as folder:\n    Path(folder, 'study_cache_mod.py').write_text(\"print('module-loaded')\\nVALUE = 42\\n\", encoding='utf-8')\n    sys.path.insert(0, folder)\n    events = io.StringIO()\n    try:\n        with contextlib.redirect_stdout(events):\n            first = importlib.import_module('study_cache_mod')\n            second = importlib.import_module('study_cache_mod')\n        spec = first.__spec__\n        print(f'same={first is second}|cached={sys.modules[\"study_cache_mod\"] is first}|value={first.VALUE}')\n        print(f'events={events.getvalue().splitlines()}|spec={spec.name}|has_location={spec.has_location}')\n    finally:\n        sys.modules.pop('study_cache_mod', None)\n        sys.path.remove(folder)",
+      walkthrough: [
+        { lines: "1-6", explanation: "import lifecycle 관찰에 필요한 표준 모듈과 임시 파일 Path를 준비합니다." },
+        { lines: "8-10", explanation: "import할 때 marker를 출력하고 VALUE를 정의하는 작은 module을 생성해 search path 앞에 둡니다." },
+        { lines: "11-18", explanation: "stdout을 capture한 채 같은 이름을 두 번 import하고 identity·cache·spec을 출력합니다." },
+        { lines: "19-21", explanation: "finally에서 sys.modules와 sys.path를 복원해 다음 test에 state를 남기지 않습니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "임시 directory 생성 권한"], command: "python import_cache_trace.py" },
+      output: { value: "same=True|cached=True|value=42\nevents=['module-loaded']|spec=study_cache_mod|has_location=True", explanation: ["두 import는 같은 module object를 반환합니다.", "top-level marker는 한 번만 실행됩니다.", "file-backed module spec은 location을 가집니다."] },
+      experiments: [
+        { change: "첫 import 뒤 파일 VALUE를99로 바꿉니다.", prediction: "재import만으로는 cached VALUE42가 유지됩니다.", result: "cache와 source file 변경을 구분합니다." },
+        { change: "importlib.reload(first)를 호출합니다.", prediction: "top-level marker가 다시 실행되고 module dictionary가 갱신됩니다.", result: "외부 copied binding은 별도임을 확인합니다." },
+        { change: "임시 module 이름을 json으로 바꿉니다.", prediction: "search path·기존 cache에 따라 stdlib shadowing 결과가 달라질 수 있습니다.", result: "표준/third-party 이름과 충돌하지 않는 package명을 사용합니다." },
+      ],
+      sourceRefs: ["python-import-doc", "python-importlib-030", "python-sys-modules-030"],
+    }],
+    diagnostics: [
+      { symptom: "module 파일을 수정했는데 같은 REPL에서 import 결과가 바뀌지 않습니다.", likelyCause: "sys.modules cache의 기존 object를 재사용했습니다.", checks: ["module name이 sys.modules에 있는지 봅니다.", "module.__file__과 source timestamp를 확인합니다.", "from-import copied names 존재를 찾습니다."], fix: "개발 중에는 process를 재시작하거나 제한적으로 importlib.reload를 사용하고 production state migration을 reload에 의존하지 않습니다.", prevention: "배포·test는 새 process에서 설치 artifact를 import합니다." },
+      { symptom: "표준 json/csv를 import했는데 로컬 파일의 attribute 오류가 납니다.", likelyCause: "프로젝트 파일이나 directory가 같은 이름으로 search path에서 먼저 resolve됐습니다.", checks: ["module.__spec__.name·origin과 __file__을 봅니다.", "find_spec 결과와 sys.path 순서를 확인합니다.", "충돌 파일명을 검색합니다."], fix: "로컬 module/package를 고유 이름으로 변경하고 import boundary를 package root로 정리합니다.", prevention: "stdlib·dependency top-level name 충돌 lint와 clean environment import test를 둡니다." },
+    ],
+  },
+  {
+    id: "package-relative-import-main-module-execution",
+    title: "package context·relative import·`python -m` entrypoint를 파일 직접 실행과 분리합니다",
+    lead: "relative import는 filesystem 상대 경로가 아니라 `__package__` 기반 fully qualified name을 사용하므로 package module은 package context에서 실행해야 합니다.",
+    explanations: [
+      "regular package는 보통 __init__.py를 가지며 import 시 package object와 초기화 code가 실행됩니다. namespace package는 여러 location을 합칠 수 있어 단순 directory 하나와 다르며 배포 artifact와 search path를 함께 확인합니다.",
+      "`from .config import VALUE`의 leading dot은 현재 package를 기준으로 합니다. 파일을 `python pkg/app.py`로 직접 실행하면 top-level module은 package context가 없어 relative import가 실패할 수 있습니다.",
+      "`python -m pkg.app`는 import machinery로 spec과 package를 설정한 뒤 해당 code를 `__main__` namespace에서 실행합니다. library package의 CLI는 짧은 __main__.py가 test 가능한 main function을 import해 호출하도록 만듭니다.",
+      "main guard는 import 때 CLI parsing·print·network를 막지만 guard 안에 모든 business logic을 넣으면 test하기 어렵습니다. `main(argv=None)->int`에 orchestration을 두고 guard는 `raise SystemExit(main())` 정도로 유지합니다.",
+      "absolute import는 public package 관계를 명확히 하고 refactor 도구에 유리하며 explicit relative import는 package 내부 sibling 관계를 간결하게 표현합니다. 일관된 규칙을 선택하고 sys.path를 runtime에서 임의 수정하는 workaround를 production에 두지 않습니다.",
+      "`__name__`, `__package__`, `__spec__`는 실행 방식에 따라 달라집니다. code가 이 값을 business decision으로 과도하게 사용하지 않게 하고 diagnostics와 entrypoint guard에 제한합니다.",
+      "package __init__.py에서 무거운 submodule을 모두 import하면 단순 package import도 느려지고 cycle surface가 커집니다. public API re-export는 의도적으로 관리하고 optional dependency는 사용 시점 boundary에서 오류를 설명합니다.",
+    ],
+    concepts: [
+      { term: "package context", definition: "relative import가 기준으로 삼는 fully qualified package 이름과 spec 정보입니다.", detail: ["__package__로 드러납니다.", "파일 경로만으로 정해지지 않습니다."] },
+      { term: "module execution with -m", definition: "import system으로 module을 찾아 package 정보를 유지한 채 top-level __main__으로 실행하는 방식입니다.", detail: ["relative import가 동작합니다.", "CLI entrypoint에 적합합니다."] },
+      { term: "composition root", definition: "configuration·dependencies·CLI adapter를 조립하고 application use case를 시작하는 entrypoint 경계입니다.", detail: ["import side effect를 줄입니다.", "main을 얇게 유지합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-runpy-package-relative-main",
+      title: "임시 package module을 __main__으로 실행해 relative import context를 확인합니다",
+      language: "python",
+      filename: "package_main_context.py",
+      purpose: "runpy의 -m 대응 실행에서 __name__은 __main__, __package__는 package 이름으로 유지되는지 exact 관찰합니다.",
+      code: "import contextlib\nimport io\nimport runpy\nimport sys\nimport tempfile\nfrom pathlib import Path\n\nwith tempfile.TemporaryDirectory() as folder:\n    package = Path(folder, 'demo_pkg')\n    package.mkdir()\n    package.joinpath('__init__.py').write_text('', encoding='utf-8')\n    package.joinpath('config.py').write_text('VALUE = 42\\n', encoding='utf-8')\n    package.joinpath('app.py').write_text(\n        \"from .config import VALUE\\n\"\n        \"def main():\\n\"\n        \"    print(f'value={VALUE}|name={__name__}|package={__package__}')\\n\"\n        \"if __name__ == '__main__':\\n\"\n        \"    main()\\n\",\n        encoding='utf-8',\n    )\n    sys.path.insert(0, folder)\n    events = io.StringIO()\n    try:\n        with contextlib.redirect_stdout(events):\n            runpy.run_module('demo_pkg.app', run_name='__main__')\n        print(f'events={events.getvalue().splitlines()}')\n        print(f'package_cached={\"demo_pkg\" in sys.modules}|config_cached={\"demo_pkg.config\" in sys.modules}')\n    finally:\n        for name in list(sys.modules):\n            if name == 'demo_pkg' or name.startswith('demo_pkg.'):\n                sys.modules.pop(name, None)\n        sys.path.remove(folder)",
+      walkthrough: [
+        { lines: "1-6", explanation: "runpy·capture·임시 package 생성을 위한 표준 모듈을 준비합니다." },
+        { lines: "8-20", explanation: "__init__, config와 relative import를 쓰는 app module을 생성합니다." },
+        { lines: "21-27", explanation: "package root를 search path에 두고 app을 __main__으로 실행해 출력과 cache를 관찰합니다." },
+        { lines: "28-32", explanation: "package 관련 cache entries와 search path를 모두 정리합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "임시 directory 생성 권한"], command: "python package_main_context.py" },
+      output: { value: "events=['value=42|name=__main__|package=demo_pkg']\npackage_cached=True|config_cached=True", explanation: ["실행 code의 __name__은 __main__입니다.", "relative import 기준 __package__는 demo_pkg로 유지됩니다.", "package와 config dependency는 sys.modules에 cache됩니다."] },
+      experiments: [
+        { change: "app.py를 path로 직접 실행합니다.", prediction: "package context가 없어 relative import 오류가 날 수 있습니다.", result: "package module은 `python -m demo_pkg.app`로 실행합니다." },
+        { change: "main guard를 제거합니다.", prediction: "normal import에서도 main 출력이 발생합니다.", result: "library import와 CLI execution을 분리합니다." },
+        { change: "__init__.py에서 app을 즉시 import합니다.", prediction: "package import side effect와 cycle surface가 커집니다.", result: "re-export를 최소화합니다." },
+      ],
+      sourceRefs: ["python-main-doc", "python-runpy-030", "python-import-doc", "python-importlib-030"],
+    }],
+    diagnostics: [
+      { symptom: "`attempted relative import with no known parent package`가 납니다.", likelyCause: "relative import가 있는 module 파일을 package context 없이 path로 직접 실행했습니다.", checks: ["__package__와 __spec__을 봅니다.", "package root와 __init__.py/namespace 구성을 확인합니다.", "실행 command가 -m인지 확인합니다."], fix: "설치된/package root 환경에서 `python -m package.module` 또는 console entrypoint로 실행합니다.", prevention: "README·IDE launch config·CI를 동일한 module entrypoint로 고정합니다." },
+    ],
+  },
+  {
+    id: "circular-import-boundaries-pyproject",
+    title: "circular import를 dependency 방향으로 해소하고 pyproject의 build·package 경계를 고정합니다",
+    lead: "cycle은 두 파일이 존재해서가 아니라 module initialization 중 아직 만들어지지 않은 이름을 서로 요구할 때 드러나며 공통 계약 추출과 layer 방향으로 해결합니다.",
+    explanations: [
+      "A가 import B를 실행하면 A는 fully initialized되기 전에 sys.modules에 들어갑니다. B가 다시 A의 아직 정의되지 않은 이름을 from-import하면 partially initialized module 오류가 발생할 수 있습니다.",
+      "import를 함수 안으로 옮기는 local import는 사용 시점까지 cycle을 늦출 수 있지만 dependency 구조를 숨길 수도 있습니다. optional dependency·type-only import처럼 근거가 있을 때 사용하고 core cycle은 layer 분리로 해소합니다.",
+      "두 module이 공유하는 dataclass·Protocol·constant를 낮은 dependency module로 이동하면 A와 B가 같은 방향으로 의존할 수 있습니다. high-level orchestration은 둘을 import하되 low-level modules가 entrypoint를 역참조하지 않게 합니다.",
+      "type annotation만 cycle을 만들면 `from __future__ import annotations`와 `if TYPE_CHECKING:` import를 사용해 runtime dependency를 줄일 수 있습니다. 실제 runtime base class·decorator·default 값은 여전히 import가 필요합니다.",
+      "pyproject.toml의 build-system은 source tree를 wheel/sdist로 만드는 backend boundary이고 project metadata·dependencies·scripts가 설치 결과를 정의합니다. working directory에서 우연히 import되는 것과 built wheel에서 import되는 것을 모두 시험합니다.",
+      "src layout은 repository root의 미설치 package를 우연히 import하는 문제를 줄여 packaging 누락을 빨리 찾을 수 있습니다. flat layout도 가능하지만 package discovery와 tests가 어떤 artifact를 import하는지 명확히 합니다.",
+      "dependency 이름을 sys.path.append로 임시 해결하면 machine별 순서와 shadowing이 생깁니다. editable install 또는 built wheel을 isolated environment에 설치하고 console script를 통해 실행합니다.",
+      "cycle test는 새 process에서 A-first·B-first 두 순서로 import하고 import-time stdout/stderr·I/O가 없는지 검사합니다. import time 성능과 optional dependency 오류 메시지도 public 품질입니다.",
+    ],
+    concepts: [
+      { term: "partially initialized module", definition: "module object는 cache에 있지만 top-level 실행이 아직 끝나지 않아 일부 이름만 존재하는 상태입니다.", detail: ["cycle에서 관찰됩니다.", "import 순서 의존 오류를 만듭니다."] },
+      { term: "dependency inversion", definition: "구체 high-level module을 서로 참조하는 대신 낮은 수준의 안정된 contract에 양쪽이 의존하도록 방향을 바꾸는 설계입니다.", detail: ["Protocol·data model을 추출할 수 있습니다.", "cycle surface를 줄입니다."] },
+      { term: "build boundary", definition: "source tree가 pyproject backend를 통해 설치 가능한 wheel/sdist로 변환되는 계약입니다.", detail: ["package discovery를 검증합니다.", "로컬 경로 우연성을 제거합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-circular-import-contract-extraction",
+      title: "재현한 circular import를 shared contract module 추출로 해소합니다",
+      language: "python",
+      filename: "circular_import_fix.py",
+      purpose: "partially initialized failure type을 확인하고 dependency를 한 방향으로 재작성해 같은 process에서 clean import합니다.",
+      code: "import importlib\nimport sys\nimport tempfile\nfrom pathlib import Path\n\nwith tempfile.TemporaryDirectory() as folder:\n    root = Path(folder)\n    root.joinpath('cycle_a.py').write_text(\"from cycle_b import B\\nA = 'a'\\n\", encoding='utf-8')\n    root.joinpath('cycle_b.py').write_text(\"from cycle_a import A\\nB = 'b'\\n\", encoding='utf-8')\n    sys.path.insert(0, folder)\n    try:\n        try:\n            importlib.import_module('cycle_a')\n        except ImportError as error:\n            print(f'cycle={type(error).__name__}')\n        finally:\n            sys.modules.pop('cycle_a', None)\n            sys.modules.pop('cycle_b', None)\n\n        root.joinpath('cycle_shared.py').write_text(\"A = 'a'\\n\", encoding='utf-8')\n        root.joinpath('cycle_b.py').write_text(\"from cycle_shared import A\\nB = 'b'\\n\", encoding='utf-8')\n        root.joinpath('cycle_a.py').write_text(\"from cycle_shared import A\\nfrom cycle_b import B\\nRESULT = A + B\\n\", encoding='utf-8')\n        importlib.invalidate_caches()\n        fixed = importlib.import_module('cycle_a')\n        loaded = sorted(name for name in ('cycle_a', 'cycle_b', 'cycle_shared') if name in sys.modules)\n        print(f'fixed={fixed.RESULT}|loaded={loaded}')\n    finally:\n        for name in ('cycle_a', 'cycle_b', 'cycle_shared'):\n            sys.modules.pop(name, None)\n        sys.path.remove(folder)",
+      walkthrough: [
+        { lines: "1-4", explanation: "dynamic import와 임시 module files를 만들 표준 도구를 준비합니다." },
+        { lines: "6-15", explanation: "A와 B가 아직 정의되지 않은 서로의 이름을 from-import하는 cycle을 만들고 ImportError type을 포착합니다." },
+        { lines: "16-19", explanation: "partial cache entries를 정리해 fixed import가 이전 실패 state를 재사용하지 않게 합니다." },
+        { lines: "20-26", explanation: "공통 A를 shared module로 추출하고 dependency를 shared→B, shared+B→A 방향으로 바꾼 뒤 finder cache를 무효화합니다." },
+        { lines: "27-30", explanation: "fixed result와 loaded modules를 출력하고 module cache·search path를 정리합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "임시 directory 생성 권한"], command: "python circular_import_fix.py" },
+      output: { value: "cycle=ImportError\nfixed=ab|loaded=['cycle_a', 'cycle_b', 'cycle_shared']", explanation: ["첫 구조는 partially initialized A의 이름을 B가 요구해 실패합니다.", "shared contract 추출 뒤 세 modules가 정상 초기화됩니다.", "cache cleanup으로 실패 state가 다음 단계에 섞이지 않습니다."] },
+      experiments: [
+        { change: "cycle_a에서 A assignment를 import보다 앞으로 옮깁니다.", prediction: "특정 순서에서는 실행될 수 있지만 fragile order dependency는 남습니다.", result: "이름 순서 조정보다 dependency 방향을 고칩니다." },
+        { change: "cycle_b import를 함수 안으로 옮깁니다.", prediction: "module import는 성공하지만 함수 호출 시 cycle/결합 문제가 나타날 수 있습니다.", result: "local import의 근거를 문서화합니다." },
+        { change: "shared에 high-level service import를 다시 추가합니다.", prediction: "cycle이 새로운 모양으로 돌아옵니다.", result: "contract layer가 상위 구현을 참조하지 않게 합니다." },
+      ],
+      sourceRefs: ["python-import-doc", "python-importlib-030", "python-sys-modules-030", "pyproject-spec-030"],
+    }],
+    diagnostics: [
+      { symptom: "cannot import name ... from partially initialized module 오류가 납니다.", likelyCause: "서로의 top-level name을 초기화가 끝나기 전에 from-import하는 cycle이 있습니다.", checks: ["import graph와 첫 실행 순서를 그립니다.", "두 modules의 top-level name 정의 위치를 봅니다.", "shared contracts와 TYPE_CHECKING-only imports를 구분합니다."], fix: "공통 model·Protocol을 낮은 module로 추출하고 dependency direction을 단방향으로 만듭니다.", prevention: "각 public module을 새 process에서 서로 다른 순서로 import하는 smoke test를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedImportChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-importlib-030", repository: "Python Standard Library", path: "importlib — The implementation of import", publicUrl: "https://docs.python.org/3/library/importlib.html", usedFor: ["import_module", "reload", "find_spec", "cache invalidation"], evidence: "programmatic import·reload·spec API와 주의사항을 공식 문서로 확인했습니다." },
+  { id: "python-sys-modules-030", repository: "Python Standard Library", path: "sys.modules", publicUrl: "https://docs.python.org/3/library/sys.html#sys.modules", usedFor: ["module cache", "identity", "cache mutation", "partial initialization"], evidence: "loaded modules를 이름으로 보관하는 mapping과 수정 주의사항을 공식 문서로 확인했습니다." },
+  { id: "python-runpy-030", repository: "Python Standard Library", path: "runpy.run_module", publicUrl: "https://docs.python.org/3/library/runpy.html#runpy.run_module", usedFor: ["-m style execution", "run_name", "package context", "__main__"], evidence: "module code를 locating한 뒤 special globals를 설정해 실행하는 공식 API를 확인했습니다." },
+  { id: "pyproject-spec-030", repository: "Python Packaging Authority", path: "pyproject.toml specification", publicUrl: "https://packaging.python.org/en/latest/specifications/pyproject-toml/", usedFor: ["build-system", "project metadata", "dependencies", "entry points"], evidence: "source tree와 설치 artifact 사이 build·metadata 경계를 공식 PyPA specification으로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "같은 module을 두 번 import하면 top-level code도 두 번 실행되나요?", answer: "보통 sys.modules의 같은 object를 재사용해 첫 정상 import에서만 실행됩니다." },
+  { question: "importlib.reload가 `from mod import name`으로 복사한 이름도 갱신하나요?", answer: "아닙니다. 외부 namespace의 기존 binding은 자동으로 바뀌지 않습니다." },
+  { question: "relative import의 dot은 현재 파일 directory를 기준으로 하나요?", answer: "아닙니다. module의 package context와 fully qualified name을 기준으로 합니다." },
+  { question: "package 내부 CLI module은 왜 path 실행보다 `python -m`이 적합한가요?", answer: "import machinery가 spec과 __package__를 설정해 relative import와 package identity를 유지하기 때문입니다." },
+  { question: "main guard 안에 business logic 전체를 넣어도 되나요?", answer: "실행은 되지만 test하기 어려워 main 함수·use case로 분리하고 guard는 얇게 둡니다." },
+  { question: "circular import는 import를 함수 안으로 옮기면 항상 해결되나요?", answer: "지연될 수 있지만 구조적 결합은 남으므로 공통 contract 추출과 dependency 방향 수정이 우선입니다." },
+  { question: "pyproject build 검증 없이 repository root import만 성공하면 충분한가요?", answer: "아닙니다. wheel/sdist에 package와 metadata가 올바르게 포함되어 설치 후 import되는지 검증해야 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "import resolution·ModuleSpec·execution·sys.modules cache 단계를 추적한다.",
+  "module top-level side effect를 최소화하고 entrypoint로 옮긴다.",
+  "reload와 from-import binding의 한계를 설명한다.",
+  "relative import를 package context와 -m 실행으로 검증했다.",
+  "main guard와 test 가능한 main 함수를 분리한다.",
+  "partially initialized circular import를 dependency graph로 진단한다.",
+  "pyproject build artifact를 isolated environment에서 import한다.",
+);

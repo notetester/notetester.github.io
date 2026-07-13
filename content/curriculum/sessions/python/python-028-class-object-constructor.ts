@@ -798,3 +798,122 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedObjectChapters: DetailedSession["chapters"] = [
+  {
+    id: "value-semantics-equality-hash-slots",
+    title: "identity와 value equality를 분리하고 hash·immutability·slots 계약을 함께 설계합니다",
+    lead: "두 인스턴스가 같은 값을 표현하는지와 같은 객체인지, dictionary key로 안전한지, 어떤 attribute layout을 허용하는지는 서로 연결되지만 별도 선택입니다.",
+    explanations: [
+      "`is`는 object identity, `==`는 `__eq__`가 정의하는 value relation입니다. 일반 domain value는 같은 field로 만든 두 객체가 `==`일 수 있지만 `is`는 False이고, singleton sentinel·None 검사에 identity를 사용합니다.",
+      "`__eq__`에서 모르는 타입은 False를 즉시 반환하기보다 `NotImplemented`를 반환해 상대 타입의 reflected comparison 기회를 줍니다. equality는 reflexive·symmetric·transitive한 equivalence relation이 되도록 설계하고 mutable external state에 의존하지 않습니다.",
+      "같다고 비교되는 객체는 같은 hash를 가져야 합니다. mutable field로 equality와 hash를 만들면 set/dict에 넣은 뒤 field 변경으로 bucket을 찾지 못할 수 있어 immutable value object로 만들거나 hash를 비활성화합니다.",
+      "dataclass는 선언 field를 기준으로 repr·eq를 생성할 수 있고 frozen=True는 일반 field assignment를 막으며 hash 생성 정책에도 영향을 줍니다. frozen은 deep immutability가 아니어서 field 안 mutable list까지 얼리지 않으므로 immutable member 타입도 선택합니다.",
+      "slots=True는 선언된 fields 중심의 slot layout을 만들어 보통 instance `__dict__`를 없애고 오타 attribute 생성을 막으며 메모리를 줄일 수 있습니다. weakref·multiple inheritance·serialization framework와 호환성을 검토하고 무조건 성능 최적화로 적용하지 않습니다.",
+      "`__repr__`은 가능한 한 class와 핵심 상태를 명확히 보여 디버깅을 돕되 password·token·개인정보를 포함하지 않습니다. eval 가능한 표현은 목표일 수 있지만 resource handle·비밀·거대한 collection에서는 안전하고 bounded한 진단 표현이 우선입니다.",
+      "constructor invariant는 equality/hash보다 먼저 성립해야 합니다. `__post_init__`에서 level 범위와 blank name을 거부하면 invalid object가 set·cache·다른 객체에 들어가기 전에 실패합니다.",
+    ],
+    concepts: [
+      { term: "object identity", definition: "한 객체가 다른 참조와 정확히 같은 runtime object인지 나타내는 관계입니다.", detail: ["is로 비교합니다.", "value equality와 다릅니다."] },
+      { term: "hash contract", definition: "동등한 객체는 같은 hash를 가져야 하고 key로 존재하는 동안 hash가 바뀌지 않아야 한다는 규약입니다.", detail: ["mutable equality state와 충돌합니다.", "dict·set correctness에 필요합니다."] },
+      { term: "slot layout", definition: "instance가 가질 attribute 이름을 descriptor slot으로 선언하는 저장 구조입니다.", detail: ["일반 __dict__를 생략할 수 있습니다.", "상속·도구 호환성을 확인합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-frozen-slotted-value-object",
+      title: "frozen slotted dataclass의 equality·identity·hash·mutation을 검증합니다",
+      language: "python",
+      filename: "course_key_value.py",
+      purpose: "immutable key object에서 생성 invariant와 value semantics가 함께 작동하는지 exact output으로 확인합니다.",
+      code: "from dataclasses import FrozenInstanceError, dataclass\n\n@dataclass(frozen=True, slots=True)\nclass CourseKey:\n    name: str\n    level: int\n\n    def __post_init__(self):\n        if not self.name.strip():\n            raise ValueError('name must not be blank')\n        if self.level < 1:\n            raise ValueError('level must be positive')\n\nfirst = CourseKey('Python', 1)\nsecond = CourseKey('Python', 1)\nprint(f'equal={first == second}|same={first is second}|hash_equal={hash(first) == hash(second)}')\nprint(f'repr={first!r}|has_dict={hasattr(first, \"__dict__\")}')\ntry:\n    first.level = 2\nexcept FrozenInstanceError as error:\n    print(f'mutation={type(error).__name__}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "frozen·slots dataclass에 key를 구성하는 두 fields를 선언합니다." },
+        { lines: "8-12", explanation: "__post_init__에서 blank name과 비양수 level을 거부해 instance invariant를 완성합니다." },
+        { lines: "14-17", explanation: "같은 값을 가진 별도 객체의 equality·identity·hash와 generated repr·slot layout을 관찰합니다." },
+        { lines: "18-21", explanation: "frozen field 변경이 전용 exception으로 차단되는지 stderr 없이 확인합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 dataclasses"], command: "python course_key_value.py" },
+      output: { value: "equal=True|same=False|hash_equal=True\nrepr=CourseKey(name='Python', level=1)|has_dict=False\nmutation=FrozenInstanceError", explanation: ["값은 같지만 서로 다른 instance입니다.", "동등한 frozen values의 hash도 같습니다.", "slots=True라 일반 instance __dict__가 없습니다."] },
+      experiments: [
+        { change: "name을 blank로 생성합니다.", prediction: "__post_init__에서 ValueError가 납니다.", result: "invalid key가 collection에 들어가기 전에 실패합니다." },
+        { change: "mutable list field를 frozen dataclass에 추가합니다.", prediction: "field 재할당은 막혀도 list 내부 변경은 가능합니다.", result: "frozen과 deep immutability를 구분합니다." },
+        { change: "eq=False로 바꿉니다.", prediction: "generated value equality 대신 object identity 기반 기본 equality가 남습니다.", result: "domain 의미에 맞는 equality 정책을 선택합니다." },
+      ],
+      sourceRefs: ["python-object-identity-028", "python-eq-hash-028", "python-slots-028", "python-dataclass-options-028"],
+    }],
+    diagnostics: [
+      { symptom: "set에 넣은 객체를 field 수정 뒤 찾을 수 없습니다.", likelyCause: "mutable field가 __eq__와 __hash__에 참여해 저장 뒤 hash가 바뀌었습니다.", checks: ["hash 전후를 비교합니다.", "equality에 참여하는 fields를 봅니다.", "dataclass frozen/unsafe_hash 설정을 확인합니다."], fix: "key object를 immutable value로 만들거나 mutable entity의 hash를 비활성화하고 stable identifier를 key로 사용합니다.", prevention: "mutation 시나리오와 equal-implies-same-hash property test를 둡니다." },
+      { symptom: "slots 적용 뒤 framework가 attribute나 weak reference를 만들지 못합니다.", likelyCause: "framework가 __dict__·__weakref__ 또는 동적 fields를 기대합니다.", checks: ["instance에 __dict__와 __weakref__가 있는지 봅니다.", "base classes의 slots를 확인합니다.", "serializer/ORM 공식 지원을 확인합니다."], fix: "필요 slot을 포함하거나 해당 integration type에는 slots를 사용하지 않고 adapter를 둡니다.", prevention: "slots 도입 전 serialization·ORM·mock·inheritance 통합 테스트를 실행합니다." },
+    ],
+  },
+  {
+    id: "manual-value-object-composition-boundary",
+    title: "작은 value object를 직접 구현하고 상속 대신 composition으로 invariant를 재사용합니다",
+    lead: "Progress는 Percentage의 한 종류가 아니라 Percentage를 보유하므로 has-a 관계로 모델링하면 범위 검증과 표시 책임을 독립적으로 재사용할 수 있습니다.",
+    explanations: [
+      "composition은 한 객체가 다른 객체를 field로 보유해 기능과 invariant를 조립합니다. `Progress(Percentage)` 같은 상속은 Progress가 모든 Percentage 자리에서 대체 가능하다는 잘못된 is-a 주장을 만들 수 있습니다.",
+      "Percentage constructor는 bool을 숫자로 우연히 허용할지, int·float·Decimal 중 무엇을 받을지, NaN을 어떻게 처리할지 정해야 합니다. 예제는 0~100 범위를 한 곳에서 검사하지만 production 금액·비율에는 Decimal과 정밀도 정책을 고려합니다.",
+      "read-only property는 `_value` 저장 방식을 숨기고 외부가 invariant를 우회해 변경하지 못하게 합니다. Python의 underscore는 완전한 접근 통제가 아니므로 모든 public constructor·factory가 같은 검증을 사용하도록 설계합니다.",
+      "수동 `__eq__`는 같은 semantic type만 비교하고 다른 타입에는 NotImplemented를 반환합니다. Percentage(75)와 raw int 75를 같다고 만들면 hash·산술·API 기대가 복잡해질 수 있어 explicit `.value` 변환을 사용합니다.",
+      "Progress의 repr는 포함된 value object repr를 재사용해 구조를 보여 줍니다. 비밀이나 큰 payload가 포함된 composition에서는 각 component가 안전한 repr 정책을 제공해야 상위 객체도 안전합니다.",
+      "composition은 dependency를 constructor로 전달해 test double을 주입할 수도 있습니다. 단순 data value는 실제 immutable object를 쓰고, clock·repository·transport처럼 side effect가 있는 collaborator에 Protocol과 fake를 사용합니다.",
+      "객체 graph를 JSON·DB로 저장할 때 `__dict__` 전체를 직렬화하지 말고 public schema mapper를 둡니다. 내부 `_value`, cache와 향후 구현 변경을 wire contract에서 분리합니다.",
+    ],
+    concepts: [
+      { term: "composition", definition: "객체가 다른 객체를 field로 포함해 책임과 동작을 조립하는 관계입니다.", detail: ["has-a 관계를 표현합니다.", "상속보다 결합을 명시적으로 제어합니다."] },
+      { term: "value object", definition: "identity보다 검증된 값과 equality가 핵심인 작은 domain 객체입니다.", detail: ["보통 immutable하게 설계합니다.", "단위와 invariant를 함께 보존합니다."] },
+      { term: "NotImplemented comparison", definition: "비교할 줄 모르는 상대 타입에서 Python의 다른 비교 경로를 허용하는 특별 반환값입니다.", detail: ["False와 다릅니다.", "NotImplementedError exception과 다릅니다."] },
+    ],
+    codeExamples: [{
+      id: "python-manual-percentage-composition",
+      title: "Percentage invariant를 Progress가 composition으로 사용합니다",
+      language: "python",
+      filename: "progress_composition.py",
+      purpose: "수동 slots·property·repr·equality와 has-a object graph를 한 예제로 검증합니다.",
+      code: "class Percentage:\n    __slots__ = ('_value',)\n\n    def __init__(self, value):\n        if isinstance(value, bool) or not isinstance(value, (int, float)):\n            raise TypeError('rate must be numeric')\n        if not 0 <= value <= 100:\n            raise ValueError('rate must be between 0 and 100')\n        self._value = float(value)\n\n    @property\n    def value(self):\n        return self._value\n\n    def __repr__(self):\n        return f'Percentage({self.value:.1f})'\n\n    def __eq__(self, other):\n        if not isinstance(other, Percentage):\n            return NotImplemented\n        return self.value == other.value\n\nclass Progress:\n    __slots__ = ('course', 'rate')\n\n    def __init__(self, course, rate):\n        self.course = course\n        self.rate = Percentage(rate)\n\n    def __repr__(self):\n        return f'Progress(course={self.course!r}, rate={self.rate!r})'\n\nprogress = Progress('Python', 75)\nsame_rate = Percentage(75)\nprint(progress)\nprint(f'value_equal={progress.rate == same_rate}|identity_equal={progress.rate is same_rate}')\ntry:\n    Progress('JSON', 120)\nexcept ValueError as error:\n    print(f'invalid={type(error).__name__}:{error}')",
+      walkthrough: [
+        { lines: "1-9", explanation: "Percentage가 slot과 constructor에서 타입·범위 invariant를 소유합니다." },
+        { lines: "11-21", explanation: "read-only property, bounded repr와 same-type value equality를 구현합니다." },
+        { lines: "23-31", explanation: "Progress는 Percentage를 상속하지 않고 포함하며 구조적인 repr를 제공합니다." },
+        { lines: "33-40", explanation: "별도 value 객체 equality·identity와 잘못된 rate의 controlled failure를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python progress_composition.py" },
+      output: { value: "Progress(course='Python', rate=Percentage(75.0))\nvalue_equal=True|identity_equal=False\ninvalid=ValueError:rate must be between 0 and 100", explanation: ["Progress와 Percentage는 has-a 관계입니다.", "두 Percentage는 값은 같지만 identity는 다릅니다.", "범위 밖 값은 object graph 생성 전에 거부됩니다."] },
+      experiments: [
+        { change: "rate=True를 전달합니다.", prediction: "bool은 int subclass지만 명시 검사로 TypeError가 납니다.", result: "숫자 타입의 숨은 subclass 경계를 확인합니다." },
+        { change: "Percentage.__eq__에서 raw int도 허용합니다.", prediction: "편해 보이지만 symmetric comparison과 hash 설계가 더 복잡해집니다.", result: "explicit value extraction을 우선합니다." },
+        { change: "Progress를 Percentage의 subclass로 바꿉니다.", prediction: "Progress가 숫자 비율이 필요한 모든 곳에 대체 가능하다는 잘못된 API가 생깁니다.", result: "is-a와 has-a 질문으로 설계를 검토합니다." },
+      ],
+      sourceRefs: ["python-object-repr-028", "python-eq-hash-028", "python-slots-028", "python-class-reference"],
+    }],
+    diagnostics: [
+      { symptom: "Progress가 Percentage API 전체를 노출해 course 의미와 숫자 연산이 섞입니다.", likelyCause: "코드 재사용만 보고 has-a 관계를 상속으로 모델링했습니다.", checks: ["Progress가 Percentage가 필요한 모든 곳에 대체 가능한지 묻습니다.", "부모 public methods가 자식에 모두 유효한지 봅니다.", "composition field로 바꾼 API를 비교합니다."], fix: "Percentage를 field로 포함하고 Progress가 필요한 operations만 위임합니다.", prevention: "상속 결정에 semantic is-a·LSP checklist를 적용합니다." },
+      { symptom: "repr 로그에 token이나 개인정보가 함께 노출됩니다.", likelyCause: "component의 __dict__ 또는 모든 fields를 자동 repr에 포함했습니다.", checks: ["generated/manual repr fields를 확인합니다.", "중첩 객체 repr를 추적합니다.", "로그 보존·접근 범위를 봅니다."], fix: "민감 field를 repr에서 제외·redact하고 bounded public fields만 표시합니다.", prevention: "secret marker가 repr·exception·structured log에 없는지 테스트합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedObjectChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-object-identity-028", repository: "Python Language Reference", path: "Objects, values and types", publicUrl: "https://docs.python.org/3/reference/datamodel.html#objects-values-and-types", usedFor: ["identity", "type", "mutability", "object lifetime"], evidence: "Python object의 identity·type·value 기본 모델을 공식 언어 레퍼런스로 확인했습니다." },
+  { id: "python-object-repr-028", repository: "Python Language Reference", path: "object.__repr__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__repr__", usedFor: ["developer representation", "repr fallback", "debugging contract"], evidence: "__repr__의 목적과 반환 타입 규약을 공식 문서로 확인했습니다." },
+  { id: "python-eq-hash-028", repository: "Python Language Reference", path: "object.__eq__ and object.__hash__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__hash__", usedFor: ["equality", "NotImplemented", "hash invariant", "mutable keys"], evidence: "equality override와 hash 생성·비활성화 규칙을 공식 데이터 모델에서 확인했습니다." },
+  { id: "python-slots-028", repository: "Python Language Reference", path: "object.__slots__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__slots__", usedFor: ["slot descriptors", "__dict__ omission", "inheritance constraints"], evidence: "__slots__가 instance layout과 attribute 생성에 미치는 영향을 공식 문서로 확인했습니다." },
+  { id: "python-dataclass-options-028", repository: "Python Standard Library", path: "dataclasses.dataclass", publicUrl: "https://docs.python.org/3/library/dataclasses.html#dataclasses.dataclass", usedFor: ["generated eq/repr", "frozen", "unsafe_hash", "slots"], evidence: "dataclass의 eq·frozen·hash·slots option 상호작용을 공식 문서로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "값이 같은 두 객체에서 `is`도 True여야 하나요?", answer: "아닙니다. is는 identity이고 ==는 value equality라 별도 객체가 값만 같을 수 있습니다." },
+  { question: "__eq__가 모르는 타입에서 무엇을 반환하는 것이 좋은가요?", answer: "NotImplemented를 반환해 상대 타입의 비교 기회를 주며 NotImplementedError를 raise하는 것과 다릅니다." },
+  { question: "frozen dataclass는 내부 list도 변경 불가능한가요?", answer: "아닙니다. field 재할당을 막지만 참조된 mutable 객체 내부까지 자동으로 얼리지 않습니다." },
+  { question: "slots=True의 장점과 위험은 무엇인가요?", answer: "동적 attribute 오타와 메모리를 줄일 수 있지만 __dict__·weakref·상속·framework 호환성을 확인해야 합니다." },
+  { question: "Progress가 Percentage를 상속하는 대신 포함해야 하는 이유는 무엇인가요?", answer: "Progress는 Percentage의 한 종류가 아니라 비율 값을 가진 객체라는 has-a 관계이기 때문입니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "identity와 value equality를 is·==로 구분한다.",
+  "equal objects의 hash invariant와 mutable key 위험을 설명한다.",
+  "frozen·slots dataclass의 범위와 deep immutability 한계를 안다.",
+  "안전하고 bounded한 repr에서 민감정보를 제외한다.",
+  "상속 대신 composition으로 value object invariant를 재사용한다.",
+);

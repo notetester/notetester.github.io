@@ -163,8 +163,8 @@ const session = {
             { lines: "24-29", explanation: "newline='' StringIO, DictReader와 정확한 header 순서 검증으로 file 없이도 같은 pipeline을 테스트합니다." },
             { lines: "31-36", explanation: "결정적인 LF 출력과 id·name·total·average output schema를 정하고 header를 씁니다." },
             { lines: "38-44", explanation: "한 row씩 세 점수를 parse하며 오류 행은 reason을 출력하고 continue합니다. reader 전체를 list로 만들지 않습니다." },
-            { lines: "45-53", explanation: "정상 행만 total과 소수 둘째 자리 average text를 만들어 즉시 writer에 전달하고 처리 결과를 기록합니다." },
-            { lines: "55-56", explanation: "최종 CSV text를 출력해 reject 행이 없고 formula 시작 name이 완화됐음을 확인합니다." },
+            { lines: "45-51", explanation: "정상 행만 total과 소수 둘째 자리 average text를 만들어 즉시 writer에 전달하고 처리 결과를 기록합니다." },
+            { lines: "53-54", explanation: "최종 CSV text를 출력해 reject 행이 없고 formula 시작 name이 완화됐음을 확인합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "csv_transform.py를 저장"], command: "python csv_transform.py" },
           output: { value: "accepted line=2 id=1 total=240\nrejected line=3 id=2 reason=eng='oops' is not integer\naccepted line=4 id=3 total=300\n--- output ---\nid,name,total,average\n1,Alice,240,80.00\n3,'=2+3,300,100.00", explanation: ["Bob 행은 eng parser에서 실패해 output에 쓰이지 않고 line·id·field reason이 남습니다.", "Alice와 세 번째 행은 각각 240·300 total과 고정 두 자리 average를 가집니다.", "=로 시작한 이름은 CSV quoting이 아니라 export policy에 의해 apostrophe가 추가됩니다."] },
@@ -376,3 +376,103 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const dialectContractChapter: DetailedSession["chapters"][number] = {
+  id: "dialect-contract-and-adversarial-records",
+  title: "dialect를 파일 계약으로 고정하고 multiline·schema·spreadsheet 경계를 적대적으로 시험합니다",
+  lead: "CSV는 단순한 comma split이 아니라 delimiter·quote·escape·newline·encoding이 함께 레코드를 결정하는 형식이므로 생산자와 소비자가 같은 dialect와 schema를 공유해야 합니다.",
+  explanations: [
+    "`csv.Dialect`는 delimiter, quotechar, doublequote, escapechar, skipinitialspace, lineterminator, quoting, strict를 이름 있는 계약으로 묶습니다. 기본 `excel`이 우연히 맞는지 기대하지 말고 거래처·버전별 dialect를 코드와 fixture에 고정합니다.",
+    "quoted field 안에는 delimiter와 실제 newline이 들어갈 수 있습니다. 그래서 물리적 줄 수와 CSV record 수가 다르며 `readline()` 뒤 split하거나 한 줄씩 독립 parse하면 레코드를 끊습니다. text stream 전체를 `csv.reader`가 newline state와 함께 소비하게 합니다.",
+    "파일은 `open(..., newline='', encoding='utf-8')`처럼 엽니다. newline=''은 csv 모듈이 quoted newline과 platform line ending을 직접 처리하게 하고, encoding은 bytes를 str로 바꾸는 별도 경계입니다. Excel 호환을 위해 utf-8-sig를 택한다면 BOM 정책을 양쪽에 기록합니다.",
+    "`Sniffer`는 표본으로 dialect/header를 추정하는 heuristic이라 짧거나 편향된 데이터에서 틀릴 수 있습니다. 신뢰할 수 없는 업로드에 자동 확정값으로 쓰지 말고 제한된 후보 dialect의 보조 신호로 사용하며, 첫 N records를 schema와 함께 검증합니다.",
+    "`DictReader`의 fieldnames는 business schema가 아닙니다. 중복 header, 공백·대소문자 차이, 빈 header, 빠진 열은 별도 검사하고, `restkey`로 초과 열을 포착하며 `restval`로 부족 열을 보이게 합니다. 값은 모두 기본적으로 str이므로 정수·날짜·enum을 명시적으로 변환합니다.",
+    "streaming pipeline은 record 하나를 parse→validate→normalize→emit하고 성공·거부 개수와 `reader.line_num`을 관찰합니다. 전체 파일을 list로 만들지 않아도 되지만 atomic publish가 필요하면 같은 filesystem의 임시 파일에 쓰고 flush·fsync·replace 순서를 사용합니다.",
+    "`QUOTE_ALL`이나 `QUOTE_MINIMAL`은 CSV 문법 escaping일 뿐 spreadsheet formula 실행을 막지 않습니다. 외부 값이 `=`, `+`, `-`, `@`, tab, carriage return으로 시작하면 정책에 따라 거부하거나 spreadsheet가 text로 해석하도록 neutralize하고 원본·표시값을 구분합니다.",
+    "formula neutralization은 대상 spreadsheet와 import 설정에 따라 검증해야 합니다. 선행 apostrophe를 붙이는 방식도 데이터 자체를 바꾸므로 원본 시스템에는 typed value를 유지하고, 다운로드 전용 export view에서만 적용하며 보안 테스트로 실제 열기를 포함합니다.",
+    "회귀 fixture에는 delimiter가 든 이름, double quote, CRLF와 LF, quoted multiline, empty와 missing, extra column, BOM, 매우 긴 field, 잘못 닫힌 quote, formula prefix를 넣습니다. 출력은 다시 같은 dialect로 읽어 typed normalized record와 비교해야 합니다.",
+  ],
+  concepts: [
+    { term: "dialect contract", definition: "CSV 레코드를 해석하고 생성하는 delimiter·quote·escape·newline 규칙의 명시적 묶음입니다.", detail: ["생산자와 소비자가 함께 버전 관리합니다.", "샘플 추정값과 구분합니다."] },
+    { term: "physical line versus record", definition: "파일의 개행으로 나뉜 물리 줄과 quoted newline을 포함할 수 있는 논리 CSV 행의 차이입니다.", detail: ["한 record가 여러 물리 줄일 수 있습니다.", "csv parser가 경계를 결정해야 합니다."] },
+    { term: "schema gate", definition: "header·열 수·필수값·타입·범위를 emit 전에 검사하는 pipeline 경계입니다.", detail: ["DictReader만으로 완성되지 않습니다.", "오류 위치와 원본 record를 추적합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "python-csv-explicit-dialect-multiline",
+      title: "semicolon dialect에서 quoted delimiter와 multiline field를 한 record로 읽습니다",
+      language: "python",
+      filename: "csv_dialect_contract.py",
+      purpose: "물리 newline을 포함하는 field가 명시적 dialect와 newline='' stream에서 보존되는지 exact output으로 검증합니다.",
+      code: "import csv\nimport io\n\nclass StudyDialect(csv.Dialect):\n    delimiter = ';'\n    quotechar = '\"'\n    doublequote = True\n    escapechar = None\n    skipinitialspace = False\n    lineterminator = '\\r\\n'\n    quoting = csv.QUOTE_MINIMAL\n    strict = True\n\ndata = 'name;note;score\\r\\n\"Kim;A\";\"line1\\nline2\";3.5\\r\\n'\nrows = list(csv.reader(io.StringIO(data, newline=''), dialect=StudyDialect))\nprint(f'rows={len(rows)}|header={rows[0]}')\nprint(f'name={rows[1][0]}|note_lines={rows[1][1].splitlines()}|score={rows[1][2]}')",
+      walkthrough: [
+        { lines: "1-2", explanation: "표준 csv parser와 메모리 text stream을 사용합니다." },
+        { lines: "4-12", explanation: "semicolon, quote, CRLF와 strict parsing을 하나의 dialect class에 고정합니다." },
+        { lines: "14-17", explanation: "delimiter와 newline을 포함한 field를 parse하고 record 수·field 경계를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python csv_dialect_contract.py" },
+      output: { value: "rows=2|header=['name', 'note', 'score']\nname=Kim;A|note_lines=['line1', 'line2']|score=3.5", explanation: ["quoted semicolon은 이름 안에 보존됩니다.", "두 물리 줄의 note가 한 logical record에 들어갑니다.", "score는 명시 변환 전이라 str입니다."] },
+      experiments: [
+        { change: "strict=False로 바꾸고 닫히지 않은 quote를 넣습니다.", prediction: "일부 malformed input이 오류 대신 예상 밖 record로 읽힐 수 있습니다.", result: "strict와 별도 schema validation을 모두 둡니다." },
+        { change: "StringIO에서 newline 인자를 제거해 플랫폼 파일 처리와 비교합니다.", prediction: "메모리 예제는 같을 수 있지만 실제 파일의 CRLF·quoted newline에서 차이가 드러납니다.", result: "파일 fixture를 Windows와 CI에서 함께 검사합니다." },
+        { change: "delimiter를 comma로 잘못 지정합니다.", prediction: "header 전체가 한 field가 되어 schema gate가 실패합니다.", result: "parse 성공과 schema 성공을 분리합니다." },
+      ],
+      sourceRefs: ["python-csv-dialect-025", "python-csv-reader-025", "rfc4180-025"],
+    },
+    {
+      id: "python-csv-dict-schema-formula-boundary",
+      title: "DictReader 초과열·타입 schema와 spreadsheet formula neutralization을 분리합니다",
+      language: "python",
+      filename: "csv_schema_export.py",
+      purpose: "header 기반 record를 typed value로 검증하고 다운로드 view에서만 formula prefix를 중화해 다시 CSV로 기록합니다.",
+      code: "import csv\nimport io\n\nsource = io.StringIO('name,score,note\\nKim,7,=2+2\\n', newline='')\nreader = csv.DictReader(source, restkey='__extra__', restval=None)\nrow = next(reader)\nissues = []\nif reader.fieldnames != ['name', 'score', 'note']:\n    issues.append('header')\nif row.get('__extra__'):\n    issues.append('extra')\ntry:\n    score = int(row['score'])\nexcept (TypeError, ValueError):\n    issues.append('score')\n    score = 0\n\ndef neutralize(value):\n    return \"'\" + value if value.lstrip()[:1] in ('=', '+', '-', '@', '\\t', '\\r') else value\n\nrecord = {'name': row['name'], 'score': score, 'note': neutralize(row['note'])}\nsink = io.StringIO(newline='')\nwriter = csv.DictWriter(sink, fieldnames=['name', 'score', 'note'], lineterminator='\\n', extrasaction='raise')\nwriter.writeheader()\nwriter.writerow(record)\nformula_neutralized = record['note'].startswith(chr(39))\nprint(f'fields={reader.fieldnames}|score_type={type(score).__name__}|issues={issues}')\nprint(f'formula_neutralized={formula_neutralized}|rows={sink.getvalue().splitlines()}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "DictReader에 restkey·restval을 지정해 ragged row를 숨기지 않습니다." },
+        { lines: "7-17", explanation: "header·초과열·정수 변환을 schema gate에서 검사하고 실패를 issues에 모읍니다." },
+        { lines: "18-19", explanation: "spreadsheet 위험 prefix는 export 전용 함수에서 text로 중화합니다." },
+        { lines: "21-28", explanation: "typed record를 고정 header·LF로 쓰고 field/type·보안 결과를 exact 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python csv_schema_export.py" },
+      output: { value: "fields=['name', 'score', 'note']|score_type=int|issues=[]\nformula_neutralized=True|rows=['name,score,note', \"Kim,7,'=2+2\"]", explanation: ["score는 schema 변환 뒤 int입니다.", "formula prefix는 다운로드 view에서 apostrophe로 중화됩니다.", "quoting 설정만으로 formula 실행을 막았다고 주장하지 않습니다."] },
+      experiments: [
+        { change: "row 끝에 extra field를 추가합니다.", prediction: "restkey __extra__에 list가 생기고 issues에 extra가 들어갑니다.", result: "초과열이 조용히 유실되지 않습니다." },
+        { change: "score를 seven으로 바꿉니다.", prediction: "ValueError를 catch해 score issue가 생깁니다.", result: "CSV parse와 domain type conversion을 분리합니다." },
+        { change: "note를 `  =cmd`로 바꿉니다.", prediction: "lstrip 검사로 위험 prefix를 발견하고 원래 공백 앞에 apostrophe를 붙입니다.", result: "leading whitespace 우회 fixture를 추가합니다." },
+      ],
+      sourceRefs: ["python-csv-dictreader-025", "owasp-csv-injection-025", "python-io-text-025"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "CSV record 수가 파일 줄 수보다 적거나 많습니다.", likelyCause: "quoted multiline field를 물리 줄 단위로 split했거나 newline 처리를 parser 밖에서 바꿨습니다.", checks: ["raw bytes와 newline 종류를 확인합니다.", "reader.line_num과 logical record count를 각각 기록합니다.", "quoted newline fixture를 같은 dialect로 재현합니다."], fix: "newline='' text stream을 csv.reader에 직접 넘기고 record 단위로 처리합니다.", prevention: "CRLF·LF·quoted CRLF/LF를 포함한 golden fixture를 둡니다." },
+    { symptom: "CSV를 정상적으로 열었는데 spreadsheet에서 셀이 명령이나 수식으로 평가됩니다.", likelyCause: "CSV quoting을 spreadsheet formula neutralization으로 오해했습니다.", checks: ["외부 string의 첫 유효 문자를 검사합니다.", "다운로드 파일을 지원 spreadsheet에서 실제로 엽니다.", "원본 값과 export view가 분리됐는지 봅니다."], fix: "정책에 따라 위험 prefix를 거부하거나 text로 중화하고 spreadsheet별 결과를 검증합니다.", prevention: "=,+,-,@,tab,CR와 leading whitespace payload를 보안 회귀 테스트에 포함합니다." },
+  ],
+};
+
+(session.chapters as DetailedSession["chapters"]).push(dialectContractChapter);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-csv-reader-025", repository: "Python Standard Library", path: "csv reader and writer objects", publicUrl: "https://docs.python.org/3/library/csv.html#reader-objects", usedFor: ["reader record model", "line_num", "quoting behavior"], evidence: "CSV reader가 logical records를 반환하고 dialect에 따라 field를 해석하는 공식 계약을 확인했습니다." },
+  { id: "python-csv-dictreader-025", repository: "Python Standard Library", path: "csv.DictReader", publicUrl: "https://docs.python.org/3/library/csv.html#csv.DictReader", usedFor: ["fieldnames", "restkey", "restval", "ordered dictionaries"], evidence: "header mapping과 초과·부족 field 처리의 공식 API를 확인했습니다." },
+  { id: "python-csv-dialect-025", repository: "Python Standard Library", path: "Dialects and Formatting Parameters", publicUrl: "https://docs.python.org/3/library/csv.html#dialects-and-formatting-parameters", usedFor: ["delimiter", "quotechar", "escapechar", "lineterminator", "strict"], evidence: "dialect 속성과 quoting 상수의 정확한 의미를 공식 문서로 확인했습니다." },
+  { id: "python-io-text-025", repository: "Python Standard Library", path: "Text I/O", publicUrl: "https://docs.python.org/3/library/io.html#text-i-o", usedFor: ["text streams", "encoding", "newline", "StringIO"], evidence: "bytes decoding과 newline translation이 CSV parsing과 별도인 text I/O 경계를 확인했습니다." },
+  { id: "python-open-text-025", repository: "Python Standard Library", path: "Built-in open", publicUrl: "https://docs.python.org/3/library/functions.html#open", usedFor: ["encoding argument", "newline argument", "errors policy"], evidence: "CSV 파일을 명시적 encoding과 newline=''로 여는 공식 API를 확인했습니다." },
+  { id: "rfc4180-025", repository: "IETF", path: "RFC 4180 Common Format and MIME Type for CSV Files", publicUrl: "https://datatracker.ietf.org/doc/html/rfc4180", usedFor: ["records", "CRLF", "quoted fields", "double quotes"], evidence: "CSV의 널리 쓰이는 record·quote 교환 형식을 원문 RFC로 확인했습니다." },
+  { id: "owasp-csv-injection-025", repository: "OWASP", path: "CSV Injection", publicUrl: "https://owasp.org/www-community/attacks/CSV_Injection", usedFor: ["formula prefixes", "spreadsheet execution", "export neutralization"], evidence: "신뢰하지 않는 cell이 spreadsheet formula로 실행되는 공격 경계와 방어 고려사항을 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "CSV의 물리적 줄 수와 record 수가 다른 이유는 무엇인가요?", answer: "quoted field 안에 newline이 들어갈 수 있어 하나의 logical record가 여러 물리 줄을 차지할 수 있기 때문입니다." },
+  { question: "`newline=''`은 encoding을 UTF-8로 고정하나요?", answer: "아닙니다. newline 처리와 bytes decoding은 별도이며 encoding='utf-8'도 명시해야 합니다." },
+  { question: "DictReader가 반환한 score는 자동으로 int인가요?", answer: "기본적으로 field는 str이며 schema 경계에서 명시적으로 변환·검증해야 합니다." },
+  { question: "Sniffer 결과를 그대로 production dialect로 확정해도 되나요?", answer: "heuristic이라 오판할 수 있으므로 후보 제한과 schema 검증, 사용자 확인을 함께 둡니다." },
+  { question: "QUOTE_ALL이면 spreadsheet formula injection이 차단되나요?", answer: "아닙니다. CSV quoting은 문법 escaping이고 spreadsheet는 quoted cell 내용도 수식으로 해석할 수 있어 별도 정책이 필요합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "dialect의 delimiter·quote·escape·newline 규칙을 이름 있는 계약으로 고정했다.",
+  "quoted delimiter와 multiline field를 logical record 하나로 검증했다.",
+  "DictReader의 restkey·restval로 초과·부족 열을 관찰한다.",
+  "header 검증과 field 타입 변환을 parse 단계와 분리했다.",
+  "Sniffer를 heuristic 보조 신호로만 사용한다.",
+  "CSV quoting과 spreadsheet formula neutralization을 구분한다.",
+);

@@ -470,7 +470,7 @@ loaded.close()`,
             { lines: "7-11", explanation: "text-only 정책에서 spreadsheet 위험 시작 문자를 발견하면 apostrophe를 실제 값 앞에 추가합니다. 범용 보안 함수가 아니라 이 export의 명시 정책입니다." },
             { lines: "14-25", explanation: "target과 같은 디렉터리에서 닫힌 임시 파일 이름을 얻고 workbook을 완전히 저장한 뒤 os.replace합니다. 성공·실패 모두 close와 남은 temp 정리를 수행합니다." },
             { lines: "28-34", explanation: "세 합성 입력을 한 열에 쓰고 원자 저장합니다." },
-            { lines: "36-40", explanation: "재조회해 파일 존재, 각 셀 data_type과 실제 저장 value를 확인한 뒤 닫습니다." },
+            { lines: "35-39", explanation: "재조회해 파일 존재, 각 셀 data_type과 실제 저장 value를 확인한 뒤 닫습니다." },
           ],
           run: { environment: ["Python 3.11 이상", "openpyxl 3.1 이상", "다른 프로그램이 target을 열고 있지 않은 실습 폴더"], command: "python safe_excel_export.py" },
           output: {
@@ -704,3 +704,72 @@ s 정상`,
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedWorkbookExamples: DetailedSession["chapters"][number]["codeExamples"] = [
+  {
+    id: "python-openpyxl-merged-anchor-style-roundtrip",
+    title: "merged range의 anchor cell과 style을 메모리 XLSX로 round-trip합니다",
+    language: "python",
+    filename: "xlsx_merged_style.py",
+    purpose: "병합 영역은 왼쪽 위 cell만 값을 보유하고 나머지는 MergedCell placeholder라는 점과 style·number format 보존을 검증합니다.",
+    code: "from io import BytesIO\n\nfrom openpyxl import Workbook, load_workbook\nfrom openpyxl.styles import Alignment, Font\n\nbook = Workbook()\nsheet = book.active\nsheet.title = 'Report'\nsheet.merge_cells('A1:C1')\nsheet['A1'] = 'Summary'\nsheet['A1'].font = Font(bold=True)\nsheet['A1'].alignment = Alignment(horizontal='center')\nsheet['B2'] = 7\nsheet['B2'].number_format = '0.00'\n\nstream = BytesIO()\nbook.save(stream)\nbook.close()\nstream.seek(0)\n\nloaded = load_workbook(stream)\nreport = loaded['Report']\nmerged = sorted(str(item) for item in report.merged_cells.ranges)\nprint(f'merged={merged}|anchor={report[\"A1\"].value}|placeholder={type(report[\"B1\"]).__name__}')\nprint(f'style=bold:{report[\"A1\"].font.bold}|align:{report[\"A1\"].alignment.horizontal}|format:{report[\"B2\"].number_format}')\nloaded.close()",
+    walkthrough: [
+      { lines: "1-4", explanation: "disk 경로 없이 XLSX package를 검증할 BytesIO와 openpyxl·style 타입을 준비합니다." },
+      { lines: "6-14", explanation: "A1:C1을 병합하고 anchor A1에 값·style, 일반 B2에 숫자 format을 설정합니다." },
+      { lines: "16-19", explanation: "workbook을 ZIP 기반 XLSX bytes로 저장하고 읽기 위치를 되감습니다." },
+      { lines: "21-26", explanation: "재로드 뒤 병합 범위·placeholder 타입·style·number format을 exact 확인하고 resource를 닫습니다." },
+    ],
+    run: { environment: ["Python 3.11 이상", "openpyxl 3.1 계열"], command: "python xlsx_merged_style.py" },
+    output: { value: "merged=['A1:C1']|anchor=Summary|placeholder=MergedCell\nstyle=bold:True|align:center|format:0.00", explanation: ["병합 범위의 값은 anchor A1에 있습니다.", "B1은 일반 Cell이 아니라 MergedCell placeholder입니다.", "style과 number format이 save/load 뒤 유지됩니다."] },
+    experiments: [
+      { change: "B1에 직접 값을 대입합니다.", prediction: "병합 placeholder는 read-only라 AttributeError가 납니다.", result: "항상 왼쪽 위 anchor를 수정합니다." },
+      { change: "unmerge_cells 뒤 B1을 검사합니다.", prediction: "일반 Cell로 돌아오지만 이전 placeholder에 별도 값은 없습니다.", result: "병합은 여러 값을 합치는 연산이 아닙니다." },
+      { change: "A1의 font object를 다른 cell에 직접 수정하려 합니다.", prediction: "style은 immutable/shared semantics라 copy 또는 새 style assignment가 필요합니다.", result: "style explosion과 alias 오해를 피합니다." },
+    ],
+    sourceRefs: ["openpyxl-merged-cells-026", "openpyxl-styles", "openpyxl-usage"],
+  },
+  {
+    id: "python-openpyxl-write-only-read-only-pipeline",
+    title: "write-only append 결과를 read-only values stream으로 다시 읽습니다",
+    language: "python",
+    filename: "xlsx_optimized_pipeline.py",
+    purpose: "대용량 모드에서 random cell access 대신 append와 lazy iter_rows를 사용하고 workbook close 책임을 검증합니다.",
+    code: "from io import BytesIO\n\nfrom openpyxl import Workbook, load_workbook\n\nstream = BytesIO()\nwriter_book = Workbook(write_only=True)\nwriter_sheet = writer_book.create_sheet('Rows')\nwriter_sheet.append(['name', 'score'])\nwriter_sheet.append(['Kim', 90])\nwriter_sheet.append(['Lee', 85])\nwriter_book.save(stream)\nstream.seek(0)\n\nreader_book = load_workbook(stream, read_only=True, data_only=False)\nreader_sheet = reader_book['Rows']\nrows = list(reader_sheet.iter_rows(values_only=True))\nprint(f'read_only={reader_book.read_only}|sheets={reader_book.sheetnames}')\nprint(f'rows={rows}')\nreader_book.close()",
+    walkthrough: [
+      { lines: "1-3", explanation: "메모리 binary stream과 workbook API를 준비합니다." },
+      { lines: "5-11", explanation: "write-only workbook에는 sheet를 명시적으로 만들고 row 순서대로 append한 뒤 한 번 저장합니다." },
+      { lines: "12-16", explanation: "stream을 되감아 read-only workbook으로 열고 values_only iterator로 cell object 대신 값 tuple을 읽습니다." },
+      { lines: "17-19", explanation: "mode·sheet·rows를 출력한 뒤 lazy reader resource를 명시적으로 닫습니다." },
+    ],
+    run: { environment: ["Python 3.11 이상", "openpyxl 3.1 계열"], command: "python xlsx_optimized_pipeline.py" },
+    output: { value: "read_only=True|sheets=['Rows']\nrows=[('name', 'score'), ('Kim', 90), ('Lee', 85)]", explanation: ["write-only workbook에는 기본 sheet가 없어 create_sheet가 필요합니다.", "read-only iter_rows는 필요한 row를 lazy하게 읽습니다.", "values_only=True는 값 tuple을 반환합니다."] },
+    experiments: [
+      { change: "write-only sheet에서 `sheet['A1']` random access를 시도합니다.", prediction: "일반 worksheet처럼 사용할 수 없어 실패합니다.", result: "optimized mode API 제약을 별도 adapter에 둡니다." },
+      { change: "저장한 write-only workbook을 다시 save합니다.", prediction: "한 번만 저장 가능한 stream 특성 때문에 예외가 납니다.", result: "temp path와 atomic replace lifecycle을 한 번으로 설계합니다." },
+      { change: "read_only=False로 열어 rows를 비교합니다.", prediction: "값은 같지만 전체 cell graph를 메모리에 구성합니다.", result: "파일 크기와 편집 요구에 따라 mode를 선택합니다." },
+    ],
+    sourceRefs: ["openpyxl-optimized", "openpyxl-usage", "openpyxl-merged-cells-026"],
+  },
+];
+
+(session.chapters.find((chapter) => chapter.id === "independent-checkpoint")!.codeExamples as DetailedSession["chapters"][number]["codeExamples"]).push(...advancedWorkbookExamples);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "openpyxl-merged-cells-026", repository: "openpyxl Documentation", path: "Worksheet merge_cells and merged_cells ranges", publicUrl: "https://openpyxl.readthedocs.io/en/stable/api/openpyxl.worksheet.worksheet.html#openpyxl.worksheet.worksheet.Worksheet.merge_cells", usedFor: ["merge_cells", "merged_cells.ranges", "anchor cell", "worksheet range lifecycle"], evidence: "병합 범위 API와 worksheet의 cell/range 동작을 openpyxl 공식 API 문서로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "병합된 A1:C1에서 실제 값을 저장하는 cell은 어디인가요?", answer: "왼쪽 위 anchor인 A1이며 나머지는 MergedCell placeholder입니다." },
+  { question: "`data_only=True`가 formula를 Python에서 계산하나요?", answer: "아닙니다. 마지막으로 spreadsheet가 저장한 cached value를 읽을 뿐 openpyxl은 수식을 계산하지 않습니다." },
+  { question: "write-only workbook에도 기본 active sheet가 있나요?", answer: "없습니다. create_sheet로 명시적으로 만든 뒤 row를 append해야 합니다." },
+  { question: "read-only workbook은 왜 close를 명시해야 하나요?", answer: "lazy XML/ZIP stream과 파일 handle을 유지할 수 있어 처리가 끝나면 close해야 합니다." },
+  { question: "XLSX style을 지정하면 cell의 숫자 값도 문자열로 바뀌나요?", answer: "아닙니다. number_format은 표시 metadata이고 cell value의 Python 타입과 분리됩니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "merged range의 anchor와 MergedCell placeholder를 구분한다.",
+  "style·alignment·number format을 save/load round-trip으로 검사했다.",
+  "formula text와 cached value, 실제 계산 책임을 구분한다.",
+  "write-only sheet를 생성하고 append-only 제약을 지킨다.",
+  "read-only values stream을 소비한 뒤 workbook을 close한다.",
+);

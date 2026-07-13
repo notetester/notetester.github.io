@@ -135,7 +135,7 @@ const session = {
             { lines: "1-10", explanation: "base가 name·salary invariant, list[str] work 반환, 공통 연봉 계산을 제공합니다." },
             { lines: "12-21", explanation: "Manager는 base 초기화와 work 결과를 super로 재사용하고 team 메시지를 추가해 같은 list[str] 계약을 유지합니다." },
             { lines: "23-29", explanation: "Intern은 초기화는 재사용하지만 work 행동은 완전히 대체하면서 같은 반환 구조를 지킵니다." },
-            { lines: "31-38", explanation: "하나의 loop가 세 구현을 호출하고 inherited annual_salary를 분기 없이 사용합니다." },
+            { lines: "30-37", explanation: "하나의 loop가 세 구현을 호출하고 inherited annual_salary를 분기 없이 사용합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "employee_override.py로 저장"], command: "python employee_override.py" },
           output: { value: "김일반: 기본 업무\nannual=36000\n총무부: 기본 업무 | 총무부: 개발팀 관리\nannual=48000\n장길산: 보조 업무 (6개월)\nannual=24000", explanation: ["Manager는 부모 list 결과를 잃지 않고 한 메시지를 확장합니다.", "Intern은 다른 내용이지만 list[str] 반환 계약을 유지합니다.", "세 객체 모두 부모 annual_salary를 재사용합니다."] },
@@ -260,3 +260,168 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedPolymorphismChapters: DetailedSession["chapters"] = [
+  {
+    id: "lsp-contracts-structural-protocols",
+    title: "LSP를 signature가 아니라 precondition·postcondition·error·state contract로 검사합니다",
+    lead: "override method 이름이 같다는 사실만으로 substitutable하지 않으며 caller가 기대하는 입력 범위와 결과·예외·부작용을 자식이 깨지 않아야 합니다.",
+    explanations: [
+      "Liskov substitution 관점에서 subtype은 base가 허용한 입력을 더 좁게 거부하지 않고, 약속한 결과를 최소한 충족하며, base invariant를 보존해야 합니다. parameter 이름·개수만 맞추는 검사는 충분하지 않습니다.",
+      "override가 더 강한 precondition을 요구하면 base client가 정상 전달한 값에서 자식만 실패합니다. 반대로 postcondition을 약화해 None이나 다른 단위를 반환하면 caller의 후속 연산이 깨집니다.",
+      "예외도 public contract입니다. base가 invalid input에 ValueError를 약속했는데 subclass가 KeyError·network exception을 새로 노출하면 caller의 recovery가 무너질 수 있습니다. 원인을 보존하면서 boundary exception으로 변환합니다.",
+      "state mutation·I/O·성능도 상황에 따라 behavioral contract입니다. read-only query override가 파일을 삭제하거나 O(1) 기대를 무제한 network scan으로 바꾸면 타입상 호환돼도 대체 가능하지 않습니다.",
+      "`typing.Protocol`은 명시 inheritance 없이 필요한 attributes·methods를 가진 객체를 structural subtype으로 표현합니다. application service가 concrete base class 대신 작은 Protocol을 받으면 third-party adapter와 fake가 쉽게 참여합니다.",
+      "`@runtime_checkable` Protocol의 isinstance는 required attribute 존재를 단순 검사하며 method signature·return type·semantic behavior를 검증하지 않습니다. static checker와 contract tests를 함께 사용합니다.",
+      "Protocol을 거대한 interface로 만들면 구현과 fake가 불필요한 methods에 결합됩니다. 소비자 관점의 작은 capability로 나누고 실제 호출하는 operations만 선언합니다.",
+      "duck typing도 실패를 늦추라는 뜻이 아닙니다. system boundary에서 configuration·capability를 검증하고 core loop에는 명확한 typed contract를 전달합니다.",
+    ],
+    concepts: [
+      { term: "Liskov substitution principle", definition: "하위 타입을 상위 타입 대신 사용해도 프로그램이 기대한 행동 계약이 유지되어야 한다는 원칙입니다.", detail: ["pre/postconditions와 invariant를 포함합니다.", "signature 일치보다 넓습니다."] },
+      { term: "structural subtyping", definition: "명시적 상속보다 필요한 member 구조를 만족하는지로 subtype 관계를 판단하는 방식입니다.", detail: ["typing.Protocol이 지원합니다.", "runtime semantics는 별도 test가 필요합니다."] },
+      { term: "behavioral contract", definition: "입력·결과·오류·상태 변화·resource 특성에 대한 caller와 implementation의 약속입니다.", detail: ["모든 구현에 같은 suite를 적용합니다.", "문서와 tests로 유지합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-runtime-protocol-contract",
+      title: "상속하지 않은 renderer를 Protocol 소비 함수와 runtime shape 검사에 사용합니다",
+      language: "python",
+      filename: "renderer_protocol.py",
+      purpose: "structural interface가 nominal base 없이 작동하되 consumer가 result invariant를 별도로 검증하는 모습을 보여 줍니다.",
+      code: "from typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Renderer(Protocol):\n    def render(self, payload: dict) -> str:\n        ...\n\nclass TextRenderer:\n    def render(self, payload: dict) -> str:\n        parts = [f'{key}={payload[key]}' for key in sorted(payload)]\n        return ','.join(parts)\n\ndef publish(renderer: Renderer, payload: dict) -> str:\n    result = renderer.render(payload)\n    if not isinstance(result, str):\n        raise TypeError('renderer must return str')\n    return result\n\nrenderer = TextRenderer()\nprint(f'runtime={isinstance(renderer, Renderer)}|output={publish(renderer, {\"score\": 90, \"name\": \"Kim\"})}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "runtime-checkable Protocol이 소비자가 필요한 render signature만 선언합니다." },
+        { lines: "8-11", explanation: "TextRenderer는 Protocol을 상속하지 않고 같은 capability를 구조적으로 제공합니다." },
+        { lines: "13-17", explanation: "consumer는 static type과 별개로 중요한 return invariant를 runtime boundary에서 확인합니다." },
+        { lines: "19-20", explanation: "structural runtime check와 deterministic sorted output을 함께 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 typing"], command: "python renderer_protocol.py" },
+      output: { value: "runtime=True|output=name=Kim,score=90", explanation: ["TextRenderer는 Renderer를 명시 상속하지 않아도 required method를 가집니다.", "runtime protocol check는 shape를 보고 publish가 return str invariant를 확인합니다."] },
+      experiments: [
+        { change: "render attribute가 문자열인 객체를 만듭니다.", prediction: "runtime Protocol check가 attribute 존재만 보고 통과할 가능성이 있어 실제 호출은 실패합니다.", result: "runtime_checkable을 완전한 validation으로 사용하지 않습니다." },
+        { change: "render가 None을 반환하게 합니다.", prediction: "publish의 postcondition 검사에서 TypeError가 납니다.", result: "behavioral contract를 boundary에 둡니다." },
+        { change: "Protocol에 close method까지 추가합니다.", prediction: "필요하지 않은 capability 때문에 기존 renderer와 fakes가 불필요하게 결합됩니다.", result: "consumer별 작은 Protocol을 유지합니다." },
+      ],
+      sourceRefs: ["python-protocol-032", "pep544-032", "python-class-doc"],
+    }],
+    diagnostics: [
+      { symptom: "subclass가 base type test는 통과하지만 정상 base 입력에서만 실패합니다.", likelyCause: "override가 더 강한 precondition을 추가해 LSP를 위반했습니다.", checks: ["base contract의 입력 domain을 표로 만듭니다.", "모든 implementation에 같은 cases를 실행합니다.", "새 validation·exception을 비교합니다."], fix: "base 입력 전체를 지원하거나 더 좁은 behavior는 별도 타입·method로 분리합니다.", prevention: "base contract suite를 모든 subclasses/adapters에 parameterize합니다." },
+      { symptom: "runtime Protocol isinstance는 True인데 method 호출이 TypeError를 냅니다.", likelyCause: "runtime_checkable은 member 존재만 단순 검사하고 signature·타입·동작을 확인하지 않습니다.", checks: ["attribute가 callable인지 봅니다.", "static type checker 결과를 확인합니다.", "실제 contract suite를 실행합니다."], fix: "Protocol을 static typing에 사용하고 system boundary에는 명시 validation·adapter·behavior tests를 둡니다.", prevention: "bad shape와 bad behavior fakes를 negative tests에 포함합니다." },
+    ],
+  },
+  {
+    id: "abc-template-method-super-hooks",
+    title: "ABC와 template method로 workflow는 고정하고 override hook만 확장합니다",
+    lead: "base가 알고리즘 순서·공통 invariant를 소유하고 subclass는 작은 abstract hook만 구현하면 parent 재사용과 확장 지점이 명확해집니다.",
+    explanations: [
+      "ABCMeta와 `@abstractmethod`는 필수 operations를 구현하지 않은 class의 instance화를 막습니다. 문서와 static type만이 아니라 nominal runtime contract가 필요한 framework extension point에 적합합니다.",
+      "template method는 public workflow를 concrete base method에 두고 normalize→validate→serialize 같은 순서를 고정합니다. subclasses는 hook만 override해 공통 validation·metrics·cleanup을 우회하지 않습니다.",
+      "abstract method도 기본 implementation을 가질 수 있고 subclass가 `super().hook()`으로 공통 normalization을 재사용한 뒤 결과를 확장할 수 있습니다. abstract라는 말이 body가 없어야 한다는 뜻은 아닙니다.",
+      "hook contract에는 input ownership, mutation 허용, return type, 호출 횟수와 exception을 적습니다. base가 같은 dict를 여러 hook에 공유하면 subclass mutation이 다음 단계에 영향을 주므로 copy·immutable value를 고려합니다.",
+      "template method가 너무 많은 protected hooks와 boolean flags를 가지면 fragile base class가 됩니다. workflow 변화 자체가 필요하면 subclass보다 strategy pipeline composition으로 전환합니다.",
+      "`super()` 재사용은 부모 class 이름을 직접 적지 않아 hierarchy refactor와 MRO 협력을 유지합니다. 다만 base hook 반환값을 무시하거나 두 번 호출하면 postcondition·side effect가 깨집니다.",
+      "ABC registration이나 `__subclasshook__`으로 virtual subclass를 만들 수 있지만 implementation을 상속하지 않고 contract 보장도 자동 검사하지 않습니다. 명시적 Protocol·adapter가 더 읽기 쉬운지 비교합니다.",
+    ],
+    concepts: [
+      { term: "template method", definition: "알고리즘의 전체 순서는 base concrete method가 정의하고 일부 단계를 override hook으로 위임하는 패턴입니다.", detail: ["공통 invariant를 중앙화합니다.", "hook 범위를 작게 유지합니다."] },
+      { term: "abstract base class", definition: "필수 abstract members를 선언해 구현되지 않은 class의 instance화를 막는 nominal interface입니다.", detail: ["abc 모듈이 제공합니다.", "abstract method에도 공통 body가 있을 수 있습니다."] },
+      { term: "override hook", definition: "subclass가 제한된 customization을 제공하도록 base가 의도적으로 노출한 method입니다.", detail: ["input·output 계약을 문서화합니다.", "workflow 전체를 우회하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-abc-template-super-hook",
+      title: "base export workflow와 normalize 기본 구현을 super로 재사용합니다",
+      language: "python",
+      filename: "export_template.py",
+      purpose: "ABC가 serialize hook을 강제하고 subclass가 base normalization을 확장하면서 public workflow 순서를 보존하는지 확인합니다.",
+      code: "from abc import ABC, abstractmethod\n\nclass Exporter(ABC):\n    def export(self, rows):\n        normalized = [self.normalize(row) for row in rows]\n        return self.serialize(normalized)\n\n    def normalize(self, row):\n        return {key: str(value).strip() for key, value in row.items()}\n\n    @abstractmethod\n    def serialize(self, rows):\n        raise NotImplementedError\n\nclass PipeExporter(Exporter):\n    def normalize(self, row):\n        normalized = super().normalize(row)\n        normalized['name'] = normalized['name'].upper()\n        return normalized\n\n    def serialize(self, rows):\n        return '\\n'.join(f'{row[\"name\"]}|{row[\"score\"]}' for row in rows)\n\nexporter = PipeExporter()\nresult = exporter.export([{'name': ' Kim ', 'score': 90}, {'name': 'Lee', 'score': 85}])\nprint(f'result={result!r}')\nprint(f'abstract={sorted(Exporter.__abstractmethods__)}|type={type(exporter).__name__}')",
+      walkthrough: [
+        { lines: "1-13", explanation: "ABC의 concrete export가 workflow를 고정하고 normalize 기본 body와 abstract serialize hook을 제공합니다." },
+        { lines: "15-22", explanation: "subclass는 super normalization을 한 번 재사용해 name만 확장하고 serialization을 구현합니다." },
+        { lines: "24-27", explanation: "두 rows를 public template method로 처리하고 newline을 repr로 고정해 abstract metadata와 함께 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 abc"], command: "python export_template.py" },
+      output: { value: "result='KIM|90\\nLEE|85'\nabstract=['serialize']|type=PipeExporter", explanation: ["export는 모든 rows에 normalize 후 serialize 순서를 강제합니다.", "PipeExporter는 공통 strip 뒤 name uppercase만 추가합니다.", "serialize 구현으로 abstract contract를 완성합니다."] },
+      experiments: [
+        { change: "PipeExporter.serialize를 제거합니다.", prediction: "PipeExporter instance화가 TypeError로 실패합니다.", result: "필수 hook이 runtime에 강제됩니다." },
+        { change: "normalize에서 super 호출을 제거합니다.", prediction: "공백 제거·문자열 변환 공통 contract가 사라집니다.", result: "parent reuse 여부를 override tests에 포함합니다." },
+        { change: "export 자체를 subclass에서 override합니다.", prediction: "공통 workflow를 우회할 수 있어 invariant가 깨질 수 있습니다.", result: "public template override를 금지할지 문서·final convention으로 관리합니다." },
+      ],
+      sourceRefs: ["python-abc-032", "python-super-doc", "python-class-doc"],
+    }],
+    diagnostics: [
+      { symptom: "새 exporter가 공통 validation과 metrics를 건너뜁니다.", likelyCause: "작은 serialize hook 대신 public template method 전체를 override했습니다.", checks: ["override 목록을 봅니다.", "base workflow call count를 기록합니다.", "공통 postcondition suite를 실행합니다."], fix: "workflow를 base concrete method에 두고 subclass가 필요한 abstract hook만 구현하게 합니다.", prevention: "template sequence와 공통 validation을 모든 implementations contract test에 둡니다." },
+    ],
+  },
+  {
+    id: "override-variance-covariant-results",
+    title: "override의 parameter·return variance와 명시적 `@override` 검사를 적용합니다",
+    lead: "subclass는 base보다 구체적인 return type을 제공할 수 있지만 허용 parameter를 임의로 좁히면 base caller가 깨지므로 variance를 호출 방향으로 이해해야 합니다.",
+    explanations: [
+      "return covariance는 base가 Animal을 약속할 때 subclass가 Dog처럼 더 구체적인 subtype을 반환해도 caller가 Animal로 사용할 수 있다는 뜻입니다. runtime dispatch는 실제 factory class의 override를 선택합니다.",
+      "parameter는 반대 방향을 고려합니다. base method가 모든 Animal을 받는데 subclass가 Dog만 받도록 좁히면 Animal을 전달하는 기존 caller가 실패합니다. override는 같은 범위 또는 더 넓게 처리해야 substitutable합니다.",
+      "mutable generic container는 읽기와 쓰기를 모두 허용해 일반적으로 invariant입니다. `list[Dog]`를 `list[Animal]`로 취급하면 Cat을 append할 수 있어 안전하지 않습니다. read-only Sequence와 type variables의 variance를 구분합니다.",
+      "Python 3.12+의 `typing.override`는 runtime 동작을 바꾸지 않지만 type checker가 base member 오타·rename을 발견하게 합니다. decorator를 쓴 것만으로 LSP 행동이 검증되는 것은 아닙니다.",
+      "return annotation은 실제 runtime value를 자동 검사하지 않습니다. contract boundary와 tests에서 isinstance·schema·postcondition을 검증하고 static checker를 함께 사용합니다.",
+      "overload와 override를 구분합니다. `@overload` declarations는 한 function의 static call signatures를 설명하고 runtime implementation은 하나이며, override는 inheritance MRO에서 구현을 대체합니다.",
+      "API evolution에서 base return을 넓히거나 parameter를 좁히면 subclasses와 callers 모두 영향을 받습니다. public Protocol·ABC와 implementations를 같은 type-check matrix로 검사합니다.",
+    ],
+    concepts: [
+      { term: "covariant return", definition: "override가 base return type보다 더 구체적인 subtype을 반환해도 안전한 관계입니다.", detail: ["caller는 여전히 base type으로 사용할 수 있습니다.", "postcondition을 강화합니다."] },
+      { term: "parameter contravariance", definition: "subtype 구현이 base caller가 허용한 입력을 좁히지 않고 같거나 더 넓게 받아야 한다는 방향입니다.", detail: ["Dog-only narrowing은 위험합니다.", "static checker가 진단할 수 있습니다."] },
+      { term: "typing.override", definition: "method가 base의 member를 의도적으로 override한다는 표시로 type checker가 이름·signature drift를 찾게 하는 decorator입니다.", detail: ["runtime dispatch는 바꾸지 않습니다.", "behavior test를 대신하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-covariant-factory-override",
+      title: "base Animal return을 Dog return으로 좁힌 factory override를 같은 caller에서 사용합니다",
+      language: "python",
+      filename: "covariant_factory.py",
+      purpose: "@override와 dynamic dispatch, covariant result가 base contract consumer에서 안전하게 작동하는지 exact 확인합니다.",
+      code: "from typing import override\n\nclass Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def speak(self):\n        return f'animal:{self.name}'\n\nclass Dog(Animal):\n    def speak(self):\n        return f'dog:{self.name}'\n\nclass Factory:\n    def create(self) -> Animal:\n        return Animal('generic')\n\nclass DogFactory(Factory):\n    @override\n    def create(self) -> Dog:\n        return Dog('Rex')\n\ndef describe(factory: Factory):\n    animal = factory.create()\n    return f'{type(animal).__name__}:{animal.speak()}:{isinstance(animal, Animal)}'\n\nprint(describe(Factory()))\nprint(describe(DogFactory()))",
+      walkthrough: [
+        { lines: "1-12", explanation: "Animal base와 더 구체적인 Dog가 같은 speak contract를 제공합니다." },
+        { lines: "14-21", explanation: "Factory는 Animal, DogFactory override는 covariant Dog를 반환하도록 annotation합니다." },
+        { lines: "23-28", explanation: "base Factory를 받는 caller가 dynamic result를 Animal contract로 사용해 두 구현 결과를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.12 이상", "표준 라이브러리 typing.override"], command: "python covariant_factory.py" },
+      output: { value: "Animal:animal:generic:True\nDog:dog:Rex:True", explanation: ["base factory는 Animal을 반환합니다.", "subclass override는 Dog를 반환하고 dynamic speak를 호출합니다.", "두 결과 모두 Animal contract를 만족합니다."] },
+      experiments: [
+        { change: "DogFactory.create가 str을 반환하게 합니다.", prediction: "type checker가 return incompatibility를 찾고 runtime caller의 speak가 실패합니다.", result: "static·behavior tests를 함께 둡니다." },
+        { change: "base method가 Animal parameter를 받고 override가 Dog만 받게 합니다.", prediction: "base caller가 Cat을 전달할 때 subclass만 실패해 LSP를 위반합니다.", result: "override parameter를 좁히지 않습니다." },
+        { change: "@override method 이름을 creat로 오타 냅니다.", prediction: "type checker가 base member를 override하지 않는다고 진단합니다.", result: "rename drift를 조기에 발견합니다." },
+      ],
+      sourceRefs: ["python-override-032", "typing-variance-032", "python-class-doc", "python-super-doc"],
+    }],
+    diagnostics: [
+      { symptom: "override decorator가 있는데 production에서 반환 타입 오류가 납니다.", likelyCause: "annotation과 decorator를 runtime validation으로 오해했거나 type checker를 실행하지 않았습니다.", checks: ["type checker CI 결과를 확인합니다.", "실제 return type과 postcondition을 기록합니다.", "base contract suite를 모든 factories에 실행합니다."], fix: "static checker를 CI에 포함하고 system boundary·contract tests에서 runtime result를 검증합니다.", prevention: "정상·잘못된 implementation fixtures로 static 및 runtime negative tests를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedPolymorphismChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-protocol-032", repository: "Python Standard Library", path: "typing.Protocol and runtime_checkable", publicUrl: "https://docs.python.org/3/library/typing.html#typing.Protocol", usedFor: ["structural subtyping", "runtime_checkable", "consumer protocols", "generic protocols"], evidence: "Protocol의 static structural typing과 runtime check 한계를 공식 문서로 확인했습니다." },
+  { id: "pep544-032", repository: "Python Enhancement Proposals", path: "PEP 544 Protocols: Structural subtyping", publicUrl: "https://peps.python.org/pep-0544/", usedFor: ["protocol rationale", "subtyping", "runtime implementation", "variance"], evidence: "Python structural subtyping 설계와 Protocol 의미를 승인된 PEP 원문으로 확인했습니다." },
+  { id: "python-abc-032", repository: "Python Standard Library", path: "abc — Abstract Base Classes", publicUrl: "https://docs.python.org/3/library/abc.html", usedFor: ["ABC", "abstractmethod", "abstract implementation", "virtual subclasses"], evidence: "abstract method와 instance화 제한·subclass hook 규칙을 공식 문서로 확인했습니다." },
+  { id: "python-override-032", repository: "Python Standard Library", path: "typing.override", publicUrl: "https://docs.python.org/3/library/typing.html#typing.override", usedFor: ["override intent", "type checker diagnostics", "runtime marker"], evidence: "Python 3.12+ override decorator의 static 목적과 runtime 동작을 공식 문서로 확인했습니다." },
+  { id: "typing-variance-032", repository: "Python Typing Specification", path: "Generics — Variance", publicUrl: "https://typing.python.org/en/latest/spec/generics.html#variance", usedFor: ["covariance", "contravariance", "invariance", "generic override compatibility"], evidence: "type parameter variance와 subtype 관계를 공식 Python typing specification으로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "override signature가 같으면 LSP가 자동으로 성립하나요?", answer: "아닙니다. 입력 범위·결과·예외·상태 변화 같은 behavioral contract도 유지해야 합니다." },
+  { question: "runtime_checkable Protocol isinstance가 method signature도 검사하나요?", answer: "아닙니다. required attribute 존재를 단순 검사하므로 static checker와 behavior test가 필요합니다." },
+  { question: "ABC abstractmethod에도 공통 구현 body를 둘 수 있나요?", answer: "가능하며 subclass가 super로 그 구현을 재사용하면서 abstract contract를 완성할 수 있습니다." },
+  { question: "template method의 장점은 무엇인가요?", answer: "공통 workflow 순서와 invariant는 base가 보존하고 subclass는 제한된 hook만 구현하게 합니다." },
+  { question: "override return을 base보다 구체적인 subtype으로 바꿀 수 있나요?", answer: "caller가 base return으로 계속 사용할 수 있다면 covariant return으로 안전할 수 있습니다." },
+  { question: "override parameter를 base보다 좁은 subtype만 받게 해도 되나요?", answer: "아닙니다. base caller의 정상 입력을 거부해 substitutability를 깨뜨릴 수 있습니다." },
+  { question: "typing.override가 runtime dispatch를 바꾸나요?", answer: "아닙니다. override 의도를 type checker가 검증하도록 표시할 뿐 MRO dispatch 자체는 같습니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "override를 pre/postcondition·exception·state contract로 검토한다.",
+  "작은 Protocol로 structural dependency를 표현한다.",
+  "runtime_checkable의 shape-only 한계를 설명한다.",
+  "ABC template method와 abstract hook 책임을 분리한다.",
+  "super로 base hook implementation을 한 번 재사용한다.",
+  "covariant return과 parameter narrowing 위험을 구분한다.",
+  "typing.override와 contract tests를 함께 적용한다.",
+);
