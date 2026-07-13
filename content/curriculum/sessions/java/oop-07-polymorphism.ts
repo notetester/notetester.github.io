@@ -1233,7 +1233,7 @@ public class OverrideNegativeCompilerSuite {
     "모든 compiler/run artifacts를 direct GUID temp에 격리하고 boundary 검사 뒤 cleanup했다.",
     "공개 code/output/evidence에 개인정보·credential·로컬 절대 경로·identity hash가 없음을 확인했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-08-abstract"],
   sources: [
     { id: "java-class04-ex15", repository: "javastudy2/classstudy", path: "src/com/java/class04/Ex15_Animal.java", usedFor: ["Animal base surface", "sound/like inherited methods", "tail/leg fields"], evidence: "public sound가 `울음소리`, public like가 `좋아하는 행동`을 출력하고 Cat/Dog common surface가 되는 active base declaration을 확인했습니다." },
     { id: "java-class04-ex16", repository: "javastudy2/classstudy", path: "src/com/java/class04/Ex16_Dog.java", usedFor: ["Dog override replacement", "@Override evidence", "Dog-only play"], evidence: "Dog sound는 @Override를 사용해 parent body 없이 `멍~ 멍~`만 출력하며 play는 Animal surface에 없는 subtype-only method입니다." },
