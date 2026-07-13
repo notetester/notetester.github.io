@@ -744,7 +744,7 @@ public class EncapsulatedLearnerLab {
     { question: "private fields만 쓰면 캡슐화가 끝나나요?", answer: "아닙니다. methods가 invariant·valid transitions를 실제로 보호해야 합니다." },
   ],
   completionChecklist: ["class01 4개 sources를 감사했다.", "comment-only와 runnable evidence를 구분했다.", "top-level access와 class/file naming을 교정했다.", "implicit default constructor를 설명했다.", "class/type/object/reference/new를 분리했다.", "two-new·alias·null을 실행했다.", "reference rebind와 object mutation을 구분했다.", "field defaults와 local definite assignment를 비교했다.", "instance state isolation을 test했다.", "static active-use initialization을 설명했다.", "instance-qualified static이 가능하지만 비권장임을 설명했다.", "mutable static writer와 test leak을 찾았다.", "lost update와 Atomic result를 실행했다.", "final binding과 target mutability를 비교했다.", "constant variable/inlining caveat를 설명했다.", "class/instance initialization order를 실행했다.", "receiver this와 static context를 구분했다.", "identity/value equals/hash/toString을 검증했다.", "privacy-safe snapshot/log를 사용했다.", "reachability와 GC timing을 분리했다.", "external resource cleanup을 명시했다.", "private constructor invariant와 dependency injection을 적용했다."],
-  nextSessions: [],
+  nextSessions: ["oop-02-method-contract"],
   sources: [
     { id: "java-class01-comment", repository: "javastudy2/classstudy", path: "src/com/java/class01/Ex01_ClassDemo.java", usedFor: ["class terminology", "field categories", "constructor/file/access corrections"], evidence: "comment-only shell을 compile하고 설명 assertions를 JLS와 대조했습니다." },
     { id: "java-class01-fields", repository: "javastudy2/classstudy", path: "src/com/java/class01/Ex02_ClassDemo.java", usedFor: ["instance/static/final fields", "package-private access", "mixed play side effects"], evidence: "5 fields와 compiled but uncalled play를 확인했습니다." },
