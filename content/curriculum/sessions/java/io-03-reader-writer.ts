@@ -236,7 +236,7 @@ try {
     "baseline/hostile launcher4·stdin/stdout isolation을 검증했다.", "temp ownership·timeout·cleanup failure aggregation을 적용했다.",
     "binary copy와 text line transform을 구분했다.", "모든 synthetic Java examples를 JDK21 warning0·exact output으로 검증한다.",
   ],
-  nextSessions: [],
+  nextSessions: ["io-04-serialization"],
   sources: [
     { id: "java-class14-ex01", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex01_FileClass.java", usedFor: ["package compile", "File boundary"], evidence: "class14 package warning0에 포함했습니다." },
     { id: "java-class14-ex02", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex02_FileOutputStream.java", usedFor: ["package compile", "byte/text contrast"], evidence: "raw byte output와 text writer 대비입니다." },
