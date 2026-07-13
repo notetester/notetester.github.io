@@ -1269,7 +1269,7 @@ public class InterfaceNegativeCompilerSuite {
     "모든 compiler/process artifacts를 temp direct GUID child에 격리하고 Java child의 async streams·10초 timeout·process-tree cleanup을 적용했다.",
     "공개 code/output/evidence에 개인정보·credential·로컬 절대 경로·identity hash가 없음을 확인했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-10-enum-inner"],
   sources: [
     { id: "java-class06-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class06/Ex01_Interface.java", usedFor: ["interface member declarations", "constants", "abstract/default/static/private methods"], evidence: "네 fields와 play/sound bodyless methods, powerOn default, powerOff static, interface-local private play01의 원본 선언을 제공하며 Ex02 실행 계약의 중심입니다." },
     { id: "java-class06-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class06/Ex02_Main.java", usedFor: ["interface constants", "named concrete implementation invocation", "default/static invocation", "eight-line golden"], evidence: "named Ex03_InterfaceDemo를 생성해 Ex01 constants10·20·30·40, play `놀이`, sound `듣기`, default powerOn, interface-qualified static powerOff를 순서대로 실행합니다." },
