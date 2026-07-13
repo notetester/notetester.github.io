@@ -70,7 +70,7 @@ const session = {
           language: "html",
           filename: "absolute-box.html",
           purpose: "component root가 containing block을 제공하고 absolute child가 sibling flow 공간을 차지하지 않는 것을 exact DOM geometry로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>절대 위치 기준</title>\n  <style>\n    * { box-sizing: border-box; }\n    body { margin: 0; }\n    .card { position: relative; inline-size: 320px; padding: 20px; border: 2px solid #444; }\n    .badge { position: absolute; inset-block-start: 12px; inset-inline-end: 16px; inline-size: 72px; block-size: 28px; }\n    .line { display: block; block-size: 24px; }\n  </style>\n</head>\n<body>\n  <article id=\"card\" class=\"card\">\n    <span id=\"before\" class=\"line\">제목</span>\n    <span id=\"badge\" class=\"badge\">신규</span>\n    <span id=\"after\" class=\"line\">설명</span>\n  </article>\n  <pre id=\"result\"></pre>\n  <script>\n    const badge = document.querySelector('#badge');\n    const before = document.querySelector('#before');\n    const after = document.querySelector('#after');\n    const style = getComputedStyle(badge);\n    document.querySelector('#result').textContent = [\n      `offsetParent=${badge.offsetParent.id}`,\n      `position=${style.position}`,\n      `inset-block-start=${style.insetBlockStart}`,\n      `flow-gap=${after.offsetTop - before.offsetTop}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>절대 위치 기준</title>\n  <style>\n    * { box-sizing: border-box; }\n    body { margin: 0; }\n    .card { position: relative; inline-size: 320px; padding: 20px; border: 2px solid #444; }\n    .badge { position: absolute; inset-block-start: 12px; inset-inline-end: 16px; inline-size: 72px; block-size: 28px; }\n    .line { display: block; block-size: 24px; }\n  </style>\n</head>\n<body>\n  <article id=\"card\" class=\"card\">\n    <span id=\"before\" class=\"line\">제목</span>\n    <span id=\"badge\" class=\"badge\">신규</span>\n    <span id=\"after\" class=\"line\">설명</span>\n  </article>\n  <pre id=\"result\"></pre>\n  <script>\n    const badge = document.querySelector('#badge');\n    const before = document.querySelector('#before');\n    const after = document.querySelector('#after');\n    const style = getComputedStyle(badge);\n    document.querySelector('#result').textContent = [\n      `offsetParent=${badge.offsetParent.id}`,\n      `position=${style.position}`,\n      `inset-block-start=${style.insetBlockStart}`,\n      `flow-gap=${after.offsetTop - before.offsetTop}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-11", explanation: "card가 relative containing block, badge가 logical inset absolute box이고 두 line은 각 24px normal-flow block입니다." },
             { lines: "15-19", explanation: "badge가 source에서 두 line 사이에 있어도 out-of-flow라 after line을 아래로 밀지 않습니다." },
@@ -154,7 +154,7 @@ const session = {
           language: "html",
           filename: "stacking-context.html",
           purpose: "nested stacking context의 atomic behavior를 elementFromPoint와 computed z-index로 증명합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>스태킹 컨텍스트</title>\n  <style>\n    body { margin: 0; }\n    .scene { position: relative; inline-size: 260px; block-size: 180px; }\n    .group-a, .group-b { position: absolute; inline-size: 180px; block-size: 120px; }\n    .group-a { inset: 0 auto auto 0; z-index: 1; }\n    .group-b { inset: 40px auto auto 60px; z-index: 2; }\n    .red { position: absolute; inset: 0; z-index: 999; background: rgb(200, 40, 40); }\n    .blue { position: absolute; inset: 0; background: rgb(40, 80, 200); }\n  </style>\n</head>\n<body>\n  <div id=\"scene\" class=\"scene\">\n    <div id=\"group-a\" class=\"group-a\"><div id=\"red\" class=\"red\"></div></div>\n    <div id=\"group-b\" class=\"group-b\"><div id=\"blue\" class=\"blue\"></div></div>\n  </div>\n  <pre id=\"result\"></pre>\n  <script>\n    const scene = document.querySelector('#scene').getBoundingClientRect();\n    const top = document.elementFromPoint(scene.left + 100, scene.top + 80);\n    document.querySelector('#result').textContent = [\n      `group-a=${getComputedStyle(document.querySelector('#group-a')).zIndex}`,\n      `red=${getComputedStyle(document.querySelector('#red')).zIndex}`,\n      `group-b=${getComputedStyle(document.querySelector('#group-b')).zIndex}`,\n      `top-at-overlap=${top.id}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>스태킹 컨텍스트</title>\n  <style>\n    body { margin: 0; }\n    .scene { position: relative; inline-size: 260px; block-size: 180px; }\n    .group-a, .group-b { position: absolute; inline-size: 180px; block-size: 120px; }\n    .group-a { inset: 0 auto auto 0; z-index: 1; }\n    .group-b { inset: 40px auto auto 60px; z-index: 2; }\n    .red { position: absolute; inset: 0; z-index: 999; background: rgb(200, 40, 40); }\n    .blue { position: absolute; inset: 0; background: rgb(40, 80, 200); }\n  </style>\n</head>\n<body>\n  <div id=\"scene\" class=\"scene\">\n    <div id=\"group-a\" class=\"group-a\"><div id=\"red\" class=\"red\"></div></div>\n    <div id=\"group-b\" class=\"group-b\"><div id=\"blue\" class=\"blue\"></div></div>\n  </div>\n  <pre id=\"result\"></pre>\n  <script>\n    const scene = document.querySelector('#scene').getBoundingClientRect();\n    const topNode = document.elementFromPoint(scene.left + 100, scene.top + 80);\n    document.querySelector('#result').textContent = [\n      `group-a=${getComputedStyle(document.querySelector('#group-a')).zIndex}`,\n      `red=${getComputedStyle(document.querySelector('#red')).zIndex}`,\n      `group-b=${getComputedStyle(document.querySelector('#group-b')).zIndex}`,\n      `top-at-overlap=${topNode.id}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "8-13", explanation: "두 sibling parent가 각각 z-index 1/2 stacking context를 만들고 red child만 999를 가집니다." },
             { lines: "17-20", explanation: "red/blue 영역이 x 60~180, y 40~120에서 겹치도록 배치합니다." },
@@ -198,7 +198,7 @@ const session = {
           language: "html",
           filename: "modal-dialog.html",
           purpose: "원본 fixed div modal을 native dialog lifecycle과 exact state output을 가진 접근 가능한 widget으로 교정합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>로그인 대화상자</title>\n  <style>\n    dialog { inline-size: min(28rem, calc(100% - 2rem)); max-block-size: calc(100dvh - 2rem); overflow: auto; border: 0; border-radius: 1rem; padding: 1.5rem; }\n    dialog::backdrop { background: rgb(0 0 0 / .65); }\n    dialog form { display: grid; gap: .75rem; }\n    button:focus-visible, input:focus-visible { outline: .2rem solid #a33b00; outline-offset: .15rem; }\n  </style>\n</head>\n<body>\n  <main><h1>학습 기록</h1><button id=\"open\">로그인 열기</button></main>\n  <dialog id=\"login\" aria-labelledby=\"dialog-title\">\n    <form method=\"dialog\">\n      <h2 id=\"dialog-title\" tabindex=\"-1\">로그인</h2>\n      <label for=\"user-id\">아이디</label><input id=\"user-id\" name=\"userId\" autocomplete=\"username\">\n      <label for=\"password\">비밀번호</label><input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\">\n      <button value=\"login\">로그인</button><button id=\"cancel\" value=\"cancel\" formnovalidate>취소</button>\n    </form>\n  </dialog>\n  <pre id=\"result\"></pre>\n  <script>\n    const opener = document.querySelector('#open');\n    const dialog = document.querySelector('#login');\n    const title = document.querySelector('#dialog-title');\n    const result = document.querySelector('#result');\n    opener.addEventListener('click', () => {\n      dialog.showModal();\n      title.focus();\n      result.textContent = [\n        `open=${dialog.open}`,\n        `modal=${dialog.matches(':modal')}`,\n        `focus=${document.activeElement.id}`\n      ].join('\n');\n    });\n    dialog.addEventListener('close', () => {\n      result.textContent += `\nclosed=${dialog.returnValue}\nreturn-focus=${document.activeElement.id}`;\n    });\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>로그인 대화상자</title>\n  <style>\n    dialog { inline-size: min(28rem, calc(100% - 2rem)); max-block-size: calc(100dvh - 2rem); overflow: auto; border: 0; border-radius: 1rem; padding: 1.5rem; }\n    dialog::backdrop { background: rgb(0 0 0 / .65); }\n    dialog form { display: grid; gap: .75rem; }\n    button:focus-visible, input:focus-visible { outline: .2rem solid #a33b00; outline-offset: .15rem; }\n  </style>\n</head>\n<body>\n  <main><h1>학습 기록</h1><button id=\"open\">로그인 열기</button></main>\n  <dialog id=\"login\" aria-labelledby=\"dialog-title\">\n    <form method=\"dialog\">\n      <h2 id=\"dialog-title\" tabindex=\"-1\">로그인</h2>\n      <label for=\"user-id\">아이디</label><input id=\"user-id\" name=\"userId\" autocomplete=\"username\">\n      <label for=\"password\">비밀번호</label><input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\">\n      <button value=\"login\">로그인</button><button id=\"cancel\" value=\"cancel\" formnovalidate>취소</button>\n    </form>\n  </dialog>\n  <pre id=\"result\"></pre>\n  <script>\n    const opener = document.querySelector('#open');\n    const dialog = document.querySelector('#login');\n    const title = document.querySelector('#dialog-title');\n    const result = document.querySelector('#result');\n    opener.addEventListener('click', () => {\n      dialog.showModal();\n      title.focus();\n      result.textContent = [\n        `open=${dialog.open}`,\n        `modal=${dialog.matches(':modal')}`,\n        `focus=${document.activeElement.id}`\n      ].join('\\n');\n    });\n    dialog.addEventListener('close', () => {\n      result.textContent += `\nclosed=${dialog.returnValue}\nreturn-focus=${document.activeElement.id}`;\n    });\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "8-11", explanation: "dialog는 viewport보다 작게 content scroll을 허용하고 ::backdrop·focus-visible을 제공합니다. 중앙 배치는 UA dialog behavior를 활용합니다." },
             { lines: "15-22", explanation: "실제 invoker와 named dialog, label/input, method=dialog action buttons를 semantic DOM으로 구성합니다." },
@@ -206,7 +206,7 @@ const session = {
             { lines: "40-42", explanation: "close 뒤 returnValue와 platform focus return 결과를 기록합니다." },
           ],
           run: { environment: ["dialog·:modal·showModal 지원 현대 browser", "keyboard"], command: "modal-dialog.html을 열고 로그인 열기 button 활성화" },
-          output: { value: "열기 직후:\nopen=true\nmodal=true\nfocus=dialog-title\n\n취소 button 활성화 후 추가:\nclosed=cancel\nreturn-focus=open", explanation: ["showModal은 open attribute와 :modal state를 동시에 만듭니다.", "초기 focus는 명시적으로 heading에 이동합니다.", "method=dialog close 뒤 browser가 invoker open button으로 focus를 반환하는 behavior를 확인합니다."] },
+          output: { value: "open=true\nmodal=true\nfocus=dialog-title\nclosed=cancel\nreturn-focus=open", explanation: ["showModal은 open attribute와 :modal state를 동시에 만듭니다.", "초기 focus는 명시적으로 heading에 이동합니다.", "취소 button으로 close한 뒤 browser가 invoker open button으로 focus를 반환합니다."] },
           experiments: [
             { change: "dialog.showModal()을 dialog.setAttribute('open','')으로 바꿉니다.", prediction: "open은 true여도 :modal=false이고 top layer/inert/focus containment modal behavior가 없습니다.", result: "open attribute와 modal lifecycle은 동일하지 않습니다." },
             { change: "dialog를 div class=modal로 바꾸고 CSS만 유지합니다.", prediction: "시각 box는 보일 수 있지만 showModal/method=dialog/Escape/inert/name/focus behavior가 사라집니다.", result: "positioning은 widget semantics를 만들지 않습니다." },
@@ -237,6 +237,94 @@ const session = {
       codeExamples: [],
       diagnostics: [
         { symptom: "RTL에서 badge가 text 시작 쪽이 아니라 반대 edge에 남고 content와 겹친다.", likelyCause: "left/right physical inset과 padding을 LTR 기준으로 hard-code했습니다.", checks: ["dir=rtl과 vertical writing fixture를 적용합니다.", "computed inset-inline-start/end를 확인합니다.", "long translation/zoom을 test합니다."], fix: "의도에 맞는 logical inset/padding/margin으로 전환하고 physical media-specific 예외만 명시합니다.", prevention: "LTR/RTL/long-label screenshot+geometry regression을 component test에 둡니다." },
+      ],
+    },
+    {
+      id: "top-layer-dialog-stacking-focus-security",
+      title: "top layer는 z-index 경쟁을 벗어나지만 modal의 focus·inert·보안 책임은 남습니다",
+      lead: "dialog를 화면 중앙에 그리는 것과 사용자 interaction을 modal로 만드는 일을 분리하고, stacking context tree와 top-layer lifecycle을 실제 browser state로 검증합니다.",
+      explanations: [
+        "position과 z-index는 같은 stacking context 안에서만 직접 비교됩니다. transform·opacity·isolation·filter 등은 새 context를 만들 수 있어 child의 매우 큰 z-index도 parent context 밖 sibling을 이기지 못합니다. DevTools Layers와 stacking context badge에서 ancestor chain을 먼저 찾습니다.",
+        "`dialog.showModal()`은 element를 top layer에 올리고 나머지 document를 inert한 modal interaction으로 만듭니다. top layer는 author stacking context 밖 별도 순서를 가지므로 arbitrary z-index escalation보다 강합니다. `::backdrop`도 top-layer entry와 함께 paint됩니다.",
+        "top layer가 접근성을 자동 완성하지는 않습니다. dialog에는 accessible name, 목적에 맞는 description, 초기 focus, Tab containment, Escape/cancel, close action, invoker로 focus 복귀가 필요합니다. 긴 content에서는 첫 paragraph나 heading에 tabindex=-1을 두는 전략도 검토합니다.",
+        "fixed position은 보통 viewport를 containing block으로 하지만 transformed ancestor 등은 fixed containing block을 바꿀 수 있습니다. top-layer dialog는 normal ancestor clipping·stacking과 다른 규칙을 가지므로 custom fixed overlay와 동일하다고 추론하지 말고 실제 rect·hit test를 봅니다.",
+        "modal은 authorization boundary가 아닙니다. overlay 뒤 control을 inert하게 만들어도 API 권한은 server가 확인해야 하고, DOM에 민감 data를 미리 넣어 CSS로 가리지 않습니다. iframe embedding·clickjacking은 CSP frame-ancestors 같은 응답 정책으로 다룹니다.",
+      ],
+      concepts: [
+        { term: "top layer", definition: "fullscreen·modal dialog·popover 등이 document stacking contexts 위에서 정해진 순서로 그려지는 browser-managed layer입니다.", detail: ["z-index 숫자 경쟁과 다릅니다.", "entry마다 backdrop을 가질 수 있습니다."] },
+        { term: "modal focus lifecycle", definition: "열기 전 invoker 기억, 초기 focus, 내부 순환, 닫기와 focus 복귀까지의 interaction 계약입니다.", detail: ["visible centering과 별개입니다.", "keyboard·screen reader로 검증합니다."] },
+        { term: "stacking context atomicity", definition: "한 stacking context의 descendants가 외부 sibling과 개별적으로 섞이지 않고 context 전체가 한 단위로 쌓이는 성질입니다.", detail: ["child z-index만 키워 해결할 수 없습니다.", "ancestor trigger를 찾아야 합니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "top-layer-dialog-over-transform-proof",
+          title: "transform stacking context 안 dialog의 top-layer·focus·hit-test 검증",
+          language: "html",
+          filename: "top-layer-dialog.html",
+          purpose: "transformed ancestor 아래 선언된 dialog가 showModal 후 top layer와 modal focus lifecycle을 얻는지 확인합니다.",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>top layer dialog</title>\n  <style>\n    body { margin: 0; min-block-size: 100vh; }\n    .context { position: relative; z-index: 1; transform: translateZ(0); }\n    dialog { position: fixed; box-sizing: border-box; inline-size: 240px; padding: 20px; border: 2px solid navy; }\n    dialog::backdrop { background: rgb(0 0 0 / .4); }\n  </style>\n</head>\n<body>\n  <main class=\"context\"><button id=\"open\" type=\"button\">설정 열기</button><dialog id=\"settings\" aria-labelledby=\"title\"><h1 id=\"title\">설정</h1><button id=\"close\" type=\"button\" autofocus>닫기</button></dialog></main>\n  <pre id=\"result\"></pre>\n  <script>\n    const dialog = document.querySelector('#settings');\n    dialog.showModal();\n    const rect = dialog.getBoundingClientRect();\n    const centerNode = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);\n    const style = getComputedStyle(dialog);\n    document.querySelector('#result').textContent = [\n      `open=${dialog.open}`,\n      `modal=${dialog.matches(':modal')}`,\n      `active=${document.activeElement.id}`,\n      `position=${style.position}`,\n      `z-index=${style.zIndex}`,\n      `hit-test-inside=${dialog.contains(centerNode)}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
+          walkthrough: [
+            { lines: "6-10", explanation: "ancestor stacking context와 fixed dialog/backdrop를 의도적으로 함께 둡니다." },
+            { lines: "13-15", explanation: "invoker·accessible heading·autofocus close button을 semantic dialog에 연결합니다." },
+            { lines: "18-22", explanation: "showModal 뒤 rect center hit test와 computed positioning을 읽습니다." },
+            { lines: "23-30", explanation: "open/modal/focus/position/z-index/hit-test state를 정확히 출력합니다." },
+          ],
+          run: { environment: ["HTML dialog와 :modal을 지원하는 현대 Chromium"], command: "browser에서 top-layer-dialog.html을 열고 결과 확인" },
+          output: { value: "open=true\nmodal=true\nactive=close\nposition=fixed\nz-index=auto\nhit-test-inside=true", explanation: ["showModal이 open과 :modal state를 만들고 autofocus close button으로 focus를 이동합니다.", "author z-index가 auto여도 top layer에서 ancestor stacking context 위에 표시됩니다.", "dialog 중심 hit test가 dialog subtree를 반환합니다."] },
+          experiments: [
+            { change: "showModal을 show로 바꿉니다.", prediction: "open은 true지만 :modal은 false이고 나머지 document가 inert하지 않습니다.", result: "modeless display와 modal behavior를 구분합니다." },
+            { change: "dialog를 일반 div와 z-index:999999로 바꿉니다.", prediction: "ancestor stacking context·clipping에 갇힐 수 있고 focus/inert lifecycle이 자동 제공되지 않습니다.", result: "큰 z-index는 modal primitive가 아닙니다." },
+            { change: "close 후 open button focus 복귀를 구현합니다.", prediction: "document.activeElement가 invoker가 됩니다.", result: "닫기까지가 modal acceptance test입니다." },
+          ],
+          sourceRefs: ["web-position-relative-source", "web-position-fixed-source", "whatwg-dialog", "wai-dialog-pattern", "css-position-3"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "z-index를 계속 키워도 modal이 transformed header 아래에 남는다.", likelyCause: "modal이 낮은 ancestor stacking context 안에 있고 top layer가 아닌 custom div입니다.", checks: ["ancestor transform·opacity·isolation을 찾습니다.", "DevTools stacking context tree를 확인합니다.", "dialog.matches(':modal')과 top-layer primitive 사용 여부를 봅니다."], fix: "가능하면 native dialog showModal을 사용하고 custom overlay라면 portal 위치와 full focus/inert lifecycle을 명시합니다.", prevention: "nested transform fixture와 keyboard modal E2E를 component CI에 둡니다." },
+      ],
+    },
+    {
+      id: "sticky-scrollport-containing-block-performance",
+      title: "sticky는 nearest scrollport와 inset·containing block·overflow chain을 함께 계산합니다",
+      lead: "viewport에 붙는다는 암기 대신 어떤 ancestor가 scroll container인지, sticky view rectangle과 parent boundary가 어디인지 측정합니다.",
+      explanations: [
+        "sticky box는 normal flow 자리를 유지하면서 nearest scrolling mechanism의 scrollport와 inset에 따라 이동합니다. 의도하지 않은 ancestor의 overflow:auto·hidden이 viewport 대신 기준이 될 수 있습니다. overflow가 실제로 scroll되지 않아도 sticky 기준을 바꾸는지 확인합니다.",
+        "sticky가 작동하려면 관련 축 inset이 auto가 아니어야 하고 scroll할 여유와 containing block 범위가 있어야 합니다. parent height가 header와 같거나 앞뒤 content가 없으면 붙을 이동 구간이 없습니다. `inset-block-start`를 사용하면 writing mode 변화에 의도를 보존합니다.",
+        "fixed·absolute containing block도 ancestor transform·filter·contain에 의해 달라질 수 있습니다. Elements에서 offsetParent 하나만 보고 결론내리지 말고 specification trigger와 rectangle coordinate를 확인합니다. getBoundingClientRect는 viewport physical 좌표입니다.",
+        "sticky header의 background·z-index가 없으면 아래 content가 비쳐 읽기 어렵고 focus target이 가려질 수 있습니다. skip link·anchor 이동에는 scroll-margin-block-start를 제공하고 400% zoom에서 sticky 영역이 viewport 대부분을 가리지 않는지 봅니다.",
+        "scroll event마다 rect를 읽고 style을 쓰면 forced layout과 jank가 생깁니다. CSS sticky를 우선하고 IntersectionObserver가 필요한 state class만 갱신하며 passive listener와 Performance trace로 확인합니다. overlay로 UI를 가리는 것은 접근 통제나 clickjacking 방어가 아닙니다.",
+      ],
+      concepts: [
+        { term: "sticky view rectangle", definition: "sticky inset과 nearest scrollport로 만들어져 box 위치를 제한하는 rectangle입니다.", detail: ["scroll container 선택이 핵심입니다.", "containing block 밖으로 벗어나지 않습니다."] },
+        { term: "scrollport", definition: "scroll container에서 사용자가 볼 수 있는 padding-box 기반 영역입니다.", detail: ["viewport와 같지 않을 수 있습니다.", "overflow chain을 따라 찾습니다."] },
+        { term: "scroll occlusion", definition: "fixed/sticky UI가 anchor target·focus indicator·본문을 가리는 문제입니다.", detail: ["scroll-margin/padding으로 완화합니다.", "zoom과 keyboard에서 검증합니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "sticky-nearest-scrollport-proof",
+          title: "nearest overflow container에서 sticky inset geometry 검증",
+          language: "html",
+          filename: "sticky-scrollport.html",
+          purpose: "nested scroller를 programmatic scroll하고 sticky header의 physical offset과 logical inset을 측정합니다.",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>sticky scrollport</title>\n  <style>\n    body { margin: 0; }\n    .scroller { box-sizing: border-box; inline-size: 240px; block-size: 120px; overflow: auto; border: 2px solid navy; }\n    .sticky { position: sticky; inset-block-start: 0; block-size: 30px; background: white; z-index: 1; }\n    .content { block-size: 300px; background: linear-gradient(lavender, lightblue); }\n  </style>\n</head>\n<body>\n  <section class=\"scroller\" aria-label=\"학습 목록\"><h1 class=\"sticky\">목차</h1><div class=\"content\"></div></section>\n  <pre id=\"result\"></pre>\n  <script>\n    const scroller = document.querySelector('.scroller');\n    const sticky = document.querySelector('.sticky');\n    scroller.scrollTop = 80;\n    requestAnimationFrame(() => {\n      const offset = Math.round(sticky.getBoundingClientRect().top - scroller.getBoundingClientRect().top);\n      const style = getComputedStyle(sticky);\n      document.querySelector('#result').textContent = [\n        `scroll-top=${scroller.scrollTop}`,\n        `sticky-offset=${offset}`,\n        `position=${style.position}`,\n        `overflow-y=${getComputedStyle(scroller).overflowY}`,\n        `inset-block-start=${style.insetBlockStart}`,\n        `stuck=${offset === 2}`\n      ].join('\\n');\n    });\n  </script>\n</body>\n</html>",
+          walkthrough: [
+            { lines: "6-10", explanation: "120px bordered scroller, logical inset sticky header와 tall content를 만듭니다." },
+            { lines: "13-15", explanation: "heading semantics를 유지한 sticky header를 nested scroll container에 둡니다." },
+            { lines: "18-22", explanation: "scrollTop 80을 적용하고 다음 animation frame에 geometry를 측정합니다." },
+            { lines: "23-31", explanation: "border 안 2px offset·overflow·logical inset과 stuck invariant를 출력합니다." },
+          ],
+          run: { environment: ["position:sticky를 지원하는 현대 Chromium"], command: "browser에서 sticky-scrollport.html을 열고 결과 확인" },
+          output: { value: "scroll-top=80\nsticky-offset=2\nposition=sticky\noverflow-y=auto\ninset-block-start=0px\nstuck=true", explanation: ["scrollTop이 80이어도 header는 nearest scrollport의 border 안 top 2px에 붙습니다.", "computed position과 logical inset은 sticky/0px입니다.", "viewport가 아니라 nested overflow container가 기준입니다."] },
+          experiments: [
+            { change: "scroller overflow를 visible로 바꿉니다.", prediction: "nested scrollTop이 동작하지 않고 sticky 기준이 상위 scrollport로 이동합니다.", result: "nearest scrolling mechanism이 기준을 결정합니다." },
+            { change: "inset-block-start를 auto로 바꿉니다.", prediction: "해당 축에서 normal relative처럼 동작해 top에 붙지 않습니다.", result: "sticky에는 non-auto inset이 필요합니다." },
+            { change: "scroller block-size를 content보다 크게 만듭니다.", prediction: "scroll 여유가 없어 sticky 이동을 관찰할 수 없습니다.", result: "작동 실패와 이동 구간 부재를 구분합니다." },
+          ],
+          sourceRefs: ["web-position-sticky-source", "css-position-3"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "sticky header가 viewport가 아니라 작은 wrapper 안에서만 붙거나 전혀 움직이지 않는다.", likelyCause: "중간 ancestor overflow가 nearest scrollport를 만들었거나 inset/scroll range가 없습니다.", checks: ["ancestor overflow chain을 위로 추적합니다.", "relevant axis inset과 parent height를 확인합니다.", "scroller scrollHeight/clientHeight와 rect offset을 기록합니다."], fix: "의도한 scroll owner에 overflow를 두고 logical inset과 충분한 scroll range를 제공하며 불필요한 clipping wrapper를 제거합니다.", prevention: "nested overflow·zoom·anchor focus fixture를 sticky regression에 포함합니다." },
       ],
     },
     {
@@ -297,6 +385,12 @@ const session = {
     { question: "fixed 중앙 div에 aria-modal=true만 추가하면 modal인가요?", answer: "아닙니다. dialog name, inert/background 차단, inside focus/Tab, Escape/close, return focus behavior가 필요합니다." },
     { question: "dialog open attribute와 showModal은 같은가요?", answer: "아닙니다. showModal은 modal mode와 top layer/inert behavior를 제공하며 open만 설정한 dialog는 modal이 아닙니다." },
     { question: "top/left 대신 logical inset을 쓰는 이유는 무엇인가요?", answer: "inline/block start/end 의도를 writing mode와 RTL에서도 유지하기 위해서입니다." },
+    { question: "top layer dialog에 z-index:999999가 꼭 필요한가요?", answer: "아닙니다. top layer는 document stacking contexts 밖에서 관리되므로 arbitrary z-index escalation이 핵심이 아닙니다." },
+    { question: "dialog.show()와 showModal()은 interaction이 같은가요?", answer: "아닙니다. show는 modeless이고 showModal은 :modal·top layer·나머지 document inert behavior를 제공합니다." },
+    { question: "modal을 닫은 뒤 focus는 어디로 가야 하나요?", answer: "일반적으로 열었던 invoker 또는 workflow상 다음 logical control로 명시적으로 복귀해야 합니다." },
+    { question: "overflow:hidden ancestor는 sticky 기준과 무관한가요?", answer: "아닙니다. scrolling mechanism을 만들어 nearest sticky scrollport 선택을 바꿀 수 있습니다." },
+    { question: "sticky에 inset이 모두 auto이면 어떻게 되나요?", answer: "해당 축에서 sticky offset이 생기지 않아 사실상 relative처럼 normal position에 머뭅니다." },
+    { question: "overlay로 뒤 UI를 가리면 API 권한도 보호되나요?", answer: "아닙니다. inert·paint는 client interaction일 뿐이며 server가 각 요청의 authorization을 검증해야 합니다." },
   ],
   completionChecklist: [
     "position scheme별 normal-flow 참여와 original slot을 확인했다.",
@@ -307,6 +401,13 @@ const session = {
     "overlay clip/transform context를 정리하고 필요한 경우 top layer/portal을 사용했다.",
     "modal dialog의 name·inert·inside focus·Tab·Escape·visible close·return focus를 검증했다.",
     "320px·200% zoom·dynamic viewport·keyboard·safe area·RTL에서 geometry와 task를 확인했다.",
+    "ancestor stacking-context trigger를 추적하고 child z-index escalation 대신 구조적 원인을 해결했다.",
+    "showModal의 top-layer·:modal·backdrop·autofocus state를 실제 browser에서 확인했다.",
+    "modal close·cancel·Escape 후 invoker focus 복귀와 screen reader name을 검증했다.",
+    "nearest overflow scrollport와 sticky view rectangle을 rect·scrollTop으로 측정했다.",
+    "sticky/fixed UI가 anchor·focus를 가리지 않도록 scroll-margin/padding과 zoom을 검사했다.",
+    "scroll listener의 geometry read/write를 줄이고 CSS sticky·observer로 성능을 검증했다.",
+    "overlay·inert·z-index를 authorization 또는 secret hiding 수단으로 사용하지 않았다.",
   ],
   nextSessions: ["css-08-responsive-viewport-media"],
   sources: [

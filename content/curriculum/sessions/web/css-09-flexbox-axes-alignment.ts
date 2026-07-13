@@ -49,7 +49,7 @@ const session = {
           language: "html",
           filename: "flex-direction-order.html",
           purpose: "flex-direction이 visual main-axis placement를 바꿔도 DOM·keyboard source order를 바꾸지 않는 사실을 geometry와 DOM 배열로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Flex 방향과 순서</title>\n  <style>\n    .row { display: flex; inline-size: 300px; }\n    .reverse { flex-direction: row-reverse; }\n    button { inline-size: 100px; block-size: 40px; }\n  </style>\n</head>\n<body>\n  <div id=\"normal\" class=\"row\"><button>1</button><button>2</button><button>3</button></div>\n  <div id=\"reverse\" class=\"row reverse\"><button>1</button><button>2</button><button>3</button></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const order = (id, visual = false) => {\n      const items = [...document.querySelectorAll(`#${id} button`)];\n      if (visual) items.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);\n      return items.map((item) => item.textContent).join(',');\n    };\n    document.querySelector('#result').textContent = [\n      `normal-dom=${order('normal')}`,\n      `normal-visual=${order('normal', true)}`,\n      `reverse-dom=${order('reverse')}`,\n      `reverse-visual=${order('reverse', true)}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Flex 방향과 순서</title>\n  <style>\n    .row { display: flex; inline-size: 300px; }\n    .reverse { flex-direction: row-reverse; }\n    button { inline-size: 100px; block-size: 40px; }\n  </style>\n</head>\n<body>\n  <div id=\"normal\" class=\"row\"><button>1</button><button>2</button><button>3</button></div>\n  <div id=\"reverse\" class=\"row reverse\"><button>1</button><button>2</button><button>3</button></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const order = (id, visual = false) => {\n      const items = [...document.querySelectorAll(`#${id} button`)];\n      if (visual) items.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);\n      return items.map((item) => item.textContent).join(',');\n    };\n    document.querySelector('#result').textContent = [\n      `normal-dom=${order('normal')}`,\n      `normal-visual=${order('normal', true)}`,\n      `reverse-dom=${order('reverse')}`,\n      `reverse-visual=${order('reverse', true)}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-9", explanation: "300px container와 100px button 세 개로 line을 정확히 채우고 두 번째만 row-reverse합니다." },
             { lines: "13-14", explanation: "두 container의 DOM button 순서는 모두 1,2,3입니다." },
@@ -113,7 +113,7 @@ const session = {
           language: "html",
           filename: "flex-grow.html",
           purpose: "zero basis item이 gap을 제외한 560px positive free space를 1:2:1로 나누는 exact width를 측정합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Flex grow 계산</title>\n  <style>\n    * { box-sizing: border-box; }\n    body { margin: 0; }\n    .line { display: flex; inline-size: 600px; gap: 20px; }\n    .item { min-inline-size: 0; block-size: 40px; padding: 0; border: 0; }\n    .a { flex: 1 1 0; }\n    .b { flex: 2 1 0; }\n    .c { flex: 1 1 0; }\n  </style>\n</head>\n<body>\n  <div class=\"line\"><div class=\"item a\">A</div><div class=\"item b\">B</div><div class=\"item c\">C</div></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const width = (selector) => document.querySelector(selector).getBoundingClientRect().width;\n    document.querySelector('#result').textContent = [\n      `container=${document.querySelector('.line').getBoundingClientRect().width}`,\n      `gap=${getComputedStyle(document.querySelector('.line')).columnGap}`,\n      `A=${width('.a')}`, `B=${width('.b')}`, `C=${width('.c')}`,\n      `sum=${width('.a') + width('.b') + width('.c') + 40}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Flex grow 계산</title>\n  <style>\n    * { box-sizing: border-box; }\n    body { margin: 0; }\n    .line { display: flex; inline-size: 600px; gap: 20px; }\n    .item { min-inline-size: 0; block-size: 40px; padding: 0; border: 0; }\n    .a { flex: 1 1 0; }\n    .b { flex: 2 1 0; }\n    .c { flex: 1 1 0; }\n  </style>\n</head>\n<body>\n  <div class=\"line\"><div class=\"item a\">A</div><div class=\"item b\">B</div><div class=\"item c\">C</div></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const width = (selector) => document.querySelector(selector).getBoundingClientRect().width;\n    document.querySelector('#result').textContent = [\n      `container=${document.querySelector('.line').getBoundingClientRect().width}`,\n      `gap=${getComputedStyle(document.querySelector('.line')).columnGap}`,\n      `A=${width('.a')}`, `B=${width('.b')}`, `C=${width('.c')}`,\n      `sum=${width('.a') + width('.b') + width('.c') + 40}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "9-13", explanation: "container 600, gap 두 개 총 40, item decoration/min-size 영향을 제거하고 grow factor만 1:2:1로 둡니다." },
             { lines: "20-26", explanation: "container/gap/item border-box width와 width sum+gap을 출력합니다." },
@@ -196,7 +196,7 @@ const session = {
           language: "html",
           filename: "flex-cross-axis.html",
           purpose: "두 flex line과 높이가 다른 item을 만들어 item alignment와 line distribution을 geometry로 구분합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>교차축 정렬</title>\n  <style>\n    body { margin: 0; }\n    .box { display: flex; flex-wrap: wrap; inline-size: 220px; block-size: 240px; align-items: center; align-content: space-between; gap: 0 20px; background: #eee; }\n    .item { flex: 0 0 100px; block-size: 40px; background: #acf; }\n    .tall { block-size: 80px; }\n  </style>\n</head>\n<body>\n  <div id=\"box\" class=\"box\"><div id=\"a\" class=\"item\">A</div><div id=\"b\" class=\"item tall\">B</div><div id=\"c\" class=\"item\">C</div><div id=\"d\" class=\"item\">D</div></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const top = (id) => document.querySelector(id).offsetTop;\n    document.querySelector('#result').textContent = [\n      `A-top=${top('#a')}`, `B-top=${top('#b')}`,\n      `C-top=${top('#c')}`, `D-top=${top('#d')}`,\n      `line-gap=${top('#c') - (top('#b') + 80)}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>교차축 정렬</title>\n  <style>\n    body { margin: 0; }\n    .box { display: flex; flex-wrap: wrap; inline-size: 220px; block-size: 240px; align-items: center; align-content: space-between; gap: 0 20px; background: #eee; }\n    .item { flex: 0 0 100px; block-size: 40px; background: #acf; }\n    .tall { block-size: 80px; }\n  </style>\n</head>\n<body>\n  <div id=\"box\" class=\"box\"><div id=\"a\" class=\"item\">A</div><div id=\"b\" class=\"item tall\">B</div><div id=\"c\" class=\"item\">C</div><div id=\"d\" class=\"item\">D</div></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const itemTop = (id) => document.querySelector(id).offsetTop;\n    document.querySelector('#result').textContent = [\n      `A-top=${itemTop('#a')}`, `B-top=${itemTop('#b')}`,\n      `C-top=${itemTop('#c')}`, `D-top=${itemTop('#d')}`,\n      `line-gap=${itemTop('#c') - (itemTop('#b') + 80)}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "8-10", explanation: "220px line에 100+20+100 두 item이 정확히 들어가 두 line이 생성됩니다. 첫 line cross size는 tall 80, 둘째는 40입니다." },
             { lines: "14", explanation: "A/B가 첫 line, C/D가 둘째 line에 source order로 배치됩니다." },
@@ -234,6 +234,94 @@ const session = {
       codeExamples: [],
       diagnostics: [
         { symptom: "wrapped card 마지막 줄의 한 card가 전체 폭을 차지해 앞 줄 column과 맞지 않는다.", likelyCause: "flex:1 item이 line별 positive free space를 독립적으로 흡수합니다.", checks: ["각 line item count와 final widths를 확인합니다.", "basis/grow를 분리합니다.", "2차원 column alignment requirement를 확인합니다."], fix: "grow를 0으로 하고 explicit basis/max를 두거나 Grid auto-fit/minmax로 2차원 track을 설계합니다.", prevention: "item count 1~N과 incomplete last row visual fixture를 test합니다." },
+      ],
+    },
+    {
+      id: "intrinsic-minimum-min-width-zero-overflow",
+      title: "Flex item의 automatic minimum은 shrink보다 먼저 content를 지키므로 min-inline-size:0 계약이 필요합니다",
+      lead: "flex-shrink 숫자만 조정하지 말고 flex base size·min-content floor·gap·fixed sibling을 순서대로 계산해 overflow 원인을 찾습니다.",
+      explanations: [
+        "flex item은 기본 `min-width:auto`에 의해 content-based automatic minimum을 가질 수 있습니다. 긴 unbreakable token·pre·image가 있으면 flex-shrink:1이어도 min-content 아래로 줄지 않아 container가 넘칩니다. item의 computed min-inline-size와 scrollWidth를 확인합니다.",
+        "card title처럼 줄거나 ellipsis되어도 되는 item에는 `min-inline-size:0`을 명시하고 overflow/wrapping 정책을 함께 둡니다. 무조건 모든 item에 0을 주면 control label·media가 지나치게 작아질 수 있으므로 content ownership과 minimum target을 정합니다.",
+        "available main size에서 item outer flex base와 gap을 뺀 값이 free space입니다. negative free space는 scaled shrink factor에 비례해 분배되지만 min/max clamp로 freeze된 item이 생기면 남은 item에 다시 분배됩니다. DevTools Flex overlay에서 final size와 frozen item을 확인합니다.",
+        "replaced image는 max-inline-size:100%, block-size:auto, aspect-ratio를 사용하고 text에는 overflow-wrap 정책을 정합니다. button은 readable label과 target minimum을 지키며 flexible title이 먼저 양보하도록 flex shorthand를 명시합니다.",
+        "수천 row에서 매 resize마다 각 item rect를 읽어 shrink 여부를 JS로 계산하지 않습니다. CSS intrinsic sizing을 사용하고 root overflow sentinel만 관찰합니다. 숨겨진 text를 ellipsis로 가리는 것은 민감 data 보호가 아니며 full DOM text는 접근 가능합니다.",
+      ],
+      concepts: [
+        { term: "automatic minimum size", definition: "flex item의 auto minimum이 content·overflow·transferred size suggestion에 따라 정해지는 floor입니다.", detail: ["shrink를 막는 흔한 원인입니다.", "min-inline-size:0으로 opt out할 수 있습니다."] },
+        { term: "scaled shrink factor", definition: "flex-shrink와 inner flex base size를 곱해 negative free space 분배 비율을 만드는 값입니다.", detail: ["큰 base item이 더 많이 줄 수 있습니다.", "min/max clamp 뒤 반복 계산됩니다."] },
+        { term: "intrinsic overflow", definition: "content의 min-content 또는 replaced natural size가 available size보다 커 생기는 overflow입니다.", detail: ["container width만 보고 해결하지 않습니다.", "wrapping·minimum·media ratio를 함께 봅니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "min-inline-size-zero-flex-proof",
+          title: "긴 flex title이 152px로 shrink하고 container overflow를 막는지 검증",
+          language: "html",
+          filename: "flex-minimum-proof.html",
+          purpose: "240px toolbar에서 80px action과 8px gap을 제외한 152px로 flexible label이 줄어드는 계산을 browser geometry로 확인합니다.",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Flex automatic minimum</title>\n  <style>\n    body { margin: 0; }\n    .row { display: flex; inline-size: 240px; gap: 8px; }\n    .label { flex: 1 1 auto; min-inline-size: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n    .action { box-sizing: border-box; flex: 0 0 80px; inline-size: 80px; }\n  </style>\n</head>\n<body>\n  <div class=\"row\"><span class=\"label\">CSS_FLEXBOX_AUTOMATIC_MINIMUM_LONG_TOKEN</span><button class=\"action\" type=\"button\">열기</button></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const row = document.querySelector('.row');\n    const label = document.querySelector('.label');\n    const action = document.querySelector('.action');\n    const labelStyle = getComputedStyle(label);\n    document.querySelector('#result').textContent = [\n      `row-width=${Math.round(row.getBoundingClientRect().width)}`,\n      `label-width=${Math.round(label.getBoundingClientRect().width)}`,\n      `action-width=${Math.round(action.getBoundingClientRect().width)}`,\n      `gap=${getComputedStyle(row).columnGap}`,\n      `min-inline-size=${labelStyle.minInlineSize}`,\n      `no-overflow=${row.scrollWidth === row.clientWidth}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
+          walkthrough: [
+            { lines: "6-10", explanation: "240px flex row, 8px gap, flexible zero-minimum label과 80px fixed action을 선언합니다." },
+            { lines: "13-15", explanation: "long unbreakable token과 real button을 같은 row에 둡니다." },
+            { lines: "18-21", explanation: "세 element와 label computed minimum을 읽습니다." },
+            { lines: "22-29", explanation: "240-80-8=152 geometry와 overflow invariant를 출력합니다." },
+          ],
+          run: { environment: ["현대 Chromium"], command: "browser에서 flex-minimum-proof.html을 열고 결과 확인" },
+          output: { value: "row-width=240\nlabel-width=152\naction-width=80\ngap=8px\nmin-inline-size=0px\nno-overflow=true", explanation: ["flexible label이 남은 152px를 사용하고 action은 80px를 지킵니다.", "8px gap을 포함해 총 240px이며 root overflow가 없습니다.", "min-inline-size 0px이 content-based floor 아래 shrink를 허용합니다."] },
+          experiments: [
+            { change: "label의 min-inline-size:0을 제거합니다.", prediction: "long token의 automatic minimum 때문에 row scrollWidth가 clientWidth보다 커질 수 있습니다.", result: "flex-shrink만으로 automatic minimum을 넘지 못합니다." },
+            { change: "white-space를 normal, overflow-wrap:anywhere로 바꿉니다.", prediction: "여러 줄을 허용하면 min-content가 줄고 ellipsis 대신 card 높이가 늘어납니다.", result: "truncate와 wrap은 product content 정책입니다." },
+            { change: "action을 flex:1로 바꿉니다.", prediction: "button도 free space 분배에 참여해 80px contract가 달라집니다.", result: "각 item의 grow/shrink/basis를 역할별로 정합니다." },
+          ],
+          sourceRefs: ["web-flex-gap-source", "css-flexbox-1", "css-align-3"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "flex card 제목이 container를 밀어내고 가로 scroll이 생기며 shrink 값을 키워도 고쳐지지 않는다.", likelyCause: "item의 automatic min-content minimum이 shrink floor로 남았습니다.", checks: ["computed min-inline-size와 scrollWidth를 확인합니다.", "long token·pre·image descendant를 찾습니다.", "min-inline-size:0과 wrapping variant를 DevTools에서 비교합니다."], fix: "줄어도 되는 item에 min-inline-size:0과 명시적 overflow/wrap 정책을 적용하고 fixed control minimum을 분리합니다.", prevention: "long URL·localization·image fixture에서 root no-overflow와 target minimum을 test합니다." },
+      ],
+    },
+    {
+      id: "logical-auto-margin-grid-comparison-order-security",
+      title: "logical auto margin은 direction-safe grouping을 만들고 Grid와 source order 경계를 분명히 합니다",
+      lead: "justify-content와 auto margin의 free-space 소비 순서를 이해하고 LTR·RTL·vertical writing에서도 DOM order와 task 흐름을 보존합니다.",
+      explanations: [
+        "main-axis auto margin은 alignment 전에 positive free space를 흡수합니다. toolbar의 특정 item에 margin-inline-start:auto를 주면 앞 group과 뒤 group을 분리하고 남은 justify-content 공간은 사실상 없어집니다. physical margin-left/right보다 direction 변화에 안전합니다.",
+        "LTR row에서 inline-start는 left지만 RTL row에서는 right입니다. vertical writing에서는 inline 축이 세로가 될 수 있습니다. computed logical margin과 resolved physical margin, item rectangles를 함께 확인해 start/end를 left/right로 암기하지 않습니다.",
+        "justify-content는 전체 item group의 free space 분배, auto margin은 특정 item 앞/뒤의 separator 역할입니다. gap은 인접 item 사이 minimum gutter입니다. 세 도구를 중복 사용했을 때 누가 space를 소유하는지 hand calculation으로 기록합니다.",
+        "Flexbox는 한 축의 content-sized 흐름과 toolbar/card 내부에 적합하고 Grid는 row/column track alignment가 동시에 필요한 collection에 적합합니다. flex wrap을 행·열 표처럼 맞추려고 negative margin과 width calc를 누적하면 Grid를 검토합니다.",
+        "row-reverse·order로 visual 순서를 바꿔도 DOM reading·focus·copy 순서는 바뀌지 않습니다. security warning·submit·가격처럼 의미 순서를 CSS로만 재배치하지 않습니다. DevTools Accessibility tree와 keyboard sequence를 source order 기준으로 검증합니다.",
+      ],
+      concepts: [
+        { term: "auto-margin absorption", definition: "flex main axis의 positive free space를 auto margin이 alignment 전에 소비하는 과정입니다.", detail: ["여러 auto margin이 나눠 가집니다.", "negative free space에서는 auto가 0처럼 처리됩니다."] },
+        { term: "logical grouping", definition: "inline/block start/end를 사용해 direction·writing mode 변화에도 의도한 toolbar group을 유지하는 배치입니다.", detail: ["resolved physical margin으로 검산합니다.", "DOM order는 그대로 둡니다."] },
+        { term: "one-dimensional layout", definition: "한 번에 주로 한 축의 item 흐름과 free space를 해결하는 Flexbox 특성입니다.", detail: ["각 flex line은 독립적입니다.", "2D track 정렬은 Grid와 비교합니다."] },
+      ],
+      codeExamples: [
+        {
+          id: "logical-auto-margin-ltr-rtl-proof",
+          title: "300px toolbar의 LTR·RTL margin-inline-start 164px mapping 검증",
+          language: "html",
+          filename: "logical-auto-margin.html",
+          purpose: "같은 DOM/CSS에서 logical auto margin이 LTR left와 RTL right로 resolve되며 group edge를 채우는지 증명합니다.",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>logical auto margin</title>\n  <style>\n    body { margin: 0; }\n    .toolbar { display: flex; inline-size: 300px; gap: 8px; margin-block-end: 8px; }\n    .toolbar button { box-sizing: border-box; flex: 0 0 40px; inline-size: 40px; }\n    .push { margin-inline-start: auto; }\n    .rtl { direction: rtl; }\n  </style>\n</head>\n<body>\n  <div class=\"toolbar ltr\"><button>A</button><button class=\"push\">B</button><button>C</button></div>\n  <div class=\"toolbar rtl\"><button>A</button><button class=\"push\">B</button><button>C</button></div>\n  <pre id=\"result\"></pre>\n  <script>\n    const ltr = document.querySelector('.ltr');\n    const rtl = document.querySelector('.rtl');\n    const ltrPush = getComputedStyle(ltr.querySelector('.push'));\n    const rtlPush = getComputedStyle(rtl.querySelector('.push'));\n    const ltrLast = ltr.lastElementChild.getBoundingClientRect();\n    const rtlLast = rtl.lastElementChild.getBoundingClientRect();\n    document.querySelector('#result').textContent = [\n      `ltr-logical=${ltrPush.marginInlineStart}`,\n      `ltr-left=${ltrPush.marginLeft}`,\n      `rtl-logical=${rtlPush.marginInlineStart}`,\n      `rtl-right=${rtlPush.marginRight}`,\n      `gap=${getComputedStyle(ltr).columnGap}`,\n      `edge-contract=${Math.round(ltrLast.right - ltr.getBoundingClientRect().left) === 300 && Math.round(rtlLast.left - rtl.getBoundingClientRect().left) === 0}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
+          walkthrough: [
+            { lines: "6-11", explanation: "300px toolbar와 세 40px items, 두 8px gaps, logical auto margin을 선언하고 RTL만 추가합니다." },
+            { lines: "14-17", explanation: "동일한 A-B-C DOM order를 LTR/RTL fixture에 유지합니다." },
+            { lines: "20-25", explanation: "logical/physical computed margins와 마지막 item rectangles를 읽습니다." },
+            { lines: "26-33", explanation: "300-120-16=164px free space와 양 방향 edge invariant를 출력합니다." },
+          ],
+          run: { environment: ["CSS logical margins와 Flexbox 지원 Chromium"], command: "browser에서 logical-auto-margin.html을 열고 결과 확인" },
+          output: { value: "ltr-logical=164px\nltr-left=164px\nrtl-logical=164px\nrtl-right=164px\ngap=8px\nedge-contract=true", explanation: ["세 item 120px과 gaps 16px을 뺀 164px을 push item의 inline-start auto margin이 흡수합니다.", "LTR에서는 physical left, RTL에서는 physical right margin이 됩니다.", "마지막 item은 각 direction의 main-end edge에 정확히 닿습니다."] },
+          experiments: [
+            { change: "push를 첫 item에 옮깁니다.", prediction: "free space가 첫 item의 inline-start에 생겨 group 전체 위치가 달라집니다.", result: "auto margin owner가 grouping semantics를 결정합니다." },
+            { change: "justify-content:space-between을 추가합니다.", prediction: "auto margin이 free space를 먼저 소비해 justify가 나눌 양이 없습니다.", result: "alignment와 auto margin의 처리 순서를 이해합니다." },
+            { change: "row-reverse를 사용합니다.", prediction: "visual order는 바뀌지만 DOM/keyboard order A-B-C는 유지됩니다.", result: "의미 순서 변경에 CSS reorder를 사용하지 않습니다." },
+          ],
+          sourceRefs: ["web-flex-justify-source", "web-flex-auto-margin-end-source", "web-flex-auto-margin-start-source", "web-flex-center-source", "web-flex-gap-source", "css-flexbox-1", "css-align-3"],
+        },
+      ],
+      diagnostics: [
+        { symptom: "RTL toolbar에서 group separator가 반대편에 생기고 keyboard 순서가 화면과 다르다.", likelyCause: "margin-left·row-reverse·order로 physical/visual 순서만 조작했습니다.", checks: ["direction별 physical/logical computed margin을 비교합니다.", "DOM·Accessibility tree·Tab 순서를 기록합니다.", "auto margin과 justify/gap의 free-space owner를 계산합니다."], fix: "DOM을 의미 순서로 유지하고 margin-inline-start/end를 group 역할에 적용하며 CSS reorder를 제거합니다.", prevention: "LTR·RTL·vertical writing과 keyboard source-order regression을 component CI에 둡니다." },
       ],
     },
     {
@@ -295,6 +383,12 @@ const session = {
     { question: "align-content는 item 하나를 중앙에 놓나요?", answer: "아닙니다. 여러 flex line 집합을 cross axis extra space에 배치하며 single line에는 효과가 없습니다." },
     { question: "gap과 margin은 같은가요?", answer: "아닙니다. gap은 item/line 사이 gutter이고 outer edge 공간을 만들지 않으며 margin은 item box에 속하고 auto margin은 alignment에도 참여합니다." },
     { question: "Flexbox와 Grid 중 무엇이 더 최신인가요?", answer: "최신/구식 관계가 아니라 Flex는 주로 one-dimensional flow/space negotiation, Grid는 2차원 track alignment에 적합합니다." },
+    { question: "min-inline-size:0은 왜 flex overflow를 고칠 수 있나요?", answer: "content-based automatic minimum 아래로 item이 shrink할 수 있게 해 available main size 안에 들어오도록 허용하기 때문입니다." },
+    { question: "모든 flex item에 min-width:0을 전역 적용해도 되나요?", answer: "역할별 minimum과 content 정책을 무시할 수 있으므로 줄어도 되는 text/media wrapper에 의도적으로 적용합니다." },
+    { question: "240px row에 80px button과 8px gap이 있으면 flexible item 공간은 얼마인가요?", answer: "다른 border/margin이 없다면 240-80-8=152px입니다." },
+    { question: "auto margin과 justify-content 중 누가 free space를 먼저 소비하나요?", answer: "main-axis auto margin이 positive free space를 먼저 흡수한 뒤 남은 공간에 alignment가 적용됩니다." },
+    { question: "margin-inline-start는 RTL에서도 physical left인가요?", answer: "아닙니다. RTL horizontal writing에서는 inline-start가 physical right로 resolve됩니다." },
+    { question: "ellipsis로 감춘 text는 보안상 숨겨진 것인가요?", answer: "아닙니다. 전체 text는 DOM·accessibility·script에서 읽을 수 있으므로 민감 data를 client에 보내면 안 됩니다." },
   ],
   completionChecklist: [
     "flex container/item과 main/cross axis를 writing mode·direction·flex-direction에서 그렸다.",
@@ -305,6 +399,13 @@ const session = {
     "align-items/self와 multi-line align-content·baseline·stretch 조건을 구분했다.",
     "reverse/order로 의미 순서를 바꾸지 않고 DOM·visual·focus order를 일치시켰다.",
     "320px·RTL·zoom·long/empty/many content에서 geometry·overflow·accessibility를 검증했다.",
+    "flex item automatic minimum과 scaled shrink factor를 DevTools computed size로 확인했다.",
+    "줄어도 되는 item에 min-inline-size:0과 wrap/ellipsis 정책을 명시하고 root overflow를 검사했다.",
+    "fixed control target·replaced image ratio·long token minimum을 역할별로 보존했다.",
+    "auto margin·justify-content·gap의 free-space 소비 순서를 수치로 검산했다.",
+    "LTR·RTL·vertical writing에서 logical auto margin의 physical mapping을 확인했다.",
+    "toolbar/card 내부 Flex와 2D collection Grid 선택 근거를 문서화했다.",
+    "CSS reorder·ellipsis·overflow를 의미 순서 변경이나 secret hiding 수단으로 사용하지 않았다.",
   ],
   nextSessions: ["css-10-responsive-layout-capstone"],
   sources: [
