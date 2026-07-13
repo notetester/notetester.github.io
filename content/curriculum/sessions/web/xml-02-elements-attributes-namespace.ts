@@ -359,3 +359,129 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 380;
+expertSession.chapters.push(
+  {
+    id: "namespace-dom-xpath-prefix-independent-contract",
+    title: "expanded name을 기준으로 DOM·XPath query를 prefix와 분리합니다",
+    lead: "XML 이름의 identity는 prefix 철자가 아니라 namespace URI와 local name의 쌍입니다. default namespace와 unprefixed attribute 규칙을 DOM과 XPath에서 정확히 재현합니다.",
+    explanations: [
+      "QName은 source에서 `prefix:local`처럼 보이지만 namespace-aware processor는 prefix declaration을 따라 namespace name과 local part의 expanded name으로 해석합니다. 서로 다른 prefix가 같은 URI에 bound되면 같은 vocabulary name이고, 같은 prefix라도 다른 URI에 bound되면 다른 name입니다.",
+      "default namespace declaration은 prefix 없는 element names에 적용되지만 prefix 없는 attribute names에는 적용되지 않습니다. `<product xmlns='urn:catalog' id='p1'>`에서 product는 `{urn:catalog}product`, id는 `{null}id`입니다. attribute를 element namespace로 getAttributeNS하면 null이 되어 missing과 혼동할 수 있습니다.",
+      "namespace declaration은 일반 업무 attribute처럼 다루지 않습니다. DOM에서는 namespaceURI/localName/prefix와 getAttributeNS를 사용하고, serializer가 선택한 prefix 철자를 domain key로 저장하지 않습니다. `xmlns` attributes를 문자열 순회해 직접 namespace context를 재구현하지 않습니다.",
+      "DOMParser XML mode에서 정상 Document를 얻은 뒤 documentElement의 namespaceURI/localName을 먼저 gate합니다. expected vocabulary/version이 아니면 `getElementsByTagName('product')`가 우연히 결과를 반환해도 처리하지 않습니다. wildcard namespace는 migration tool처럼 목적이 명확한 경우에만 사용합니다.",
+      "getElementsByTagNameNS(namespaceURI, localName)는 prefix 변경과 무관한 live collection을 반환할 수 있습니다. querySelector는 CSS namespace resolver를 JavaScript에서 간단히 제공하지 않으므로 namespaced XML data extraction에는 namespace-aware DOM API나 XPath resolver가 더 명시적입니다.",
+      "XPath에서 unprefixed element test는 source document의 default namespace를 자동 의미하지 않습니다. expression에 code-owned prefix를 쓰고 resolver가 그 prefix를 expected URI에 map하도록 합니다. document source의 prefix 철자와 XPath prefix는 같을 필요가 없습니다.",
+      "XPath expression에 사용자 입력을 문자열 보간하면 query 문법·탐색 범위를 제어하게 할 수 있습니다. expression은 fixed allowlist로 두고 사용자 검색어는 추출된 validated text에 JavaScript로 적용하거나 variable binding을 지원하는 검토된 engine을 사용합니다.",
+      "XPathResult NUMBER_TYPE, STRING_TYPE, FIRST_ORDERED_NODE_TYPE, ORDERED_NODE_SNAPSHOT_TYPE 등 기대 result type을 고정합니다. iterator는 tree mutation으로 invalidation될 수 있고 snapshot은 생성 시점 목록이므로 UI update 중 어떤 consistency가 필요한지 정합니다.",
+      "mixed content에서는 element.textContent가 inline descendant text를 합치지만 원래 element/text 순서와 markup 의미를 잃을 수 있습니다. 문서형 content를 domain scalar로 납작하게 만들지 말고 node walk 또는 vocabulary-specific renderer를 사용하며 external text는 HTML에 textContent로 넣습니다.",
+      "test matrix는 default/prefixed/alias prefix, undeclared prefix, wrong namespace, unprefixed/namespaced attribute, empty namespace, XPath empty result와 fixed query를 포함합니다. DevTools에서 XML Document의 namespaceURI/localName과 XPath count를 기록하고 source prefix spelling만 비교하는 assertion을 금지합니다.",
+    ],
+    concepts: [
+      { term: "expanded name", definition: "namespace name과 local name의 ordered pair로 XML element/attribute identity를 나타냅니다.", detail: ["prefix 철자와 분리됩니다.", "Clark notation은 교육·도구 표현일 뿐 XML source 문법은 아닙니다."] },
+      { term: "namespace resolver", definition: "XPath expression 안 prefix를 expected namespace URI에 연결하는 함수 또는 mapping입니다.", detail: ["document의 실제 prefix와 달라도 됩니다.", "고정 expression과 allowlisted URI를 사용합니다."] },
+      { term: "no-namespace attribute", definition: "default namespace가 선언된 element 위에서도 prefix 없는 attribute가 갖는 null namespace identity입니다.", detail: ["getAttribute('id') 또는 getAttributeNS(null,'id')로 읽습니다.", "element namespace를 자동 상속하지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "browser-namespace-dom-xpath",
+        title: "default namespace·namespaced attribute·XPath resolver를 함께 검증",
+        language: "html",
+        filename: "xml-namespace-xpath.html",
+        purpose: "DOMParser로 namespace XML을 읽고 expanded name, unprefixed/namespaced attributes와 fixed XPath count를 prefix-independent exact output으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML namespace XPath</title></head>\n<body>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script>\n    const CATALOG = 'urn:catalog:v2';\n    const META = 'urn:meta:v1';\n    const source = `<catalog xmlns=\"${CATALOG}\" xmlns:m=\"${META}\">\n      <product id=\"p1\" m:status=\"active\">키보드</product>\n      <product id=\"p2\" m:status=\"paused\">마우스</product>\n    </catalog>`;\n    const documentNode = new DOMParser().parseFromString(source, 'application/xml');\n    if (documentNode.getElementsByTagNameNS('*', 'parsererror').length) throw new Error('PARSE_ERROR');\n\n    const root = documentNode.documentElement;\n    const products = documentNode.getElementsByTagNameNS(CATALOG, 'product');\n    const first = products[0];\n    const count = documentNode.evaluate(\n      'count(/c:catalog/c:product)',\n      documentNode,\n      (prefix) => ({ c: CATALOG, m: META })[prefix] ?? null,\n      XPathResult.NUMBER_TYPE,\n    ).numberValue;\n    const lines = [\n      `root={${root.namespaceURI}}${root.localName}`,\n      `products=${count}`,\n      `first-id=${first.getAttributeNS(null, 'id')}`,\n      `status=${first.getAttributeNS(META, 'status')}`,\n      `id-no-namespace=${first.getAttributeNode('id').namespaceURI === null}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-5", explanation: "browser shell과 결과 status를 준비합니다." },
+          { lines: "6-13", explanation: "default element namespace와 prefixed metadata namespace를 가진 두 product XML string을 만듭니다." },
+          { lines: "14-15", explanation: "XML mode로 parse하고 parsererror를 namespace-independent하게 거부합니다." },
+          { lines: "17-26", explanation: "root와 products를 namespace-aware DOM으로 읽고 fixed XPath prefix를 expected URI에 resolve해 count합니다." },
+          { lines: "27-36", explanation: "expanded root, count, no-namespace id, namespaced status와 attribute namespace invariant를 화면·Console에 기록합니다." },
+          { lines: "34-36", explanation: "script와 document를 닫고 DevTools에서 namespace properties와 keyboard 접근을 확인합니다." },
+        ],
+        run: { environment: ["최신 Chromium 또는 Firefox", "xml-namespace-xpath.html을 UTF-8로 저장", "DevTools Console·Elements·Accessibility", "keyboard로 결과 영역 탐색"], command: "브라우저에서 xml-namespace-xpath.html을 열고 pre·Console exact 출력과 namespaceURI/localName을 확인" },
+        output: { value: "root={urn:catalog:v2}catalog\nproducts=2\nfirst-id=p1\nstatus=active\nid-no-namespace=true", explanation: ["default namespace element는 URI와 local name 쌍으로 식별됩니다.", "XPath의 c prefix는 resolver가 expected URI에 연결해 두 product를 셉니다.", "prefix 없는 id는 null namespace이고 m:status만 metadata namespace에 속합니다."] },
+        experiments: [
+          { change: "source의 m prefix를 meta로 바꾸되 같은 URI를 유지합니다.", prediction: "DOM getAttributeNS와 XPath 결과는 그대로입니다.", result: "prefix 철자와 expanded name identity를 분리합니다." },
+          { change: "XPath를 count(/catalog/product)로 바꾸고 resolver를 제거합니다.", prediction: "default namespace elements가 no-namespace test와 일치하지 않아 0이 됩니다.", result: "XPath가 source default namespace를 자동 상속하지 않음을 확인합니다." },
+          { change: "사용자 검색어를 XPath string에 이어 붙이는 대신 products를 추출한 뒤 textContent를 비교합니다.", prediction: "XPath metacharacter가 query grammar를 바꾸지 않습니다.", result: "fixed query와 untrusted data 경계를 유지합니다." },
+        ],
+        sourceRefs: ["web-weather-namespace-source", "w3c-namespaces", "xml-infoset", "whatwg-dom", "xpath-31"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "default namespace XML에서 XPath `//product`가 빈 결과를 반환한다.", likelyCause: "XPath의 unprefixed name test가 document의 default namespace를 자동 사용한다고 가정했습니다.", checks: ["root.namespaceURI/localName을 출력합니다.", "expression prefix와 resolver mapping을 확인합니다.", "DOM getElementsByTagNameNS 결과와 비교합니다."], fix: "code-owned XPath prefix를 expected namespace URI에 resolve하고 `//c:product`처럼 fixed expression을 사용합니다.", prevention: "default/prefixed/alias prefix fixtures에서 같은 expanded-name result를 검증합니다." },
+      { symptom: "product의 id를 getAttributeNS(catalogUri, 'id')로 읽으면 null이다.", likelyCause: "default namespace가 prefix 없는 attribute에도 적용된다고 오해했습니다.", checks: ["getAttributeNode('id').namespaceURI를 확인합니다.", "prefixed m:status와 unprefixed id를 비교합니다.", "namespace declaration과 normal attributes를 구분합니다."], fix: "prefix 없는 id는 getAttribute('id') 또는 getAttributeNS(null,'id')로 읽고 실제 namespaced attribute만 해당 URI로 조회합니다.", prevention: "element/attribute expanded-name matrix를 vocabulary contract에 포함합니다." },
+    ],
+    expertNotes: ["XPath prefix는 expression 내부의 임시 이름입니다. source 문서와 철자가 같아야 한다는 convention을 identity 규칙으로 오해하지 않습니다.", "querySelector로 XML namespace를 다루는 browser별 CSS namespace 제약보다 namespace-aware DOM/XPath API를 우선 검토합니다."],
+  },
+  {
+    id: "versioned-vocabulary-schema-canonical-streaming",
+    title: "versioned vocabulary를 schema·domain validation·canonicalization·streaming 정책으로 운영합니다",
+    lead: "요소냐 속성이냐를 선택한 뒤에도 version evolution, missing/empty/null, schema dialect, canonical bytes와 대용량 처리 계약을 명시해야 장기 호환되는 XML이 됩니다.",
+    explanations: [
+      "vocabulary는 namespace URI, root local name, version, allowed children/attributes와 semantics를 함께 정의합니다. namespace URI를 반드시 fetch 가능한 schema URL로 만들 필요는 없지만 안정적이고 조직이 소유하는 identifier로 관리합니다. version을 namespace에 넣을지 별도 attribute로 둘지 migration 정책과 함께 정합니다.",
+      "element와 attribute 선택은 style이 아니라 information model입니다. 반복·순서·mixed content·확장 가능성이 있으면 element가 자연스럽고 compact metadata와 identity는 attribute가 유리할 수 있습니다. attribute에는 child structure가 없고 같은 expanded name을 한 element에 중복할 수 없습니다.",
+      "missing, empty string, whitespace-only, explicit nil은 다른 상태가 될 수 있습니다. XSI nil을 사용한다면 schema와 nillable contract가 필요하고, 단지 빈 tag를 nil로 간주하지 않습니다. domain adapter는 raw presence와 normalized value를 분리해 silent default로 data quality error를 숨기지 않습니다.",
+      "XSD, Relax NG, Schematron과 application validation은 해결하는 문제와 표현력이 다릅니다. parser의 well-formedness 뒤 pinned local schema로 구조/type를 검사하고, cross-record uniqueness·authorization·업무 규칙은 application layer에서 확인합니다. untrusted schemaLocation을 network fetch하지 않습니다.",
+      "schema version evolution은 optional additive field만 보고 끝나지 않습니다. enum 확장, numeric unit, timezone, default 의미, namespace 변경, ordering과 unknown element policy를 consumer capability와 연결합니다. tolerant reader도 unknown security-sensitive field를 무조건 무시하면 안 됩니다.",
+      "round trip은 parse→domain→serialize 뒤 semantic value가 보존되는지 보는 것이지 source bytes·prefix·attribute order·quote style가 같은 것을 의미하지 않습니다. comments, CDATA boundary, entity spelling과 insignificant whitespace가 사라질 수 있으므로 lexical preservation이 필요한 문서 편집기는 일반 data binding과 다른 model을 사용합니다.",
+      "digital signature와 hash는 semantic equivalence만으로 bytes가 같아지지 않아 canonicalization 규칙과 transform chain이 필요합니다. 직접 attribute sort나 whitespace 제거로 canonical XML을 흉내 내지 말고 검토된 C14N implementation, algorithm allowlist, wrapping attack 방어와 signed node identity를 사용합니다.",
+      "streaming parser는 element start/end와 namespace scope event를 전달합니다. ancestor namespace context, mixed text/tail, record boundary와 root-level invariants를 state machine으로 관리하고, 한 record를 내보내기 전 required fields와 limits를 검증합니다. late document error에서 commit/rollback 정책도 필요합니다.",
+      "serialization은 element/attribute text를 XML serializer에 맡겨 `& < > \" '` escaping과 legal character rules를 적용합니다. string interpolation로 markup을 조립하지 않고 DOM/ElementTree builder를 사용합니다. external URI와 schema reference는 allowlist하고 output encoding declaration과 실제 writer encoding을 일치시킵니다.",
+      "contract tests는 alias prefix semantic equality, wrong namespace/version, unknown field, missing/empty/nil, duplicate ID, reordered children, mixed content, round-trip loss, schema offline, streaming truncation과 canonical signature fixture를 포함합니다. raw XML 전체를 snapshot 하나로 비교하지 말고 domain invariants와 필요한 lexical invariants를 분리합니다.",
+    ],
+    concepts: [
+      { term: "vocabulary version", definition: "namespace·root·version marker와 element/attribute semantics의 호환성 단위를 나타냅니다.", detail: ["consumer migration 정책과 함께 관리합니다.", "schema URL과 namespace identity는 같은 개념이 아닙니다."] },
+      { term: "semantic round trip", definition: "parse와 serialization을 거친 뒤 application 의미가 보존되는지 확인하는 성질입니다.", detail: ["prefix·quote·attribute order bytes는 달라질 수 있습니다.", "lexical preservation 요구는 별도 model이 필요합니다."] },
+      { term: "canonicalization", definition: "signature/hash처럼 byte-level 비교가 필요한 경우 정의된 XML node-set을 표준 형태로 serialize하는 과정입니다.", detail: ["임의 whitespace 제거와 다릅니다.", "검토된 C14N implementation을 사용합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "expanded-name-domain-validation",
+        title: "prefix와 분리한 expanded-name domain validator",
+        language: "javascript",
+        filename: "expanded-name-validator.mjs",
+        purpose: "parser가 추출했다고 가정한 raw node의 namespace/local/attributes를 versioned vocabulary로 검증하고 prefix alias가 domain identity를 바꾸지 않음을 exact 확인합니다.",
+        code: "const VOCABULARY = { namespaceURI: 'urn:catalog:v2', localName: 'product' };\n\nfunction expandedName(node) {\n  return `{${node.namespaceURI}}${node.localName}`;\n}\n\nfunction validateProduct(node) {\n  if (node.namespaceURI !== VOCABULARY.namespaceURI || node.localName !== VOCABULARY.localName) {\n    throw new TypeError('VOCABULARY_ERROR');\n  }\n  const id = node.attributes.get('id');\n  const rawPrice = node.attributes.get('price');\n  const price = Number(rawPrice);\n  if (!id || rawPrice === undefined || rawPrice.trim() === '' || !Number.isSafeInteger(price) || price < 0) throw new TypeError('SCHEMA_ERROR');\n  return { id, price };\n}\n\nconst first = { prefix: 'p', namespaceURI: 'urn:catalog:v2', localName: 'product', attributes: new Map([['id', 'p1'], ['price', '12000']]) };\nconst alias = { ...first, prefix: 'catalog' };\nconst product = validateProduct(first);\nconsole.log(`expanded=${expandedName(first)}`);\nconsole.log(`prefix-independent=${expandedName(first) === expandedName(alias)}`);\nconsole.log(`id=${product.id}, price=${product.price}`);\nconsole.log(`missing-category=${first.attributes.get('category') === undefined}`);",
+        walkthrough: [
+          { lines: "1-5", explanation: "versioned vocabulary의 expected namespace/local과 교육용 Clark notation helper를 정의합니다." },
+          { lines: "7-16", explanation: "expanded name을 먼저 검사한 뒤 no-namespace attributes의 presence·empty와 safe integer domain rule을 검증합니다." },
+          { lines: "18-20", explanation: "같은 URI/local에 서로 다른 prefix를 가진 raw node와 validated domain record를 만듭니다." },
+          { lines: "21-24", explanation: "expanded identity, prefix alias equality, typed domain value와 missing attribute를 exact 출력합니다." },
+        ],
+        run: { environment: ["Node.js 20 이상", "expanded-name-validator.mjs를 UTF-8로 저장"], command: "node expanded-name-validator.mjs" },
+        output: { value: "expanded={urn:catalog:v2}product\nprefix-independent=true\nid=p1, price=12000\nmissing-category=true", explanation: ["domain identity는 prefix가 아니라 URI/local pair입니다.", "문자열 price는 validation boundary에서 safe integer로 변환됩니다.", "누락 attribute는 빈 문자열과 구분되는 undefined로 관찰됩니다."] },
+        experiments: [
+          { change: "alias.namespaceURI를 urn:catalog:v1로 바꿉니다.", prediction: "expanded names가 달라지고 validator는 VOCABULARY_ERROR를 냅니다.", result: "같은 local/prefix 모양이 namespace version identity를 대신하지 않습니다." },
+          { change: "price를 빈 문자열로 바꿉니다.", prediction: "raw empty guard가 Number 변환의 0 coercion 전에 SCHEMA_ERROR를 냅니다.", result: "conversion 전에 missing/empty lexical policy를 검사해 silent data loss를 막습니다." },
+          { change: "raw node를 XML로 직접 string interpolation하지 않고 DOM/ElementTree serializer로 serialize합니다.", prediction: "특수문자 escaping과 namespace declarations를 library가 처리합니다.", result: "domain validation과 safe serialization을 별도 경계로 유지합니다." },
+        ],
+        sourceRefs: ["web-xml-elements-source", "web-xml-attributes-source", "w3c-xml", "w3c-namespaces", "xml-infoset", "python-elementtree"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "XML round trip 뒤 signature가 깨졌지만 domain 값은 모두 같다.", likelyCause: "semantic round trip과 prefix·attribute order·whitespace까지 포함한 canonical bytes를 같은 것으로 간주했습니다.", checks: ["serialize 전후 expanded names/domain values와 raw bytes를 따로 비교합니다.", "사용한 canonicalization/transform algorithm을 확인합니다.", "signed node selection과 wrapping 가능성을 검토합니다."], fix: "signature에는 표준 C14N과 검토된 XML signature library를 사용하고 일반 serializer 결과의 byte equality를 기대하지 않습니다.", prevention: "known signature vectors와 namespace/attribute-order/wrapping regression fixtures를 둡니다." },
+      { symptom: "streaming import가 끝에서 malformed XML을 발견했지만 앞 record들은 이미 DB에 저장됐다.", likelyCause: "document-level validity와 transaction commit boundary를 설계하지 않았습니다.", checks: ["record emit/DB commit 시점과 root end 확인 시점을 추적합니다.", "late schema/duplicate ID error rollback 범위를 봅니다.", "staging table 또는 batch transaction 사용을 확인합니다."], fix: "전체-document invariant가 필요하면 staging/transaction에서 최종 root 검증 뒤 commit하고 record-independent protocol만 조기 commit합니다.", prevention: "truncated tail·late duplicate·wrong closing root fixture로 rollback을 검증합니다." },
+    ],
+    expertNotes: ["Node 예제는 parser가 제공한 namespace-aware raw node 이후의 domain boundary를 보여 줍니다. XML source를 정규식이나 문자열 split으로 parser처럼 처리하지 않습니다.", "canonicalization과 XML Signature는 별도 보안 전문 영역입니다. 직접 구현하지 말고 알고리즘 downgrade, key trust, wrapping 공격까지 검토된 library/profile을 사용합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "서로 다른 prefix가 같은 namespace URI와 local name을 가리키면 다른 요소인가요?", answer: "아닙니다. expanded name이 같으므로 같은 vocabulary name이며 prefix는 lexical alias입니다." },
+  { question: "default namespace가 prefix 없는 attribute에도 적용되나요?", answer: "아닙니다. prefix 없는 attribute는 null namespace이고 prefix가 있는 attribute만 해당 namespace URI를 가집니다." },
+  { question: "XPath의 `//product`가 source default namespace의 product를 찾나요?", answer: "일반적으로 아닙니다. expression prefix를 resolver로 expected namespace URI에 연결해야 합니다." },
+  { question: "schema validation이 업무 규칙과 authorization까지 보장하나요?", answer: "아닙니다. 구조/type validation 뒤에도 uniqueness, cross-record rule, 권한과 외부 reference 정책을 application이 검증해야 합니다." },
+  { question: "parse→serialize 뒤 prefix와 attribute order가 달라지면 semantic data가 손상된 건가요?", answer: "반드시 그렇지 않습니다. expanded names와 domain values가 같을 수 있으며 byte equality가 필요하면 표준 canonicalization을 별도로 사용합니다." },
+);
+expertSession.completionChecklist.push(
+  "element/attribute identity를 namespace URI+local name으로 저장하고 prefix 철자와 분리했다.",
+  "default namespace element와 no-namespace attribute를 DOM·XPath fixture로 검증했다.",
+  "XPath expression·resolver·result type을 고정하고 사용자 입력을 query code에 보간하지 않았다.",
+  "missing·empty·nil·typed conversion과 unknown field/version evolution 정책을 문서화했다.",
+  "well-formedness·schema·domain validation·authorization을 독립 gate로 구현했다.",
+  "round-trip semantic invariants와 canonical bytes/signature 요구를 분리하고 streaming rollback을 검증했다.",
+);

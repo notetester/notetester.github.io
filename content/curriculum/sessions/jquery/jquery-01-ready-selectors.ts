@@ -603,7 +603,7 @@ const session = {
     { id: "jquery-upgrade-4", repository: "OpenJS Foundation jQuery", path: "jQuery Core 4.0 Upgrade Guide", publicUrl: "https://jquery.com/upgrade-guide/4.0/", usedFor: ["removed/deprecated APIs", "Migrate process", "plugin compatibility", "stepwise upgrade"], evidence: "major version 직접 교체 대신 warning 제거와 단계적 regression을 설계하는 기준으로 사용했습니다." },
     { id: "sri-standard", repository: "W3C Web Application Security Working Group", path: "Subresource Integrity", publicUrl: "https://www.w3.org/TR/sri/", usedFor: ["integrity metadata", "CORS interaction", "resource identity", "failure behavior"], evidence: "external jQuery bytes를 고정하고 mismatch 실행을 막는 browser contract의 1차 기준입니다." },
     { id: "html-script-loading", repository: "WHATWG HTML Standard", path: "the script element", publicUrl: "https://html.spec.whatwg.org/multipage/scripting.html#the-script-element", usedFor: ["classic parser blocking", "async", "defer", "module execution", "DOMContentLoaded ordering"], evidence: "ready 전후의 browser parser와 script scheduling 설명을 living standard에 맞췄습니다." },
-    { id: "dom-query-standard", repository: "WHATWG DOM Standard", path: "ParentNode querySelector and querySelectorAll", publicUrl: "https://dom.spec.whatwg.org/#dom-document-queryselectorall", usedFor: ["native selector comparison", "static NodeList", "invalid selector", "query root"], evidence: "jQuery collection과 native DOM selection의 반환·root·error 비교 기준입니다." },
+    { id: "dom-query-standard", repository: "WHATWG DOM Standard", path: "#dom-parentnode-queryselectorall", publicUrl: "https://dom.spec.whatwg.org/#dom-parentnode-queryselectorall", usedFor: ["native selector comparison", "static NodeList", "invalid selector", "query root"], evidence: "jQuery collection과 native DOM selection의 반환·root·error 비교 기준입니다." },
   ],
   sourceCoverage: {
     filesRead: 4,
@@ -617,3 +617,72 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 400;
+expertSession.chapters.push({
+  id: "selector-escaping-scope-native-migration-accessibility",
+  title: "selector escaping·scope·native migration을 성능과 접근성 계약으로 설계합니다",
+  lead: "jQuery selector 한 줄을 querySelector로 기계 치환하지 않습니다. 입력이 selector 문법이 되는 경계, 탐색 root, 반환 collection, document readiness, focus와 semantic state까지 같은 동작 계약으로 옮깁니다.",
+  explanations: [
+    "jQuery의 `$()`는 selector 실행, HTML fragment 생성, DOM node wrapping, ready callback 등록 등 여러 overload를 가진 함수입니다. modern DOM으로 migration할 때는 호출마다 의도를 먼저 분류합니다. selector는 querySelector/All, wrapping은 node 자체 또는 Array, creation은 createElement/template, ready는 module/defer 또는 DOMContentLoaded로 각각 다른 API가 됩니다.",
+    "CSS selector에 사용자·서버 문자열을 보간하면 그 값은 plain text가 아니라 selector grammar 일부가 됩니다. id가 `course:1`, 공백, 점, 대괄호를 포함하면 raw `#${id}`는 다른 의미나 SyntaxError가 될 수 있습니다. identifier 자리에는 `CSS.escape(id)` 또는 jQuery의 `$.escapeSelector(id)`를 사용하고, 가능하면 Map·dataset iteration처럼 selector 조합 자체를 줄입니다.",
+    "attribute selector의 quoted value에도 별도 grammar와 escaping 문제가 있습니다. CSS.escape가 모든 selector string template을 자동 안전하게 만들지는 않습니다. 전체 selector를 외부 입력으로 받지 말고 code가 고정한 selector 구조 안에서 정확히 identifier 한 조각만 escape하거나, 이미 찾은 elements의 property 값을 JavaScript로 비교합니다.",
+    "탐색 범위는 correctness와 성능의 공통 경계입니다. `$(root).find('.item')`를 `document.querySelectorAll('.item')`로 바꾸면 다른 component의 같은 class까지 포함할 수 있습니다. `root.querySelectorAll(...)`, `:scope > ...`, closest 후 contains 확인으로 component root를 명시하고 shadow root·iframe·detached tree는 별도 document 경계로 다룹니다.",
+    "jQuery collection은 array처럼 보이지만 Array가 아니며 chain method와 implicit iteration을 제공합니다. querySelectorAll은 static NodeList이고 getElementsByClassName 계열은 live collection입니다. migration에서 `.first()`, `.eq()`, `.get()`, `.toArray()`의 empty·negative index·identity semantics를 Array indexing, at, Array.from으로 명시적으로 재현합니다.",
+    "native selector가 항상 더 빠르거나 jQuery가 항상 느리다는 구호로 결정하지 않습니다. selector 결과를 실제로 쓰는 범위, DOM size, 반복 횟수, mutation 사이 cache 유효성을 측정합니다. querySelectorAll 후 layout-dependent property를 반복 읽으면 selector보다 style/layout thrashing이 더 큰 병목일 수 있습니다.",
+    "ready 처리도 migration contract입니다. type=module과 defer script는 document parsing 뒤 실행되지만 async/dynamic script는 실행 시점이 다릅니다. 재사용 initializer는 `document.readyState === 'loading'`이면 DOMContentLoaded once를 등록하고 아니면 즉시 실행하며, hot navigation이나 partial render에서는 document ready보다 component mount/dispose lifecycle을 사용합니다.",
+    "jQuery 4 upgrade에서는 deprecated/removed APIs, slim/full build 차이, browser support와 plugin compatibility를 공식 upgrade guide로 점검합니다. 새 jQuery와 legacy plugin을 함께 쓸 때 global `$`를 덮는 방식 대신 dependency ownership을 명시하고, migrate plugin은 임시 진단 도구로만 사용해 warning을 제거한 뒤 배포합니다.",
+    "CDN script는 exact version을 고정하고 HTTPS와 Subresource Integrity, crossorigin 정책을 검토합니다. SRI는 받아온 resource bytes가 지정 hash와 같은지 확인하지만 malicious upstream version 선택, compromised application HTML, runtime DOM injection을 모두 해결하지 않습니다. self-host와 CDN의 cache·CSP·offline·update 책임을 비교합니다.",
+    "selector로 찾은 요소가 존재한다고 usable UI가 되는 것은 아닙니다. click 가능한 div를 늘리기보다 button/link semantics를 유지하고, filtering 뒤 focus가 제거되면 논리적 다음 control로 이동합니다. hidden/disabled/aria-selected 같은 상태는 selector class만 바꾸지 말고 native property와 accessible state를 authoritative render에서 함께 갱신합니다.",
+    "검증은 selector result count만 보지 않습니다. 특수문자 id, 빈 result, duplicated id, nested component, dynamic insert, shadow root, keyboard Tab/Enter/Space, visible focus, Accessibility tree를 포함합니다. DevTools Performance에서 selector 호출과 style/layout을 분리하고, Elements에서 query root 밖 node가 섞이지 않는지 확인합니다.",
+  ],
+  concepts: [
+    { term: "selector injection", definition: "외부 문자열이 CSS selector 문법으로 해석되어 의도하지 않은 요소 선택·SyntaxError·과도한 탐색을 만드는 경계 오류입니다.", detail: ["전체 selector를 외부 입력으로 받지 않습니다.", "identifier 조각에는 CSS.escape를 적용합니다."] },
+    { term: "query scope", definition: "selector가 탐색할 Document·Element·ShadowRoot와 component boundary를 명시한 범위입니다.", detail: ["root.querySelectorAll과 :scope를 사용합니다.", "closest 결과도 contains로 소유 범위를 확인합니다."] },
+    { term: "migration parity", definition: "jQuery 호출을 native API로 옮길 때 result set·순서·empty behavior·event timing·focus·cleanup이 기존 계약과 같은지 검증하는 기준입니다.", detail: ["문법 치환보다 behavior test를 우선합니다.", "collection과 lifecycle 차이를 기록합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "native-selector-escape-scope-focus",
+      title: "CSS.escape와 :scope로 component 밖 선택을 막고 focus를 보존",
+      language: "html",
+      filename: "native-selector-migration.html",
+      purpose: "특수문자 id를 안전하게 선택하고 같은 class가 다른 component에도 있어도 현재 root의 직접 항목만 모으며 semantic button focus를 exact 확인합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>selector migration</title></head>\n<body>\n  <section id=\"alpha\" aria-labelledby=\"alpha-title\">\n    <h2 id=\"alpha-title\">알파 과정</h2>\n    <ul>\n      <li><button id=\"course:1\" class=\"lesson\" type=\"button\">DOM</button></li>\n      <li><button id=\"course.2\" class=\"lesson\" type=\"button\" disabled>Ajax</button></li>\n    </ul>\n  </section>\n  <section id=\"beta\"><button class=\"lesson\" type=\"button\">다른 과정</button></section>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script>\n    const root = document.querySelector('#alpha');\n    const rawId = 'course:1';\n    const escapedId = CSS.escape(rawId);\n    const selected = root.querySelector(`#${escapedId}`);\n    const scoped = root.querySelectorAll(':scope > ul > li > .lesson');\n    const enabled = [...scoped].filter((button) => !button.disabled);\n    selected.focus();\n\n    const lines = [\n      `escaped=${escapedId}`,\n      `scoped=${scoped.length}`,\n      `enabled=${enabled.length}`,\n      `focused=${document.activeElement.id}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-13", explanation: "같은 lesson class가 두 component에 있고 alpha 안 id에는 colon/dot이 포함된 semantic button fixture를 만듭니다." },
+        { lines: "15-19", explanation: "component root와 raw identifier를 분리하고 CSS.escape 결과만 id selector 조각에 넣습니다." },
+        { lines: "20-22", explanation: ":scope의 직접 구조로 alpha items만 수집하고 disabled는 native property로 거른 뒤 찾은 button에 focus합니다." },
+        { lines: "24-32", explanation: "escaped selector, scoped/usable count와 activeElement를 화면·Console에 동일하게 기록합니다." },
+        { lines: "31-33", explanation: "script와 문서를 닫고 keyboard Tab 순서와 visible focus를 실제 browser에서 확인합니다." },
+      ],
+      run: { environment: ["최신 Chromium 또는 Firefox", "native-selector-migration.html을 UTF-8로 저장", "DevTools Elements·Console·Performance·Accessibility", "keyboard-only Tab·Shift+Tab·Enter"], command: "브라우저에서 native-selector-migration.html을 열고 pre 출력, alpha 범위, focus ring과 접근성 이름을 확인" },
+      output: { value: "escaped=course\\:1\nscoped=2\nenabled=1\nfocused=course:1", explanation: ["CSS.escape는 colon을 selector 문법에서 literal identifier로 처리하도록 backslash를 추가합니다.", "document 전체에는 lesson이 세 개지만 alpha root와 :scope 구조에서는 두 개만 선택됩니다.", "disabled button을 제외한 usable 항목은 하나이고 focus는 특수문자 id의 native button에 있습니다."] },
+      experiments: [
+        { change: "root.querySelectorAll을 document.querySelectorAll('.lesson')로 바꿉니다.", prediction: "beta의 다른 과정까지 포함되어 count가 3이 됩니다.", result: "migration에서 탐색 root가 behavior contract임을 확인합니다." },
+        { change: "CSS.escape를 제거하고 `#course:1`을 사용합니다.", prediction: "colon이 pseudo-class 문법으로 해석되어 SyntaxError 또는 잘못된 query가 됩니다.", result: "외부 identifier와 selector grammar 경계를 확인합니다." },
+        { change: "jQuery 4 full/slim build를 exact version+SRI로 별도 page에 로드하고 `$.escapeSelector(rawId)` 및 `$(root).find()` 결과를 비교합니다.", prediction: "동일한 요소 집합을 얻되 build/plugin/API 호환성은 upgrade guide와 실제 smoke test가 필요합니다.", result: "native migration parity와 공급망 선택을 서로 독립적으로 기록합니다." },
+      ],
+      sourceRefs: ["jquery-release-4", "jquery-download-builds", "jquery-upgrade-4", "sri-standard", "dom-query-standard"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "서버에서 받은 id를 `#${id}`에 넣자 SyntaxError가 나거나 다른 요소가 선택된다.", likelyCause: "plain identifier를 CSS selector grammar로 직접 보간했습니다.", checks: ["id에 colon·dot·space·bracket이 있는 fixture로 재현합니다.", "전체 selector가 외부 입력인지 identifier 조각만 외부인지 분류합니다.", "CSS.escape/$.escapeSelector 적용 위치와 query root를 확인합니다."], fix: "selector 구조는 code에 고정하고 identifier 조각만 CSS.escape로 처리하거나 Map/getElementById/property 비교로 selector 조합을 제거합니다.", prevention: "특수문자·빈 값·매우 긴 값·nested component selector contract test를 둡니다." },
+    { symptom: "jQuery를 제거한 뒤 같은 class의 다른 widget까지 event/state 변경 대상이 된다.", likelyCause: "`$(root).find()`의 context를 document.querySelectorAll로 넓혀 query scope를 잃었습니다.", checks: ["기존 jQuery context와 새 native root를 나란히 출력합니다.", ":scope/direct-child 의미와 descendant 차이를 확인합니다.", "closest 결과가 component root 안인지 contains로 검증합니다."], fix: "Element 또는 ShadowRoot에서 query하고 구조상 direct child가 필요하면 :scope를 사용하며 event delegation도 root ownership을 확인합니다.", prevention: "두 개 이상의 동일 component를 렌더링해 cross-component mutation 0을 E2E로 검증합니다." },
+  ],
+  expertNotes: ["CSS.escape는 identifier serialization 도구이지 임의 selector sanitizer가 아닙니다. 외부 값으로 combinator·pseudo-class·attribute selector 전체를 만들지 않습니다.", "jQuery 제거 여부는 bundle 크기 하나로 판단하지 말고 legacy plugin, browser target, team migration cost와 parity tests를 포함해 단계적으로 결정합니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "CSS.escape를 전체 selector 문자열에 한 번 적용하면 안전한가요?", answer: "아닙니다. selector 구조는 code에 고정하고 id 같은 identifier 조각만 escape해야 하며 attribute value 등 다른 문맥은 별도 규칙이 필요합니다." },
+  { question: "$(root).find('.item')을 document.querySelectorAll('.item')로 바꾸면 같은가요?", answer: "아닙니다. 탐색 root가 document로 넓어져 다른 component의 item까지 포함될 수 있으므로 root.querySelectorAll로 scope를 보존해야 합니다." },
+  { question: "SRI를 사용하면 외부 jQuery의 모든 공급망 위험이 사라지나요?", answer: "아닙니다. 특정 resource bytes 무결성을 확인할 뿐 application HTML 변조, 잘못 고정한 version, plugin 취약점과 runtime injection까지 해결하지 않습니다." },
+);
+expertSession.completionChecklist.push(
+  "jQuery overload를 selector·creation·wrapping·ready 의도로 분류해 native API로 parity migration했다.",
+  "외부 identifier는 CSS.escape/$.escapeSelector 문맥을 검증하고 전체 selector 입력을 허용하지 않았다.",
+  "component query scope·collection semantics·focus·keyboard·Accessibility tree를 migration 전후 비교했다.",
+  "jQuery exact version·build·plugin 호환성과 SRI/CSP/self-host 정책을 검증했다.",
+);

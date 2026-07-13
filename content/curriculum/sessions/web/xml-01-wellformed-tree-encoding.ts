@@ -255,7 +255,7 @@ const session = {
           walkthrough: [
             { lines: "3-9", explanation: "정상 empty element 한 건과 mismatched end-tag, 두 document element, unquoted attribute, raw ampersand 네 well-formedness 위반을 서로 독립된 최소 입력으로 만듭니다." },
             { lines: "11-14", explanation: "각 source를 새 parse call로 격리해 하나의 fatal error가 다음 case 상태를 오염시키지 않게 합니다." },
-            { lines: "15-18", explanation: "ParseError의 runtime별 message를 snapshot하지 않고 fatal category만 출력하며, 성공 때만 root tag를 application result로 사용합니다." },
+            { lines: "15-17", explanation: "ParseError의 runtime별 message를 snapshot하지 않고 fatal category만 출력하며, 성공 때만 root tag를 application result로 사용합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "표준 library xml.etree.ElementTree"], command: "python xml_fatal_matrix.py" },
           output: { value: "valid=ok:root\nmismatched=fatal\ntwo-roots=fatal\nunquoted-attribute=fatal\nraw-ampersand=fatal", explanation: ["matching end-tag와 empty child를 가진 첫 input만 root tree를 반환합니다.", "나머지 네 input은 서로 다른 well-formedness constraint를 위반해 application data로 진행하지 않습니다.", "오류 문구 대신 stable classification을 출력해 runtime 차이에 덜 취약합니다."] },
@@ -377,3 +377,97 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 360;
+expertSession.chapters.push({
+  id: "transport-decoding-streaming-validation-security-contract",
+  title: "transport bytes부터 decoder·well-formed parser·validation·secure runtime까지 경계를 고정합니다",
+  lead: "XML 문서를 문자열 예제로만 보지 않고 HTTP/file bytes가 Unicode가 되고 tree로 materialize된 뒤 vocabulary 규칙을 통과하는 전체 pipeline으로 검증합니다.",
+  explanations: [
+    "XML processor의 입력은 bytes 또는 characters일 수 있습니다. bytes 입력에서는 BOM, XML declaration의 encoding, transport metadata가 encoding detection에 관여하지만 JavaScript string처럼 이미 Unicode characters가 된 입력에서는 declaration이 다시 bytes를 decode하지 않습니다. 어느 layer가 decoding을 소유하는지 먼저 기록합니다.",
+    "HTTP의 XML media types와 charset parameter는 representation metadata입니다. server Content-Type, XML declaration, 실제 bytes가 불일치하면 parser/runtime마다 silent replacement 또는 fatal error가 달라질 수 있으므로 API contract를 UTF-8로 통일하고 non-ASCII golden bytes로 검증합니다. file extension만으로 encoding을 추측하지 않습니다.",
+    "UTF-8 한 code point는 여러 bytes일 수 있고 network chunk는 character나 tag 경계와 일치하지 않습니다. chunk마다 새 decoder를 만들면 분할된 문자가 U+FFFD로 손상될 수 있어 하나의 TextDecoder에 stream:true를 사용하고 끝에서 flush합니다. invalid sequence를 replacement로 허용할지 fatal error로 만들지도 data contract입니다.",
+    "Unicode code point가 같아 보여도 normalization form이 다를 수 있습니다. XML processor가 application identifier의 NFC 동등성을 자동 보장한다고 가정하지 말고, 사용자 검색·signature·key 비교가 normalization에 민감한지 정책을 정합니다. 원문 preservation과 normalized domain value도 분리합니다.",
+    "well-formedness는 단일 document element, proper nesting, quoted attributes, legal characters와 entity/reference 규칙을 만족하는 syntax gate입니다. parser가 tree를 반환했다는 사실과 schema/domain validity를 같은 것으로 부르지 않습니다. fatal syntax error 뒤 partial record를 성공 데이터로 사용하지 않습니다.",
+    "DOMParser XML mode는 malformed string에서 항상 exception을 throw한다고 가정할 수 없습니다. parsererror가 든 Document를 반환할 수 있어 namespace-independent check를 하고 application의 PARSE_ERROR로 정규화합니다. parsererror element의 text·namespace·markup은 browser별 detail이므로 exact 문구에 의존하지 않습니다.",
+    "Python ElementTree 같은 server/library parser도 API·version·configuration별 동작을 확인합니다. untrusted XML에는 DTD/external entity, network access, entity expansion, XInclude, external schema와 size/depth/node/text limits를 명시적으로 검토합니다. 한 runtime의 browser 관찰을 다른 runtime의 보안 보장으로 일반화하지 않습니다.",
+    "DOCTYPE·entity가 필요 없는 application은 parser에서 해당 기능을 비활성화하고 fail-closed로 거부합니다. 문자열에서 `<!DOCTYPE`를 찾는 precheck는 빠른 policy signal일 뿐 encoding·grammar를 이해하는 secure parser configuration을 대신하지 못합니다. 실제 parser에 file/network sentinel fixture를 넣어 접근이 0인지 확인합니다.",
+    "DOM tree는 전체 text와 node graph를 memory에 함께 보유할 수 있습니다. Content-Length는 누락·압축·오류가 가능하므로 실제 read bytes/chars, depth, attributes, nodes, text length와 records를 제한합니다. 대용량 feed는 SAX/pull/iterparse 같은 streaming parser를 검토하되 handler state와 early abort, namespace, schema validation을 별도로 설계합니다.",
+    "streaming parser도 안전을 자동 보장하지 않습니다. record 경계 전에 잘린 document, root 종료 전 side effect, duplicate ID, late schema error를 처리해야 합니다. validate-before-commit staging을 두거나 한 record가 독립적으로 검증되는 protocol을 사용하고 malformed tail에서 이미 저장한 data를 어떻게 rollback할지 정합니다.",
+    "fixture는 UTF-8 multi-byte split, BOM, declaration/transport mismatch, invalid byte, illegal character, mismatched tag, duplicate attribute, multiple roots, truncated stream, DTD/entity, oversize/deep tree를 포함합니다. 오류는 DECODE_ERROR·PARSE_ERROR·VALIDATION_ERROR·LIMIT_EXCEEDED처럼 stage code로 남기고 raw XML·file path·개인정보는 log하지 않습니다.",
+  ],
+  concepts: [
+    { term: "decoding boundary", definition: "byte sequence를 Unicode character sequence로 변환하는 단 한 layer와 그 layer가 신뢰할 BOM·transport·declaration 정책입니다.", detail: ["이미 string이면 XML declaration이 재-decoding하지 않습니다.", "non-ASCII golden bytes로 검증합니다."] },
+    { term: "fatal well-formedness error", definition: "XML processor가 정상 document tree 처리를 계속할 수 없는 문법 오류입니다.", detail: ["partial data를 성공으로 사용하지 않습니다.", "application error code로 정규화합니다."] },
+    { term: "streaming commit boundary", definition: "전체 document 검증 전에 읽은 일부 record를 언제 외부 state에 반영할지 정하는 transaction 경계입니다.", detail: ["late parse/schema error rollback을 설계합니다.", "record 독립성과 root-level invariants를 구분합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "utf8-streaming-decode-boundary",
+      title: "한글 UTF-8 bytes를 문자 중간에서 나눠도 한 decoder로 복원",
+      language: "javascript",
+      filename: "xml-utf8-boundary.mjs",
+      purpose: "XML bytes의 network chunk가 multi-byte character 중간에서 나뉘는 fixture를 만들어 streaming decoder의 state와 declaration/string 경계를 exact 확인합니다.",
+      code: "const source = '<?xml version=\"1.0\" encoding=\"UTF-8\"?><product>한글</product>';\nconst bytes = new TextEncoder().encode(source);\nconst firstMultibyte = bytes.findIndex((byte) => byte >= 0x80);\nconst split = firstMultibyte + 1;\nconst chunks = [bytes.slice(0, split), bytes.slice(split)];\n\nconst decoder = new TextDecoder('utf-8', { fatal: true });\nlet decoded = '';\nfor (const chunk of chunks) {\n  decoded += decoder.decode(chunk, { stream: true });\n}\ndecoded += decoder.decode();\n\nconst text = decoded.match(/<product>([^<]+)<\\/product>/)?.[1];\nconsole.log(`declaration=${decoded.includes('encoding=\"UTF-8\"')}`);\nconsole.log(`text=${text}`);\nconsole.log(`replacement=${decoded.includes('\\uFFFD')}`);\nconsole.log(`split-inside=${split === firstMultibyte + 1}`);",
+      walkthrough: [
+        { lines: "1-5", explanation: "UTF-8 declaration과 한글 text가 있는 XML source를 bytes로 만들고 첫 multi-byte code point의 첫 byte 뒤에서 분할합니다." },
+        { lines: "7-12", explanation: "한 fatal TextDecoder instance를 모든 chunk에 재사용해 불완전 byte state를 이어 가고 마지막에 flush합니다." },
+        { lines: "14-18", explanation: "이 예제의 고정 fixture에서 text를 관찰하고 declaration 존재, replacement character 부재와 의도한 split을 exact 출력합니다. 정규식은 일반 XML parser가 아닙니다." },
+      ],
+      run: { environment: ["Node.js 20 이상", "xml-utf8-boundary.mjs를 UTF-8로 저장"], command: "node xml-utf8-boundary.mjs" },
+      output: { value: "declaration=true\ntext=한글\nreplacement=false\nsplit-inside=true", explanation: ["XML declaration은 decoded string의 문자로 남지만 decoder 선택은 code의 TextDecoder에서 이미 이루어졌습니다.", "한글 첫 code point가 chunk 사이에서 나뉘어도 streaming decoder가 원문을 복원합니다.", "새 decoder를 chunk마다 만들지 않아 replacement character가 없습니다."] },
+      experiments: [
+        { change: "각 chunk마다 `new TextDecoder().decode(chunk)`를 호출합니다.", prediction: "분할된 한글 문자가 replacement character로 손상됩니다.", result: "byte chunk와 Unicode character 경계가 다름을 확인합니다." },
+        { change: "fatal UTF-8 decoder에 invalid continuation byte fixture를 넣습니다.", prediction: "decode가 TypeError를 throw하고 parser 단계로 진행하지 않습니다.", result: "DECODE_ERROR와 XML PARSE_ERROR를 분리합니다." },
+        { change: "전체 decoded string을 NFC normalization 전후로 비교합니다.", prediction: "현재 fixture는 같지만 결합 문자 fixture에서는 byte와 string identity가 달라질 수 있습니다.", result: "identifier 비교와 원문 preservation 정책을 명시합니다." },
+      ],
+      sourceRefs: ["w3c-xml-10", "ietf-xml-media-types", "w3c-character-model"],
+    },
+    {
+      id: "browser-wellformed-parsererror-contract",
+      title: "DOMParser의 정상 tree와 malformed parsererror를 분리",
+      language: "html",
+      filename: "xml-wellformed-browser.html",
+      purpose: "이미 Unicode string인 XML에서 declaration을 metadata 문자로 관찰하고 정상 root/text와 malformed parsererror를 stable application result로 구분합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML well-formedness</title></head>\n<body>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script>\n    function parse(source) {\n      const documentNode = new DOMParser().parseFromString(source, 'application/xml');\n      const failed = documentNode.getElementsByTagNameNS('*', 'parsererror').length > 0;\n      return { documentNode, failed };\n    }\n\n    const validSource = '<?xml version=\"1.0\" encoding=\"UTF-8\"?><products><product id=\"p1\">키보드</product></products>';\n    const valid = parse(validSource);\n    const invalid = parse('<products><product></products>');\n    const lines = [\n      `valid-root=${valid.documentNode.documentElement.localName}`,\n      `product-text=${valid.documentNode.querySelector('product').textContent}`,\n      `invalid-error=${invalid.failed}`,\n      `declaration-encoding=${/encoding=\"([^\"]+)\"/.exec(validSource)[1]}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-5", explanation: "browser HTML shell과 결과를 알릴 status 영역을 만듭니다." },
+        { lines: "6-11", explanation: "DOMParser XML mode가 반환한 Document에서 namespace 독립 parsererror 존재를 검사합니다." },
+        { lines: "13-15", explanation: "정상 declaration/attribute/text fixture와 mismatched-tag fixture를 각각 parse합니다." },
+        { lines: "16-24", explanation: "정상 root/text, malformed 여부와 source declaration 문자를 화면·Console에 exact 기록합니다." },
+        { lines: "24-26", explanation: "script와 문서를 닫고 Elements에서 XML Document를 별도 object로 관찰합니다." },
+      ],
+      run: { environment: ["최신 Chromium 또는 Firefox", "xml-wellformed-browser.html을 UTF-8로 저장", "DevTools Console·Elements·Accessibility", "keyboard로 결과 영역 탐색"], command: "브라우저에서 xml-wellformed-browser.html을 열어 pre·Console exact 출력과 parsererror Document를 확인" },
+      output: { value: "valid-root=products\nproduct-text=키보드\ninvalid-error=true\ndeclaration-encoding=UTF-8", explanation: ["정상 document element와 product text가 tree에서 추출됩니다.", "malformed XML은 browser-specific 오류 문구 대신 failed=true로 정규화됩니다.", "encoding declaration은 이미 만들어진 JavaScript string에서 다시 bytes를 decode하지 않습니다."] },
+      experiments: [
+        { change: "valid source에 두 번째 top-level root를 추가합니다.", prediction: "well-formedness가 깨져 parsererror가 검출됩니다.", result: "XML document는 정확히 하나의 document element를 가져야 합니다." },
+        { change: "product id attribute 따옴표를 제거합니다.", prediction: "HTML과 달리 XML mode는 unquoted attribute를 복구하지 않고 오류로 처리합니다.", result: "HTML parser recovery와 XML fatal error를 구분합니다." },
+        { change: "DTD/external entity fixture를 browser와 Python/server parser에 각각 넣습니다.", prediction: "동작과 지원 feature가 runtime별로 달라 browser 관찰만으로 server 안전을 증명할 수 없습니다.", result: "server parser에서 DTD/external resolution을 비활성화하고 file/network sentinel 접근 0을 검증합니다." },
+      ],
+      sourceRefs: ["web-xml-attributes-source", "w3c-xml-10", "w3c-xml-names", "whatwg-dom", "whatwg-domparser", "python-xml-security"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "UTF-8 XML이 작은 응답에서는 정상인데 streaming download에서 가끔 한글이 깨진다.", likelyCause: "network chunk마다 decoder를 새로 만들어 multi-byte code point를 독립 decode했습니다.", checks: ["한글 byte 중간에서 의도적으로 chunk를 나눕니다.", "하나의 TextDecoder와 stream:true/flush 사용을 확인합니다.", "replacement와 fatal 정책을 기록합니다."], fix: "한 decoder instance로 모든 bytes를 streaming decode하고 종료에서 flush한 뒤 완전한 string 또는 검증된 streaming parser에 전달합니다.", prevention: "모든 split offset과 invalid byte fixture를 자동 순회합니다." },
+    { symptom: "browser에서는 XXE가 보이지 않아 server XML upload도 그대로 허용했다.", likelyCause: "DOMParser와 production parser의 feature/default/configuration 차이를 무시했습니다.", checks: ["실제 server parser/version/effective flags를 확인합니다.", "DTD·external entity·XInclude·schema access를 각각 sentinel로 검사합니다.", "entity expansion·size·depth limits를 점검합니다."], fix: "production parser에서 필요 없는 DTD/external resolution을 명시 비활성화하고 resource limits와 실제 file/network 접근 0 test를 둡니다.", prevention: "parser upgrade마다 보안 configuration fingerprint와 malicious fixture suite를 재실행합니다." },
+  ],
+  expertNotes: ["Node 예제의 정규식은 decoder 결과 관찰용 고정 fixture일 뿐 XML parser가 아닙니다. 실제 XML structure·entity·namespace 처리는 conforming parser에 맡깁니다.", "streaming은 memory 절감 수단이지 자동 validity/security 기능이 아닙니다. 전체-document invariant와 commit/rollback을 별도 설계합니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "response.text로 이미 만든 JavaScript string의 XML declaration이 encoding을 다시 선택하나요?", answer: "아닙니다. bytes에서 string으로의 decoding은 이미 끝났고 declaration은 string 안의 문자일 뿐입니다." },
+  { question: "UTF-8 network chunk마다 새 TextDecoder를 만들면 왜 위험한가요?", answer: "multi-byte code point가 chunk 사이에서 나뉠 수 있어 불완전 sequence가 replacement 또는 오류가 되므로 한 decoder의 streaming state를 이어야 합니다." },
+  { question: "browser DOMParser에서 external entity가 확장되지 않으면 server parser도 안전한가요?", answer: "아닙니다. runtime별 기능과 defaults가 다르므로 production parser에서 DTD/external resolution을 끄고 실제 sentinel test를 해야 합니다." },
+);
+expertSession.completionChecklist.push(
+  "transport bytes·BOM·Content-Type·XML declaration·TextDecoder의 단일 decoding boundary를 기록했다.",
+  "multi-byte split·invalid bytes·normalization fixture로 streaming decode를 검증했다.",
+  "well-formedness·namespace/schema/domain validation과 parser error code를 분리했다.",
+  "server parser의 DTD/external entity/XInclude/resource limits와 streaming commit rollback을 검증했다.",
+);
+expertSession.sources.push(
+  { id: "ietf-xml-media-types", repository: "IETF RFC Editor", path: "RFC 7303 XML Media Types", publicUrl: "https://www.rfc-editor.org/rfc/rfc7303", usedFor: ["application/xml and text/xml media types", "charset parameter", "BOM and XML declaration interaction", "fragment identifiers"], evidence: "transport Content-Type과 XML 자체 encoding information의 책임을 구분하고 UTF-8 API contract를 설계하는 공식 HTTP media-type 근거로 사용했습니다." },
+  { id: "w3c-character-model", repository: "W3C", path: "Character Model for the World Wide Web: Fundamentals", publicUrl: "https://www.w3.org/TR/charmod/", usedFor: ["bytes and characters", "character encoding", "Unicode code points", "normalization", "string identity"], evidence: "XML bytes→Unicode 경계와 visually equivalent strings의 normalization/identity 정책을 설명하는 Web character model 근거로 사용했습니다." },
+);

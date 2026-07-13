@@ -49,7 +49,7 @@ const session = {
           language: "html",
           filename: "response-body.html",
           purpose: "network 없이 data URL을 fetch해 status/bodyUsed와 single-consumption contract를 exact output으로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>Response body</title></head>\n<body>\n  <pre id=\"result\"></pre>\n  <script>\n    (async () => {\n      const source = '<catalog><item id=\"1\">XML</item></catalog>';\n      const url = 'data:application/xml;charset=utf-8,' + encodeURIComponent(source);\n      const response = await fetch(url);\n      const lines = [`status=${response.status}`, `ok=${response.ok}`, `before=${response.bodyUsed}`];\n      const text = await response.text();\n      lines.push(`after=${response.bodyUsed}`, `text=${text}`);\n      try { await response.text(); } catch (error) { lines.push(`second=${error.name}`); }\n      document.querySelector('#result').textContent = lines.join('\n');\n    })();\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>Response body</title></head>\n<body>\n  <pre id=\"result\"></pre>\n  <script>\n    (async () => {\n      const source = '<catalog><item id=\"1\">XML</item></catalog>';\n      const url = 'data:application/xml;charset=utf-8,' + encodeURIComponent(source);\n      const response = await fetch(url);\n      const lines = [`status=${response.status}`, `ok=${response.ok}`, `before=${response.bodyUsed}`];\n      const text = await response.text();\n      lines.push(`after=${response.bodyUsed}`, `text=${text}`);\n      try { await response.text(); } catch (error) { lines.push(`second=${error.name}`); }\n      document.querySelector('#result').textContent = lines.join('\\n');\n    })();\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-9", explanation: "well-formed XML을 percent-encoded data URL로 만들어 external server/CORS 없이 Response를 얻습니다." },
             { lines: "10-12", explanation: "status·ok와 consume 전 bodyUsed를 기록하고 text로 한 번 읽습니다." },
@@ -114,7 +114,7 @@ const session = {
           language: "html",
           filename: "xml-parser.html",
           purpose: "DOMParser가 invalid input에서 throw하지 않고 parsererror Document를 돌려주는 behavior를 stable boolean output으로 확인합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML parser</title></head>\n<body>\n  <pre id=\"result\"></pre>\n  <script>\n    const parser = new DOMParser();\n    const parse = (source) => parser.parseFromString(source, 'application/xml');\n    const hasError = (doc) => doc.documentElement.localName === 'parsererror' ||\n      doc.getElementsByTagNameNS('*', 'parsererror').length > 0;\n\n    const good = parse('<catalog><item id=\"1\">XML</item></catalog>');\n    const bad = parse('<catalog><item></catalog>');\n    document.querySelector('#result').textContent = [\n      `good-root=${good.documentElement.localName}`,\n      `good-error=${hasError(good)}`,\n      `good-items=${good.getElementsByTagName('item').length}`,\n      `bad-error=${hasError(bad)}`,\n      `bad-root=${bad.documentElement.localName}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML parser</title></head>\n<body>\n  <pre id=\"result\"></pre>\n  <script>\n    const parser = new DOMParser();\n    const parse = (source) => parser.parseFromString(source, 'application/xml');\n    const hasError = (doc) => doc.documentElement.localName === 'parsererror' ||\n      doc.getElementsByTagNameNS('*', 'parsererror').length > 0;\n\n    const good = parse('<catalog><item id=\"1\">XML</item></catalog>');\n    const bad = parse('<catalog><item></catalog>');\n    document.querySelector('#result').textContent = [\n      `good-root=${good.documentElement.localName}`,\n      `good-error=${hasError(good)}`,\n      `good-items=${good.getElementsByTagName('item').length}`,\n      `bad-error=${hasError(bad)}`,\n      `bad-root=${bad.documentElement.localName}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-10", explanation: "application/xml parser와 root/namespace-aware parsererror helper를 정의합니다." },
             { lines: "12-13", explanation: "정상 catalog와 closing tag mismatch input을 각각 parse합니다." },
@@ -178,7 +178,7 @@ const session = {
           language: "html",
           filename: "xml-table.html",
           purpose: "markup처럼 생긴 item text가 실행되지 않고 literal text로 table cell에 남는 것을 DOM 결과로 증명합니다.",
-          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>안전한 XML 표</title></head>\n<body>\n  <main><h1>과정 목록</h1><div id=\"result\"></div><pre id=\"check\"></pre></main>\n  <script>\n    const source = `<catalog>\n      <item level=\"기초\">HTML &amp; XML</item>\n      <item level=\"고급\">&lt;img src=x onerror=alert(1)&gt;</item>\n    </catalog>`;\n    const xml = new DOMParser().parseFromString(source, 'application/xml');\n    const table = document.createElement('table');\n    const caption = table.createCaption(); caption.textContent = '과정과 난이도';\n    const head = table.createTHead().insertRow();\n    for (const label of ['과정', '난이도']) { const th = document.createElement('th'); th.scope = 'col'; th.textContent = label; head.append(th); }\n    const body = table.createTBody();\n    for (const item of xml.getElementsByTagName('item')) {\n      const row = body.insertRow();\n      const name = row.insertCell(); name.textContent = item.textContent.trim();\n      const level = row.insertCell(); level.textContent = item.getAttribute('level') ?? '미정';\n    }\n    document.querySelector('#result').append(table);\n    document.querySelector('#check').textContent = [\n      `rows=${body.rows.length}`,\n      `images=${table.querySelectorAll('img').length}`,\n      `cell2=${JSON.stringify(body.rows[1].cells[0].textContent)}`\n    ].join('\n');\n  </script>\n</body>\n</html>",
+          code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>안전한 XML 표</title></head>\n<body>\n  <main><h1>과정 목록</h1><div id=\"result\"></div><pre id=\"check\"></pre></main>\n  <script>\n    const source = `<catalog>\n      <item level=\"기초\">HTML &amp; XML</item>\n      <item level=\"고급\">&lt;img src=x onerror=alert(1)&gt;</item>\n    </catalog>`;\n    const xml = new DOMParser().parseFromString(source, 'application/xml');\n    const table = document.createElement('table');\n    const caption = table.createCaption(); caption.textContent = '과정과 난이도';\n    const head = table.createTHead().insertRow();\n    for (const label of ['과정', '난이도']) { const th = document.createElement('th'); th.scope = 'col'; th.textContent = label; head.append(th); }\n    const body = table.createTBody();\n    for (const item of xml.getElementsByTagName('item')) {\n      const row = body.insertRow();\n      const name = row.insertCell(); name.textContent = item.textContent.trim();\n      const level = row.insertCell(); level.textContent = item.getAttribute('level') ?? '미정';\n    }\n    document.querySelector('#result').append(table);\n    document.querySelector('#check').textContent = [\n      `rows=${body.rows.length}`,\n      `images=${table.querySelectorAll('img').length}`,\n      `cell2=${JSON.stringify(body.rows[1].cells[0].textContent)}`\n    ].join('\\n');\n  </script>\n</body>\n</html>",
           walkthrough: [
             { lines: "7-10", explanation: "ampersand와 escaped img-like text를 가진 well-formed XML fixture를 만듭니다." },
             { lines: "12-16", explanation: "HTML table/caption/thead/th를 DOM API로 만들고 header scope를 설정합니다." },
@@ -332,3 +332,133 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 390;
+expertSession.chapters.push(
+  {
+    id: "streaming-byte-decoding-body-lifecycle",
+    title: "Response stream·byte decoding·body 수명을 DOMParser 앞에서 제어합니다",
+    lead: "fetch 결과를 곧바로 XML Document라고 부르지 않고 status·media type·byte stream·Unicode string·parser Document·validated records 단계를 각각 검증합니다.",
+    explanations: [
+      "fetch는 Request를 보내고 Response headers/body를 비동기로 제공합니다. Promise가 fulfill되어도 404·500일 수 있으므로 status/ok와 허용 status를 먼저 검사합니다. 204처럼 성공이지만 body가 없는 status를 XML parse error로 오인하지 않습니다.",
+      "Content-Type은 parser 선택의 transport contract입니다. `application/xml`, `text/xml`, 합의한 `+xml`만 허용하고 HTML 오류 page나 JSON을 XML parser에 넘기지 않습니다. header comparison은 parameter를 제거한 case-insensitive media type으로 수행하며 charset 의미는 Fetch decoding 규칙과 target runtime에서 확인합니다.",
+      "Response body는 ReadableStream이며 text/json/arrayBuffer 같은 convenience method는 한 번 소비합니다. bodyUsed와 stream lock을 관찰하고, log와 parse용으로 같은 Response를 두 번 읽지 않습니다. 두 consumer가 정말 필요하면 읽기 전에 clone하지만 큰 body buffering 비용을 측정합니다.",
+      "network chunk는 UTF-8 character·entity·tag 경계와 일치하지 않습니다. 직접 reader를 사용하면 하나의 TextDecoder에 stream:true를 주고 끝에서 flush합니다. invalid byte를 replacement로 허용할지 fatal decode error로 만들지 정하고, XML declaration은 이미 Unicode string이 된 뒤 decoder를 다시 선택하지 않습니다.",
+      "DOMParser.parseFromString은 완전한 string을 받아 synchronous하게 tree를 만듭니다. streaming read를 했더라도 accumulated text와 XML DOM이 동시에 memory에 존재할 수 있어 peak memory와 main-thread parse time을 제한해야 합니다. 매우 큰 feed는 server transform·pagination·worker/streaming parser architecture를 비교합니다.",
+      "Content-Length는 누락·압축·오류·CORS exposure 제한이 있어 안전한 실제 크기 보장이 아닙니다. reader 단계에서 실제 bytes/chars를 count하고 한도 초과 시 reader.cancel과 fetch AbortController를 실행합니다. partial string/tree를 성공 UI로 render하지 않습니다.",
+      "reader.read가 reject하거나 stream이 중간 종료되고 XML closing tag가 없으면 decode와 well-formedness 중 정확한 stage error로 분류합니다. network error, HTTP status, media mismatch, DECODE_ERROR, PARSE_ERROR, NAMESPACE_ERROR, SCHEMA_ERROR와 LIMIT_EXCEEDED를 하나의 catch message로 뭉개지 않습니다.",
+      "CORS는 browser가 cross-origin response를 script에 노출할지 정하는 protocol이고 server authentication/authorization을 대신하지 않습니다. fetch TypeError는 CORS·CSP·mixed content·network를 포함할 수 있어 Console과 Network panel, server correlation을 함께 봅니다. raw response나 credential을 log하지 않습니다.",
+      "cache와 service worker는 network 요청 없이 오래된 XML을 반환할 수 있습니다. Network의 Size/Transferred/ServiceWorker/Timing과 Cache-Control·ETag·Vary를 확인하고 schema/version migration을 cache rollout과 함께 test합니다. DevTools Disable cache가 실제 사용자 조건과 다름도 기록합니다.",
+      "test는 multi-byte split, empty/204, wrong Content-Type, body double-read, invalid byte, truncated/oversize stream, abort mid-read, cached old namespace와 parsererror를 포함합니다. 각 fixture의 stage code, pending reader/network 0과 stale render 0을 assertion합니다.",
+    ],
+    concepts: [
+      { term: "body consumption", definition: "Response body stream을 읽거나 취소해 disturbed 상태로 만드는 lifecycle입니다.", detail: ["같은 body는 일반적으로 한 번만 읽습니다.", "reader·clone·cancel ownership을 정합니다."] },
+      { term: "streaming decoder", definition: "chunk 사이의 불완전 multi-byte sequence를 한 TextDecoder가 유지하며 bytes를 Unicode로 바꾸는 방식입니다.", detail: ["stream:true와 마지막 flush를 사용합니다.", "invalid-byte policy를 명시합니다."] },
+      { term: "pipeline stage error", definition: "network/HTTP/media/decode/parse/namespace/schema/limit 중 실패한 경계를 안정적인 code로 구분한 오류입니다.", detail: ["복구 action과 telemetry가 달라집니다.", "raw payload를 노출하지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "response-stream-xml-decode-parse",
+        title: "UTF-8 chunk를 streaming decode한 뒤 XML을 한 번 parse",
+        language: "html",
+        filename: "xml-response-stream.html",
+        purpose: "synthetic Response의 status·Content-Type을 확인하고 한글 byte 중간에서 나뉜 body를 한 decoder로 복원한 뒤 DOMParser와 bodyUsed를 exact 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML response stream</title></head>\n<body>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script type=\"module\">\n    const bytes = new TextEncoder().encode('<catalog><product>한글</product></catalog>');\n    const firstMultibyte = bytes.findIndex((byte) => byte >= 0x80);\n    const split = firstMultibyte + 1;\n    const stream = new ReadableStream({\n      start(controller) {\n        controller.enqueue(bytes.slice(0, split));\n        controller.enqueue(bytes.slice(split));\n        controller.close();\n      },\n    });\n    const response = new Response(stream, {\n      status: 200,\n      headers: { 'content-type': 'application/xml; charset=utf-8' },\n    });\n\n    const reader = response.body.getReader();\n    const decoder = new TextDecoder('utf-8', { fatal: true });\n    let source = '';\n    while (true) {\n      const { value, done } = await reader.read();\n      if (done) break;\n      source += decoder.decode(value, { stream: true });\n    }\n    source += decoder.decode();\n    const documentNode = new DOMParser().parseFromString(source, 'application/xml');\n    if (documentNode.getElementsByTagNameNS('*', 'parsererror').length) throw new Error('PARSE_ERROR');\n    const lines = [\n      `status=${response.status}`,\n      `content-type=${response.headers.get('content-type')}`,\n      `product=${documentNode.querySelector('product').textContent}`,\n      `bodyUsed=${response.bodyUsed}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "browser shell, live 결과와 module script를 준비합니다." },
+          { lines: "7-16", explanation: "한글 UTF-8 bytes를 첫 multi-byte 문자 내부에서 나누어 두 chunk Response source를 만듭니다." },
+          { lines: "17-21", explanation: "명시적 200 status와 XML Content-Type을 가진 synthetic Response를 구성합니다." },
+          { lines: "22-30", explanation: "body reader와 한 fatal decoder로 모든 chunk를 streaming decode하고 끝에서 flush합니다." },
+          { lines: "31-32", explanation: "완전한 string을 XML mode로 한 번 parse하고 parsererror를 거부합니다." },
+          { lines: "33-40", explanation: "status/media/domain text/bodyUsed를 화면·Console에 exact 기록합니다." },
+          { lines: "41-43", explanation: "script와 document를 닫고 Network·Memory·Accessibility 관찰을 수행합니다." },
+        ],
+        run: { environment: ["최신 Chromium 또는 Firefox", "xml-response-stream.html을 UTF-8로 저장", "DevTools Console·Network·Memory·Accessibility", "keyboard로 결과 영역 탐색"], command: "브라우저에서 xml-response-stream.html을 열고 pre·Console exact 출력, bodyUsed와 한글 복원을 확인" },
+        output: { value: "status=200\ncontent-type=application/xml; charset=utf-8\nproduct=한글\nbodyUsed=true", explanation: ["status와 media type은 parser 전에 관찰됩니다.", "한글 bytes가 chunk 사이에서 나뉘어도 한 decoder가 원문을 복원합니다.", "reader가 stream을 소비한 뒤 bodyUsed는 true입니다."] },
+        experiments: [
+          { change: "각 chunk에서 새 TextDecoder로 decode합니다.", prediction: "분할된 한글에 replacement character가 생기고 extracted text가 손상됩니다.", result: "network chunk와 character boundary 차이를 확인합니다." },
+          { change: "Content-Type을 text/html로 바꿉니다.", prediction: "synthetic body는 우연히 parse되더라도 production pipeline은 MEDIA_TYPE_ERROR로 먼저 거부해야 합니다.", result: "body sniffing보다 representation contract를 우선합니다." },
+          { change: "read byte limit를 한글 뒤보다 작게 두고 초과 시 reader.cancel을 호출합니다.", prediction: "partial XML을 render하지 않고 LIMIT_EXCEEDED가 됩니다.", result: "header가 아니라 실제 소비량으로 resource limit을 적용합니다." },
+        ],
+        sourceRefs: ["web-fetch-xml-source", "web-jquery-text-source", "dom-parsing", "fetch-standard", "dom-standard"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "XML 한글이 network 상황에 따라 간헐적으로 깨지고 parsererror가 난다.", likelyCause: "Response chunk마다 독립 decode해 multi-byte character가 chunk 경계에서 손상됐습니다.", checks: ["raw bytes를 한글 중간에서 분할해 재현합니다.", "하나의 TextDecoder·stream:true·flush 사용을 확인합니다.", "decode error와 XML parsererror를 별도 기록합니다."], fix: "한 decoder의 streaming state로 전체 bytes를 Unicode string으로 만든 뒤 DOMParser에 전달하고 invalid-byte 정책을 고정합니다.", prevention: "모든 byte split offset과 invalid UTF-8 fixture를 자동 검증합니다." },
+      { symptom: "대용량 XML에서 cancel을 눌러도 download와 memory 증가가 계속된다.", likelyCause: "UI state만 바꾸고 reader.cancel·fetch abort·buffer references를 정리하지 않았습니다.", checks: ["Network pending/transfer와 active reader lock을 확인합니다.", "AbortSignal이 fetch와 reader owner까지 전달되는지 봅니다.", "accumulated source와 DOM retaining path를 검사합니다."], fix: "component lifecycle owner가 reader.cancel과 AbortController.abort를 실행하고 buffers/tree references를 해제하며 stale generation을 무시합니다.", prevention: "oversize·user cancel·route dispose 뒤 pending resource와 stale mutation 0을 검증합니다." },
+    ],
+    expertNotes: ["Response.text decoding과 generic XML processor의 byte encoding detection은 다른 layer입니다. target Fetch runtime 규격과 실제 bytes fixture로 확인합니다.", "DOMParser는 synchronous full-tree parser라 parseFromString 실행 중 AbortSignal로 중단할 수 없습니다. size/time architecture 결정을 호출 전에 끝냅니다."],
+  },
+  {
+    id: "abort-latest-render-security-accessibility-observability",
+    title: "AbortSignal·latest-wins·안전한 render·접근성·XXE runtime 경계를 함께 운영합니다",
+    lead: "빠른 검색과 route 전환에서 이전 XML load를 실제 취소하고, 가장 최신 generation만 validated DOM을 semantic HTML로 render하게 만듭니다.",
+    explanations: [
+      "AbortController는 Promise에 cancelled state를 추가하지 않습니다. fetch처럼 signal을 지원하는 underlying operation에 전달하고 abort reason으로 rejection을 분류합니다. timer·custom loader는 abort listener에서 handle을 clear하고 성공/실패 종료에서도 listener를 제거해야 합니다.",
+      "새 요청이 시작되면 이전 controller를 abort하고 generation을 증가시킵니다. abort가 network를 중단해도 이미 끝난 parse/transform Promise가 뒤늦게 이어질 수 있어 render 직전에 generation과 signal.aborted를 다시 확인합니다. latest-wins는 cancellation과 stale-result guard 둘 다 필요합니다.",
+      "loading/error/empty/success/aborted 상태를 구분합니다. 이전 검색의 AbortError는 일반 오류 banner로 깜박이지 않게 할 수 있지만 timeout·offline·HTTP·schema error는 서로 다른 복구 action을 제공합니다. finally도 stale generation이면 최신 busy state를 false로 덮지 않습니다.",
+      "XML DOM의 textContent·attribute 값은 external data입니다. HTML table은 createElement/textContent로 만들고 URL·class·style은 allowlist mapping을 사용합니다. XML parser가 markup을 tree로 만들었다는 사실이 그 text를 HTML innerHTML에 넣어도 안전하다는 뜻은 아닙니다.",
+      "semantic table에는 caption, th와 scope, units, missing-value label이 필요합니다. loading/result count/error는 짧은 role=status 또는 aria-live에 전달하고 매 keypress마다 전체 table을 재공지하지 않습니다. filter 뒤 focused row가 사라지면 검색 input이나 논리적 다음 control로 focus 정책을 적용합니다.",
+      "jQuery `$.get`, `$.ajax`, `.find()`를 modern fetch/DOM으로 옮길 때 status/CORS, jqXHR abort, Deferred timing, selector context와 result collection 차이를 parity test합니다. migration 중 jQuery와 native handler가 동시에 붙어 duplicate render·request가 생기지 않게 owner를 하나로 정합니다.",
+      "browser DOMParser에서 external entity가 expansion되지 않았다는 관찰을 server Java/Python parser의 XXE 보장으로 사용하지 않습니다. production runtime에서 DTD, external general/parameter entities, XInclude, external schema/network access를 비활성화하고 expansion/depth/size limits를 실제 sentinel로 검증합니다.",
+      "DOCTYPE가 필요 없는 browser app은 source에서 DTD를 거부하는 좁은 policy를 추가할 수 있지만 문자열 precheck는 secure parser configuration이나 sanitizer가 아닙니다. encoding·grammar variants와 다른 runtime behavior를 포괄하지 못합니다.",
+      "Performance는 network, decode, synchronous parse, validation, render를 User Timing으로 분리합니다. record 수와 size bucket만 privacy-safe telemetry에 남기고 raw XML, query PII, URL token, parsererror text를 기록하지 않습니다. Long task와 memory를 large fixture에서 함께 봅니다.",
+      "E2E는 rapid A→B request, abort before start/mid-read/after response, stale parse, route disposal, malformed/wrong namespace/oversize, malicious text, keyboard·screen reader를 포함합니다. 종료 뒤 pending request/timer/listener 0, latest render one, duplicate rows/listeners 0을 assertion합니다.",
+    ],
+    concepts: [
+      { term: "latest-wins", definition: "여러 비동기 요청 중 현재 generation의 결과만 UI state를 변경하도록 cancellation과 identity guard를 결합한 정책입니다.", detail: ["이전 underlying work를 abort합니다.", "render/finally에서도 generation을 확인합니다."] },
+      { term: "safe XML-to-HTML render", definition: "validated XML data를 HTML parser string sink가 아니라 semantic DOM node와 textContent, allowlisted properties로 표현하는 과정입니다.", detail: ["XML text도 untrusted입니다.", "URL/style/class는 별도 검증합니다."] },
+      { term: "runtime-specific XML security", definition: "DTD/entity/XInclude/schema/network 기능과 resource limits를 실제 parser library·version·configuration별로 검증하는 원칙입니다.", detail: ["browser 결과를 server에 일반화하지 않습니다.", "file/network sentinel 접근 0을 테스트합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "abort-previous-latest-loader",
+        title: "이전 loader의 timer를 실제 취소하고 latest 결과만 사용",
+        language: "javascript",
+        filename: "xml-latest-request.mjs",
+        purpose: "AbortSignal을 지원하는 custom loader에서 previous resource를 정리하고 current result만 남기며 active handle이 0인지 Node에서 exact 확인합니다.",
+        code: "let active = 0;\n\nfunction loadXml(label, { signal, delay }) {\n  return new Promise((resolve, reject) => {\n    if (signal.aborted) { reject(signal.reason); return; }\n    active += 1;\n    const cleanup = () => {\n      signal.removeEventListener('abort', onAbort);\n      active -= 1;\n    };\n    const timer = setTimeout(() => {\n      cleanup();\n      resolve(`<result>${label}</result>`);\n    }, delay);\n    const onAbort = () => {\n      clearTimeout(timer);\n      cleanup();\n      reject(signal.reason);\n    };\n    signal.addEventListener('abort', onAbort, { once: true });\n  });\n}\n\nconst previousController = new AbortController();\nconst previous = loadXml('old', { signal: previousController.signal, delay: 50 })\n  .catch((error) => error.name);\npreviousController.abort(new DOMException('stale request', 'AbortError'));\n\nconst currentController = new AbortController();\nconst current = await loadXml('new', { signal: currentController.signal, delay: 0 });\nconst currentLabel = /<result>([^<]+)<\\/result>/.exec(current)[1];\nconsole.log(`previous=${await previous}`);\nconsole.log(`latest=${currentLabel}`);\nconsole.log(`active=${active}`);",
+        walkthrough: [
+          { lines: "1-5", explanation: "active resource counter와 signal/delay를 받는 custom XML fixture loader를 정의합니다." },
+          { lines: "6-20", explanation: "timer 생성·성공·abort 모든 경로가 listener와 active handle을 정확히 한 번 정리하게 합니다." },
+          { lines: "23-26", explanation: "previous request를 시작한 직후 AbortError reason으로 실제 timer를 취소하고 rejection을 분류합니다." },
+          { lines: "28-33", explanation: "current request를 완료하고 고정 fixture label을 관찰한 뒤 previous/latest/active exact 결과를 출력합니다. 정규식은 일반 XML parser가 아닙니다." },
+        ],
+        run: { environment: ["Node.js 20 이상", "xml-latest-request.mjs를 UTF-8로 저장"], command: "node xml-latest-request.mjs" },
+        output: { value: "previous=AbortError\nlatest=new\nactive=0", explanation: ["previous timer는 abort listener에서 clear되고 AbortError로 분류됩니다.", "current loader의 new 결과만 latest로 사용됩니다.", "두 settle 경로 뒤 active resource count는 0입니다."] },
+        experiments: [
+          { change: "clearTimeout(timer)를 제거합니다.", prediction: "Promise state는 이미 rejected여도 old timer callback이 나중에 cleanup을 다시 실행해 active가 -1이 될 수 있습니다.", result: "wrapper rejection과 underlying resource cancellation을 분리합니다." },
+          { change: "이미 aborted된 signal을 loadXml에 전달합니다.", prediction: "active를 증가시키기 전에 같은 reason으로 즉시 reject합니다.", result: "already-aborted entry contract를 확인합니다." },
+          { change: "browser fetch adapter에서 generation guard를 제거하고 old parse를 일부러 늦춥니다.", prediction: "abort 시점에 이미 response가 끝났다면 old render가 new UI를 덮을 수 있습니다.", result: "underlying abort와 render identity guard를 함께 사용합니다." },
+        ],
+        sourceRefs: ["web-jquery-xml-source", "web-jquery-weather-source", "web-jquery-text-source", "fetch-standard", "dom-abort"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "검색 B 결과가 보인 뒤 늦은 검색 A XML이 화면을 덮는다.", likelyCause: "이전 request를 abort하지 않았거나 response 이후 parse/render에 generation guard가 없습니다.", checks: ["request/response/parse/render에 generation id를 기록합니다.", "새 request에서 이전 controller.abort가 호출되는지 봅니다.", "finally도 최신 state만 갱신하는지 확인합니다."], fix: "새 요청에서 이전 work를 실제 abort하고 parse/render/finally 직전에 signal과 generation을 확인해 stale mutation을 중단합니다.", prevention: "A를 느리게, B를 빠르게 만든 deterministic race test에서 latest render one을 검증합니다." },
+      { symptom: "XML의 지역명이 `<img onerror=...>`일 때 table에서 code로 실행된다.", likelyCause: "XML text를 innerHTML table string에 이어 붙여 HTML parser에 다시 전달했습니다.", checks: ["innerHTML/insertAdjacentHTML/template string sink를 inventory합니다.", "XML text가 entity decoding 뒤 어떤 string인지 확인합니다.", "URL/style/class assignments도 별도 검사합니다."], fix: "semantic table nodes를 createElement로 만들고 external values는 textContent, URL/style/class는 allowlist된 property mapping으로 설정합니다.", prevention: "tag-like text·javascript URL·CSS payload fixture와 CSP/Trusted Types report를 둡니다." },
+    ],
+    expertNotes: ["Node 예제의 regular expression은 고정된 loader label 관찰용입니다. production XML은 namespace-aware conforming parser와 schema/domain validator로 처리합니다.", "AbortError를 UI에서 숨기더라도 telemetry와 cleanup owner는 명확해야 하며 timeout·user cancel·route dispose reason을 privacy-safe category로 구분합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "fetch Promise가 fulfill되면 XML load 전체가 성공한 건가요?", answer: "아닙니다. HTTP status, Content-Type, byte decoding, XML well-formedness, namespace/schema와 domain validation을 차례로 통과해야 합니다." },
+  { question: "Response body를 response.text로 읽은 뒤 다시 reader로 읽을 수 있나요?", answer: "일반적으로 아닙니다. body는 single-consumption lifecycle이며 두 consumer가 필요하면 읽기 전에 clone 비용과 contract를 검토합니다." },
+  { question: "AbortController만 호출하면 stale UI render가 항상 막히나요?", answer: "아닙니다. 이미 끝난 response나 진행 중인 parse/transform은 이어질 수 있어 render와 finally에서 generation/signal guard도 필요합니다." },
+  { question: "XML text는 XML parser를 통과했으니 innerHTML에 넣어도 안전한가요?", answer: "아닙니다. external text가 HTML markup으로 다시 해석될 수 있으므로 textContent와 allowlisted DOM properties를 사용합니다." },
+  { question: "browser DOMParser의 entity 동작으로 server XXE 안전성을 판단할 수 있나요?", answer: "아닙니다. production parser의 DTD/external entity/XInclude/schema/network 설정과 resource limits를 실제 runtime에서 검증해야 합니다." },
+  { question: "XML table update를 screen reader에 알릴 때 table 전체를 aria-live로 두면 좋은가요?", answer: "대개 과도한 반복 announcement가 됩니다. 짧은 status에 loading/result count/error만 알리고 table은 semantic structure와 focus를 유지합니다." },
+);
+expertSession.completionChecklist.push(
+  "HTTP status·media type·decode·parse·namespace/schema/domain 단계를 독립 오류 code로 분리했다.",
+  "Response body single-use·stream lock·TextDecoder flush·bodyUsed·cancel을 검증했다.",
+  "실제 byte/char/node limits와 large XML memory/parse-time budget을 적용했다.",
+  "AbortSignal을 underlying fetch/reader/custom loader에 전달하고 generation으로 stale render/finally를 막았다.",
+  "external XML values를 semantic DOM/textContent와 URL/style/class allowlist로 렌더링했다.",
+  "caption·th scope·units·missing label·status·focus를 keyboard와 Accessibility tree에서 검증했다.",
+  "browser와 server parser의 DTD/entity/XXE configuration 경계를 분리하고 privacy-safe telemetry를 적용했다.",
+);
+expertSession.sources.push({ id: "dom-abort", repository: "WHATWG DOM Standard", path: "#aborting-ongoing-activities", publicUrl: "https://dom.spec.whatwg.org/#aborting-ongoing-activities", usedFor: ["AbortController", "AbortSignal", "abort reason", "already-aborted operation", "resource cancellation"], evidence: "rapid XML requests와 component disposal에서 underlying fetch/reader/timer를 중단하고 stale generation을 차단하는 lifecycle의 공식 기준으로 사용했습니다." });

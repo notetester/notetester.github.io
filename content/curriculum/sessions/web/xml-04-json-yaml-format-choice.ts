@@ -392,3 +392,104 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 400;
+expertSession.chapters.push({
+  id: "streaming-framing-schema-migration-observability",
+  title: "format별 framing·schema·migration·streaming·운영 비용을 같은 기준으로 비교합니다",
+  lead: "XML·JSON·YAML을 문법 취향으로 고르지 않고 transport framing, schema ecosystem, loss model, untrusted parser surface, streaming과 운영 도구를 요구사항별로 평가합니다.",
+  explanations: [
+    "format 선택은 data model과 사용 맥락에서 시작합니다. XML은 namespaces, attributes, ordered/mixed content와 document tooling이 강하고 JSON은 Web API의 object/array/scalar 상호운용이 단순하며 YAML은 사람이 편집하는 configuration에서 주석·간결한 mapping/sequence가 유용합니다. 같은 domain을 표현할 수 있다는 사실이 동일한 fidelity를 뜻하지 않습니다.",
+    "network stream은 임의 byte chunk를 전달하므로 application record framing이 필요합니다. 하나의 JSON document는 끝까지 parse해야 하고 NDJSON은 unescaped newline 밖의 한 line을 record boundary로 삼습니다. XML은 nested start/end element와 namespace context를 이해하는 SAX/pull parser가 필요하며 tag 문자열 split은 올바른 framing이 아닙니다.",
+    "YAML stream은 `---` document markers를 사용할 수 있지만 block scalar, indentation, anchors와 directives를 이해하는 실제 parser가 필요합니다. line split이나 직접 만든 subset parser를 production general YAML에 사용하지 않습니다. configuration이 한 작은 document라면 streaming보다 atomic read·size limit·schema validation이 더 단순할 수 있습니다.",
+    "streaming decode는 format parser보다 앞선 bytes→Unicode 경계입니다. UTF-8 multi-byte character가 chunk 사이에서 나뉠 수 있어 한 TextDecoder의 stream state를 유지하고, BOM/charset/invalid bytes 정책을 고정합니다. 이후 parser가 record/token boundary를 관리하게 합니다.",
+    "schema는 syntax parser와 별도입니다. XSD는 XML element/attribute/type 구조와 identity constraints를 제공하고 JSON Schema는 JSON instance의 type·required·properties·constraints를 vocabulary/dialect에 따라 평가합니다. YAML은 loader가 만든 data model을 JSON Schema나 application validator로 검증할 수 있지만 YAML-specific tags/types와 conversion을 먼저 제한합니다.",
+    "schema URI와 dialect/version을 고정하고 remote `$ref`, XSD import/include를 untrusted network에서 임의 fetch하지 않습니다. pinned local registry와 allowlist, recursion/depth/compile-time limits를 두며 schema 자체도 code/dependency처럼 review합니다. validation success가 authorization·업무 consistency를 보장하지 않습니다.",
+    "duplicate name policy는 format/parser마다 다릅니다. XML attributes의 duplicate expanded name은 well-formedness 오류이고, JSON object duplicate member는 interoperability 문제가 있어 reject하는 parser hook을 고려하며, YAML mapping duplicate key와 merge key는 loader 정책을 고정합니다. silent last-wins는 서명·권한·설정 review를 속일 수 있습니다.",
+    "XML entity/DTD, YAML arbitrary object tags, JSON/YAML deep nesting·huge scalar, schema regex/recursive reference는 서로 다른 attack surface입니다. safe loader만으로 size/CPU가 제한되지는 않으므로 bytes, depth, nodes/items, scalar length, alias/entity expansion, total time과 external access를 format/runtime별로 설정합니다.",
+    "conversion은 명시적 loss report를 생성합니다. XML attributes/namespaces/mixed order/comments, JSON null/number precision/duplicate members, YAML comments/anchors/tags/timestamps와 key types가 target model에서 어떻게 변하는지 표로 기록합니다. round trip이 필요하면 canonical domain model보다 concrete syntax tree를 보존하는 도구가 필요할 수 있습니다.",
+    "version migration은 parse→validate-old→normalize→migrate→validate-current→use 단계로 구성합니다. consumer가 이해하지 못하는 security-sensitive field를 무조건 무시하지 않고, additive/renamed/removed/unit/default 변경을 versioned adapter와 golden fixtures로 검증합니다. writer가 여러 version을 내보내야 하는 기간도 정합니다.",
+    "관측은 format, schema version, safe source id, byte/record bucket, decode/parse/validate/migrate duration과 stable error code만 기록합니다. raw configuration, secrets, XML entity URI, request token을 log하지 않습니다. production failure sample은 synthetic/redacted fixture로 재현합니다.",
+    "benchmark는 같은 validated domain output과 같은 security limits를 기준으로 해야 합니다. parser 시간만 비교하지 말고 decode, memory peak, schema compile/cache, validation, migration, render/serialization, dependency size와 운영자의 편집 오류율까지 측정합니다. 작은 config 결과를 대용량 feed에 일반화하지 않습니다.",
+  ],
+  concepts: [
+    { term: "record framing", definition: "byte/text stream에서 하나의 독립 application record가 끝나는 위치를 모호하지 않게 판별하는 protocol 규칙입니다.", detail: ["network chunk와 다릅니다.", "NDJSON newline, XML parser events 등 format-aware 방식이 필요합니다."] },
+    { term: "schema dialect", definition: "schema 문서의 keywords·evaluation semantics·version을 정의하는 vocabulary 조합입니다.", detail: ["URI/version을 고정합니다.", "remote references와 resource limits를 통제합니다."] },
+    { term: "loss report", definition: "source format의 구조·types·metadata 중 target model이 보존·변환·삭제·거부하는 항목을 명시한 conversion 산출물입니다.", detail: ["silent conversion을 막습니다.", "round-trip 요구와 별도로 관리합니다."] },
+    { term: "versioned adapter", definition: "특정 wire/schema version을 validated current domain model로 변환하고 migration 오류를 명시하는 경계입니다.", detail: ["old와 current schema를 각각 검증합니다.", "golden fixtures와 deprecation 기간을 둡니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "xml-json-domain-parity-browser",
+      title: "XML과 JSON adapter가 같은 validated domain model을 생성",
+      language: "html",
+      filename: "xml-json-parity.html",
+      purpose: "XML DOM과 JSON object의 wire 차이를 adapter 안에 격리하고 동일 member schema와 normalized output을 browser exact 결과로 확인합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML JSON parity</title></head>\n<body>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script>\n    function validateMember(value) {\n      if (!value || typeof value.id !== 'string' || typeof value.name !== 'string' || value.name.length === 0) {\n        throw new TypeError('SCHEMA_ERROR');\n      }\n      return { id: value.id, name: value.name };\n    }\n    function fromXml(source) {\n      const documentNode = new DOMParser().parseFromString(source, 'application/xml');\n      if (documentNode.getElementsByTagNameNS('*', 'parsererror').length) throw new Error('PARSE_ERROR');\n      return [...documentNode.querySelectorAll('member')].map((element) => validateMember({\n        id: element.getAttribute('id'),\n        name: element.textContent,\n      }));\n    }\n    function fromJson(source) {\n      const value = JSON.parse(source);\n      if (!value || !Array.isArray(value.members)) throw new TypeError('SCHEMA_ERROR');\n      return value.members.map(validateMember);\n    }\n\n    const xml = '<team><member id=\"1\">Ada</member></team>';\n    const json = '{\"members\":[{\"id\":\"1\",\"name\":\"Ada\"}]}';\n    const xmlMembers = fromXml(xml);\n    const jsonMembers = fromJson(json);\n    const lines = [\n      `same=${JSON.stringify(xmlMembers) === JSON.stringify(jsonMembers)}`,\n      `member=${xmlMembers[0].id}:${xmlMembers[0].name}`,\n      `xml-root=${new DOMParser().parseFromString(xml, 'application/xml').documentElement.localName}`,\n      `json-type=${Array.isArray(JSON.parse(json).members) ? 'array' : 'other'}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-5", explanation: "browser shell과 결과 status를 준비합니다." },
+        { lines: "6-12", explanation: "두 adapter가 공유할 string id/name domain schema validator를 정의합니다." },
+        { lines: "13-20", explanation: "XML parsererror를 확인하고 member attributes/text를 plain records로 변환해 같은 validator를 통과시킵니다." },
+        { lines: "21-25", explanation: "JSON syntax를 parse한 뒤 members array shape를 확인하고 같은 validator를 사용합니다." },
+        { lines: "27-31", explanation: "의미가 같은 XML과 JSON wire fixtures를 각각 adapter로 normalize합니다." },
+        { lines: "32-40", explanation: "normalized equality, domain value와 각 wire structure 차이를 화면·Console에 exact 기록합니다." },
+        { lines: "39-41", explanation: "script와 문서를 닫고 Accessibility pane에서 status를 확인합니다." },
+      ],
+      run: { environment: ["최신 Chromium 또는 Firefox", "xml-json-parity.html을 UTF-8로 저장", "DevTools Console·Elements·Accessibility", "keyboard로 결과 영역 탐색"], command: "브라우저에서 xml-json-parity.html을 열어 pre·Console exact 출력과 adapter parity를 확인" },
+      output: { value: "same=true\nmember=1:Ada\nxml-root=team\njson-type=array", explanation: ["wire structure는 다르지만 두 adapter가 같은 validated member array를 만듭니다.", "XML attribute/text와 JSON object fields의 mapping이 adapter 안에 격리됩니다.", "renderer와 업무 logic은 normalized domain model만 사용합니다."] },
+      experiments: [
+        { change: "JSON member의 id를 number 1로 바꿉니다.", prediction: "문법 parse는 성공하지만 shared schema validator가 SCHEMA_ERROR를 냅니다.", result: "syntax와 domain schema를 분리합니다." },
+        { change: "XML에 두 member가 같은 id를 갖게 합니다.", prediction: "현재 field validator만으로는 통과하므로 collection uniqueness validator를 추가해야 합니다.", result: "field schema와 cross-record 업무 invariant를 구분합니다." },
+        { change: "XML XSD와 JSON Schema를 pinned local registry에서 각각 검증한 뒤 adapter를 실행합니다.", prediction: "wire-specific 구조 오류를 앞에서 잡되 authorization과 semantic migration은 adapter/application에 남습니다.", result: "schema dialect와 domain validation의 책임을 문서화합니다." },
+      ],
+      sourceRefs: ["web-product-xml-source", "web-score-json-source", "xml-10e", "rfc8259-json", "w3c-xsd", "json-schema-2020-12"],
+    },
+    {
+      id: "ndjson-stream-framing-decoder",
+      title: "UTF-8 chunk와 NDJSON record framing을 서로 분리",
+      language: "javascript",
+      filename: "ndjson-streaming.mjs",
+      purpose: "team records가 임의 byte chunks와 한글 문자를 가로질러도 streaming decoder와 newline framing을 순서대로 적용해 exact records를 복원합니다.",
+      code: "const source = '{\"team\":\"panthers\",\"score\":3}\\n{\"team\":\"jaguars\",\"score\":2}\\n';\nconst bytes = new TextEncoder().encode(source);\nconst chunks = [bytes.slice(0, 17), bytes.slice(17, 41), bytes.slice(41)];\nconst decoder = new TextDecoder('utf-8', { fatal: true });\nconst allowedTeams = new Set(['panthers', 'jaguars']);\nlet buffer = '';\nconst records = [];\n\nfunction accept(line) {\n  if (line.length === 0) return;\n  const value = JSON.parse(line);\n  if (!allowedTeams.has(value.team) || !Number.isSafeInteger(value.score)) throw new TypeError('SCHEMA_ERROR');\n  records.push({ team: value.team, score: value.score });\n}\n\nfor (const chunk of chunks) {\n  buffer += decoder.decode(chunk, { stream: true });\n  const lines = buffer.split('\\n');\n  buffer = lines.pop();\n  for (const line of lines) accept(line);\n}\nbuffer += decoder.decode();\naccept(buffer);\n\nconsole.log(`records=${records.length}`);\nconsole.log(`teams=${records.map((record) => record.team).join(',')}`);\nconsole.log(`score-total=${records.reduce((sum, record) => sum + record.score, 0)}`);\nconsole.log('framing=ndjson');",
+      walkthrough: [
+        { lines: "1-7", explanation: "두 JSON records와 trailing newline을 UTF-8 bytes로 만들고 record와 token을 가로지르는 임의 chunks, decoder와 allowlist state를 준비합니다." },
+        { lines: "9-14", explanation: "한 complete line만 JSON parse하고 team/score domain schema를 검증해 accepted records에 추가합니다." },
+        { lines: "16-22", explanation: "각 chunk를 한 decoder로 이어 붙이고 마지막 incomplete line은 buffer에 남겨 다음 chunk와 결합합니다." },
+        { lines: "23-24", explanation: "decoder를 flush하고 마지막 nonempty buffer를 처리합니다." },
+        { lines: "25-28", explanation: "record count, order, aggregate와 명시적 NDJSON framing을 exact 출력합니다." },
+      ],
+      run: { environment: ["Node.js 20 이상", "ndjson-streaming.mjs를 UTF-8로 저장"], command: "node ndjson-streaming.mjs" },
+      output: { value: "records=2\nteams=panthers,jaguars\nscore-total=5\nframing=ndjson", explanation: ["byte chunks는 JSON record boundary와 무관하지만 newline-delimited protocol이 complete records를 복원합니다.", "각 record는 parse 직후 allowlist와 integer schema를 통과합니다.", "일반 JSON array·XML·YAML을 이 line splitter로 처리하지 않습니다."] },
+      experiments: [
+        { change: "두 번째 line의 closing brace를 제거합니다.", prediction: "마지막 accept에서 JSON syntax error가 나고 partial record를 성공으로 사용하지 않습니다.", result: "truncated stream의 atomic record boundary를 확인합니다." },
+        { change: "source를 JSON array 한 문서로 바꿉니다.", prediction: "newline framing은 더 이상 protocol이 아니므로 전체 document parser 또는 streaming JSON parser가 필요합니다.", result: "JSON과 NDJSON을 같은 media type/format으로 부르지 않습니다." },
+        { change: "team YAML fixtures를 general YAML stream으로 읽으려 line split합니다.", prediction: "indentation·block scalar·document marker를 깨뜨릴 수 있습니다.", result: "safe YAML loader와 explicit document framing, alias/depth limits를 사용합니다." },
+      ],
+      sourceRefs: ["git-panthers-yaml-source", "git-leopards-yaml-source", "git-jaguars-yaml-source", "rfc8259-json", "yaml-122", "pyyaml-docs"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "JSON stream을 network chunk마다 JSON.parse해 간헐적으로 Unexpected end 오류가 난다.", likelyCause: "transport chunk를 application record boundary로 오해했습니다.", checks: ["chunk sizes와 actual framing protocol을 기록합니다.", "한 JSON document, NDJSON, length-prefix 중 무엇인지 확인합니다.", "decoder buffer와 incomplete record state를 검사합니다."], fix: "명시된 framing을 사용해 complete record만 parser에 전달하고 일반 JSON은 전체 document 또는 검증된 incremental parser로 처리합니다.", prevention: "모든 byte/token/record split offset과 truncated tail fixture를 검증합니다." },
+    { symptom: "XML→JSON 변환 뒤 signature·comments·mixed text order가 사라졌지만 성공으로 보고됐다.", likelyCause: "target model이 표현하지 못하는 source 정보의 loss policy를 정의하지 않았습니다.", checks: ["namespace/attribute/mixed content/comment/signature를 loss matrix에 대조합니다.", "semantic migration과 lexical round trip 요구를 구분합니다.", "converter가 warning/error report를 생성하는지 봅니다."], fix: "보존 불가능 항목은 명시적으로 거부하거나 loss report와 승인 가능한 policy로 변환하고 signature 문서는 검증 후 별도 artifact로 보존합니다.", prevention: "format별 golden round-trip/loss fixtures와 승인된 conversion profile을 CI에 둡니다." },
+    { symptom: "schema validation이 성공했는데 다른 사용자의 resource ID가 처리됐다.", likelyCause: "structural/type schema가 authentication·authorization도 보장한다고 오해했습니다.", checks: ["schema 결과와 current principal/object ownership 검사를 분리합니다.", "외부 reference와 ID lookup 경계를 추적합니다.", "tenant/role fixture를 실행합니다."], fix: "schema 뒤 application service에서 principal·object-level authorization과 cross-record 업무 규칙을 검증합니다.", prevention: "valid document이지만 unauthorized ID를 가진 negative security tests를 둡니다." },
+  ],
+  expertNotes: ["NDJSON은 JSON text sequence의 한 선택이지 RFC 8259의 단일 JSON document와 동일하지 않습니다. media type/framing을 API contract에 명시합니다.", "XML XSD와 JSON Schema 모두 dialect/version과 external reference resolution을 고정해야 하며 schema validation engine도 resource limit과 dependency update review 대상입니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "network ReadableStream chunk 하나가 JSON/XML record 하나인가요?", answer: "아닙니다. transport chunk는 임의 경계이며 NDJSON newline, XML parser events 같은 명시적 format-aware framing이 필요합니다." },
+  { question: "JSON Schema validation이 XML XSD validation과 완전히 같은 data model을 보장하나요?", answer: "아닙니다. 각 schema는 서로 다른 instance model과 dialect를 평가하므로 공통 domain adapter와 별도 loss/semantic validation이 필요합니다." },
+  { question: "safe YAML loader만 쓰면 대용량 alias·deep nesting 공격도 자동 방지되나요?", answer: "아닙니다. arbitrary object construction을 줄여도 bytes, depth, aliases, scalar length, CPU/time limits를 별도로 적용해야 합니다." },
+  { question: "XML과 JSON adapter의 출력이 같으면 source format을 무손실 변환할 수 있다는 뜻인가요?", answer: "아닙니다. domain 의미 일부가 같다는 뜻이며 namespace, mixed content, comments, numeric precision, YAML anchors 같은 lexical/model 정보는 loss report가 필요합니다." },
+  { question: "schema가 유효하면 authorization도 통과한 것으로 봐도 되나요?", answer: "아닙니다. schema는 구조와 type constraints를 검증하며 사용자·tenant·object-level 권한은 application이 별도로 확인합니다." },
+);
+expertSession.completionChecklist.push(
+  "XML·JSON·YAML 선택을 data model·framing·schema·tooling·운영 요구로 평가했다.",
+  "transport chunk·Unicode decoding·record framing·syntax parse를 독립 단계로 구현했다.",
+  "XSD/JSON Schema dialect와 remote reference allowlist·resource limits를 고정했다.",
+  "duplicate names·YAML tags/aliases·XML DTD/entities·deep input을 runtime별 정책으로 제한했다.",
+  "versioned adapter가 old/current schema를 검증하고 migration 뒤 공통 domain model을 생성한다.",
+  "conversion loss report·round-trip fixtures·privacy-safe observability와 authorization tests를 운영 gate에 포함했다.",
+);
