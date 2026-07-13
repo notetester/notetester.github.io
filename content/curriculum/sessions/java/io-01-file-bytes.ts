@@ -296,7 +296,7 @@ try {
     "relative path 기준을 working directory와 함께 문서화했다.",
     "모든 synthetic Java examples를 JDK21 warning0·exact output으로 검증한다.",
   ],
-  nextSessions: [],
+  nextSessions: ["io-02-buffer-copy"],
   sources: [
     { id: "java-class14-ex01", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex01_FileClass.java", usedFor: ["File create/delete", "mkdirs", "exact5"], evidence: "new File6·create1·mkdirs1·delete4·path literals6과 relocated exact5 lines입니다." },
     { id: "java-class14-ex02", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex02_FileOutputStream.java", usedFor: ["byte writes", "default charset caveat", "exact34 bytes"], evidence: "FileOutputStream1·write12·getBytes1과 relocated UTF-8 payload34 bytes입니다." },
