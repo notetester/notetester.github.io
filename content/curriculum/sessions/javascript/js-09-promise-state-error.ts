@@ -401,7 +401,7 @@ const session = {
     { id: "tc39-promise-finally", repository: "Ecma International TC39", path: "control-abstraction-objects.html#sec-promise.prototype.finally", publicUrl: "https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.prototype.finally", usedFor: ["finally callback", "value/reason pass-through", "cleanup promise", "throw/reject override"], evidence: "공통 cleanup이 original outcome을 보존하고 cleanup failure가 override하는 semantics의 기준으로 사용했습니다." },
     { id: "tc39-promise-combinators", repository: "Ecma International TC39", path: "control-abstraction-objects.html#sec-promise.all", publicUrl: "https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.all", usedFor: ["Promise.all", "allSettled", "race", "any", "AggregateError", "input order/empty iterable"], evidence: "네 composition policies의 exact output·failure/empty/ordering 선택 기준을 current ECMAScript algorithms로 보강했습니다." },
     { id: "tc39-async-functions", repository: "Ecma International TC39", path: "control-abstraction-objects.html#sec-async-function-objects", publicUrl: "https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-async-function-objects", usedFor: ["async function Promise return", "await suspension", "return/throw", "continuation", "sequential/concurrent composition"], evidence: "async/await이 Promise meaning을 바꾸지 않는 syntax/control abstraction임을 연결하는 기준으로 사용했습니다." },
-    { id: "html-microtasks", repository: "WHATWG HTML Standard", path: "webappapis.html#microtask-queuing", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#microtask-queuing", usedFor: ["microtask queue/checkpoint", "Promise reaction timing", "timer order", "starvation", "exception reporting"], evidence: "settled Promise handler도 synchronous stack 뒤 microtask에서 실행되는 browser exact order를 JS08 event-loop model과 연결했습니다." },
+    { id: "html-microtasks", repository: "WHATWG HTML Standard", path: "webappapis.html#perform-a-microtask-checkpoint", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#perform-a-microtask-checkpoint", usedFor: ["microtask queue/checkpoint", "Promise reaction timing", "timer order", "starvation", "exception reporting"], evidence: "settled Promise handler도 synchronous stack 뒤 microtask에서 실행되는 browser exact order를 JS08 event-loop model과 연결했습니다." },
     { id: "html-unhandled-rejections", repository: "WHATWG HTML Standard", path: "webappapis.html#unhandled-promise-rejections", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#unhandled-promise-rejections", usedFor: ["unhandled promise rejection tracking", "rejectionhandled", "global events", "host reporting", "privacy"], evidence: "floating/unhandled Promise를 local error strategy와 구분하고 final telemetry로 다루는 browser host model의 기준으로 사용했습니다." },
     { id: "dom-abort", repository: "WHATWG DOM Standard", path: "#aborting-ongoing-activities", publicUrl: "https://dom.spec.whatwg.org/#aborting-ongoing-activities", usedFor: ["AbortController", "AbortSignal", "abort reason", "already aborted", "underlying operation cleanup", "listener lifecycle"], evidence: "Promise 자체 settlement와 underlying asynchronous activity cancellation을 분리하고 timeout/race loser를 정리하는 기준으로 사용했습니다." },
   ],
@@ -417,3 +417,77 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 400;
+expertSession.chapters.push({
+  id: "structured-cancellation-timeout-error-cause",
+  title: "Promise graph에 구조화된 취소·timeout·오류 원인·수명 경계를 부여합니다",
+  lead: "Promise에는 내장 cancel 상태가 없습니다. AbortSignal을 실제 작업까지 전파하고, timeout·사용자 취소·실패를 구분하며, 모든 child 작업이 성공·실패·취소 중 하나로 관찰되도록 소유권을 설계합니다.",
+  explanations: [
+    "Promise state는 pending, fulfilled, rejected이고 settled는 fulfilled 또는 rejected입니다. resolved는 더 넓은 개념으로 다른 Promise/thenable을 채택해 여전히 pending일 수 있습니다. `resolve(otherPromise)` 직후 fulfilled라고 설명하면 adoption과 실제 settlement를 혼동합니다.",
+    "Promise 자체에는 표준 cancel 메서드나 cancelled라는 네 번째 state가 없습니다. controller.abort는 Promise object를 취소하는 것이 아니라 AbortSignal을 관찰하는 underlying operation에게 중단을 요청합니다. 작업이 signal을 무시하면 wrapper가 rejected되어도 network·timer·CPU work는 계속될 수 있습니다.",
+    "취소 가능한 함수는 `{ signal }`을 명시적 parameter로 받고 시작 전에 `signal.aborted` 또는 `throwIfAborted()`를 검사합니다. 시작 뒤에는 abort event를 once로 듣고 timer·reader·listener 같은 resource를 실제로 정리한 뒤 `signal.reason`으로 reject합니다. 성공·실패 종료에서는 abort listener도 제거해 수명 밖 reference를 남기지 않습니다.",
+    "AbortController를 최상위 작업 owner가 만들고 같은 signal을 관련 fetch, body reader, timer adapter, child computation에 전달합니다. 각 helper가 임의 controller를 새로 만들면 parent dispose가 child를 중단하지 못합니다. 여러 독립 작업은 필요한 경우 child controller와 parent abort forwarding을 두되 listener cleanup을 함께 설계합니다.",
+    "timeout은 `Promise.race([work, timeoutRejection])`만으로 구현하면 loser인 실제 work를 중단하지 않습니다. timeout 시 controller.abort(new DOMException(..., 'TimeoutError'))를 호출해 underlying operation을 취소하고, race에 참여한 timer도 어느 winner에서든 clear합니다. 지원 범위를 확인한 뒤 AbortSignal.timeout/any를 사용할 수 있지만 reason 우선순위와 cleanup contract는 여전히 테스트합니다.",
+    "사용자 취소·timeout·network 오류·schema 오류는 복구 행동이 다릅니다. AbortError는 조용한 이전 요청 폐기일 수 있고 TimeoutError는 retry를 제안할 수 있으며 validation error는 입력 수정이 필요합니다. `catch { return [] }`로 모두 성공처럼 바꾸면 empty data와 failure를 구분할 수 없으므로 typed error/code와 명시적 UI state를 사용합니다.",
+    "Error의 `cause` option은 lower-level 오류를 보존하면서 domain message와 type을 추가하는 데 유용합니다. 원본 Error object를 문자열 연결로 잃지 않고 `new DataLoadError('날씨 변환 실패', { cause })`처럼 감쌉니다. 사용자 메시지에는 내부 URL·token·stack을 노출하지 않고, 관측 로그는 redaction과 correlation id를 적용합니다.",
+    "async function은 호출 즉시 Promise를 반환하고 await는 현재 async execution을 suspend한 뒤 reaction job에서 이어집니다. `for` 안 await는 의도된 순차 실행일 수 있지만 독립 작업이라면 Promise.all 계열을 검토합니다. 반대로 무제한 map+Promise.all은 concurrency 폭주를 만들 수 있어 제한된 worker pool과 공용 abort가 필요합니다.",
+    "구조화된 비동기 수명에서는 parent scope가 시작한 child 작업을 추적하고 scope 종료 전에 모두 await·cancel·settle시킵니다. fire-and-forget Promise를 만들었다면 내부에서 모든 실패를 처리하고 상태/telemetry owner가 있어야 합니다. event handler에서 void로 버린 Promise의 rejection도 의도적으로 catch합니다.",
+    "browser의 unhandledrejection은 rejection에 handler가 적시에 연결되지 않았음을 관찰하는 안전망이지 업무 오류 처리 전략이 아닙니다. 나중에 handler를 붙이면 rejectionhandled가 발생할 수 있고 browser 정책·cross-origin 제한도 있습니다. Node의 unhandled rejection 정책도 version/options에 따라 process 영향을 줄 수 있으므로 모든 entry-point Promise에 명시적 terminal catch와 test를 둡니다.",
+    "finally callback은 settlement 종류와 무관하게 실행되고 보통 앞의 value/reason을 통과시키지만, finally가 throw하거나 rejected Promise를 반환하면 새 rejection으로 덮습니다. cleanup은 idempotent해야 하며 원래 오류를 숨기지 않도록 cleanup failure를 별도 cause/aggregate로 다룰지 정책을 정합니다.",
+    "test는 immediate abort, already-aborted signal, 성공 직전 abort, timeout winner/loser cleanup, double abort, child 하나 실패, catch recovery, finally throw, unhandled rejection 0을 fake timer와 실제 runtime에서 검증합니다. 완료 뒤 active timer/listener/reader가 0이고 stale UI mutation이 없는지를 결과 값만큼 중요하게 봅니다.",
+  ],
+  concepts: [
+    { term: "cooperative cancellation", definition: "AbortSignal 같은 공용 신호를 작업이 관찰하고 자신이 소유한 resource와 side effect를 중단하는 협력적 계약입니다.", detail: ["Promise state에 cancel을 추가하지 않습니다.", "underlying operation까지 signal을 전달합니다."] },
+    { term: "structured concurrency", definition: "scope가 시작한 child 비동기 작업의 수명을 소유해 종료 전에 성공·실패·취소 결과를 모두 관찰하는 설계 원칙입니다.", detail: ["fire-and-forget을 제한합니다.", "parent cancellation을 child에 전파합니다."] },
+    { term: "error cause", definition: "상위 domain 오류가 lower-level 원본 오류를 잃지 않고 연결하는 표준 Error option입니다.", detail: ["관측과 debugging context를 보존합니다.", "사용자에게 민감한 내부 정보를 그대로 노출하지 않습니다."] },
+    { term: "terminal rejection handler", definition: "비동기 entry point에서 더 이상 caller가 처리하지 않는 최종 rejection을 의도적으로 분류·보고·복구하는 catch 경계입니다.", detail: ["unhandledrejection은 보조 안전망입니다.", "void event handler Promise에도 필요합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "abortable-promise-cleanup",
+      title: "AbortSignal을 실제 timer에 연결하고 cleanup을 보장하는 Promise",
+      language: "javascript",
+      filename: "promise-abort.mjs",
+      purpose: "abort reason이 rejection으로 전파되고 underlying timer가 clear되며 finally cleanup 뒤 caller가 분류된 결과를 받는 순서를 Node에서 exact 검증합니다.",
+      code: "function delay(ms, { signal }) {\n  return new Promise((resolve, reject) => {\n    if (signal.aborted) {\n      reject(signal.reason);\n      return;\n    }\n\n    const onAbort = () => {\n      clearTimeout(timer);\n      reject(signal.reason);\n    };\n    const timer = setTimeout(() => {\n      signal.removeEventListener('abort', onAbort);\n      resolve('completed');\n    }, ms);\n    signal.addEventListener('abort', onAbort, { once: true });\n  });\n}\n\nconst controller = new AbortController();\nconst resultPromise = delay(100, { signal: controller.signal })\n  .catch((error) => `caught:${error.name}`)\n  .finally(() => console.log('cleanup'));\n\ncontroller.abort(new DOMException('사용자가 취소했습니다.', 'AbortError'));\nconsole.log(await resultPromise);",
+      walkthrough: [
+        { lines: "1-6", explanation: "signal을 필수 dependency로 받고 이미 abort된 요청도 같은 reason으로 즉시 reject합니다." },
+        { lines: "8-15", explanation: "abort에서는 timer를 실제 clear하고 reject하며, 성공에서는 abort listener를 제거하고 resolve합니다." },
+        { lines: "16-17", explanation: "abort listener는 once로 등록해 중복 호출 surface를 줄이고 Promise executor를 닫습니다." },
+        { lines: "20-23", explanation: "호출자는 AbortController를 소유하고 rejection을 분류된 value로 recovery한 뒤 finally cleanup을 기록합니다." },
+        { lines: "25-26", explanation: "즉시 abort한 뒤 settlement를 await하므로 finally가 먼저 출력되고 recovery value가 다음에 출력됩니다." },
+      ],
+      run: { environment: ["Node.js 20 이상", "promise-abort.mjs를 UTF-8로 저장"], command: "node promise-abort.mjs" },
+      output: { value: "cleanup\ncaught:AbortError", explanation: ["AbortError reason이 delay rejection에서 catch까지 보존됩니다.", "finally는 recovered Promise가 settle되기 전에 실행되어 cleanup을 먼저 기록합니다.", "100ms timer는 clear되어 completed side effect나 process 지연을 남기지 않습니다."] },
+      experiments: [
+        { change: "controller.abort를 150ms timer 안으로 옮깁니다.", prediction: "delay가 completed로 먼저 fulfill되어 출력은 cleanup 다음 completed가 됩니다.", result: "이미 settled된 Promise는 뒤 abort로 상태가 바뀌지 않지만 listener cleanup은 여전히 필요합니다." },
+        { change: "catch를 제거하고 top-level await를 try/catch로 감쌉니다.", prediction: "같은 AbortError를 entry-point 경계에서 처리할 수 있습니다.", result: "어느 한 계층이 rejection의 최종 owner인지 명확히 정합니다." },
+        { change: "Promise.race timeout만 추가하고 delay에 signal을 전달하지 않습니다.", prediction: "race는 timeout으로 reject되어도 delay timer는 계속 살아 있습니다.", result: "wrapper rejection과 underlying cancellation을 구분합니다." },
+      ],
+      sourceRefs: ["tc39-promise-objects", "tc39-promise-constructor", "tc39-promise-then", "tc39-async-functions", "html-unhandled-rejections", "dom-abort"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "timeout UI는 나타났지만 network·timer가 계속 실행되고 늦은 결과가 화면을 덮는다.", likelyCause: "Promise.race로 wrapper만 reject하고 실제 operation에 AbortSignal을 전달하지 않았습니다.", checks: ["timeout 뒤 Network pending request와 active timer를 봅니다.", "fetch/reader/helper까지 같은 signal이 전달되는지 확인합니다.", "stale generation guard와 final cleanup을 계측합니다."], fix: "timeout owner가 controller.abort를 호출하고 모든 underlying operation이 signal을 관찰해 resource를 정리하게 하며 generation guard로 늦은 side effect를 막습니다.", prevention: "timeout 뒤 pending resource 0·stale mutation 0을 fake timer와 browser integration test로 검증합니다." },
+    { symptom: "오류를 cause로 감쌌는데 사용자 화면이나 로그에 access token과 전체 응답 body가 노출된다.", likelyCause: "원본 오류 보존과 외부 노출 정책을 구분하지 않고 Error object를 그대로 serialize했습니다.", checks: ["cause chain의 message·request URL·headers·body를 검사합니다.", "client UI와 production telemetry serializer를 분리합니다.", "redaction 및 allowlisted fields를 확인합니다."], fix: "사용자에는 안전한 domain code/message만 제공하고 관측 경계에서도 token·query·body를 redaction한 구조화 metadata만 기록합니다.", prevention: "secret fixture와 PII fixture로 error serialization privacy test를 둡니다." },
+  ],
+  expertNotes: [
+    "signal.reason이 항상 DOMException이라고 가정하지 마십시오. abort(reason)은 임의 값을 reason으로 받을 수 있으므로 public API에서 허용 reason type을 정규화하고 unknown도 안전하게 처리합니다.",
+    "AbortSignal.any와 timeout은 편리하지만 결합 signal에서 어느 원인이 먼저 abort했는지, listener/resource cleanup이 어떻게 되는지 지원 browser·runtime에서 contract test를 둡니다.",
+  ],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "Promise.race로 timeout rejection을 만들면 실제 작업도 취소되나요?", answer: "아닙니다. race의 loser는 계속 실행될 수 있으므로 AbortSignal을 underlying operation에 전달하고 timeout에서 controller.abort를 호출해야 합니다." },
+  { question: "AbortController가 Promise에 cancelled state를 추가하나요?", answer: "아닙니다. Promise는 pending/fulfilled/rejected 모델을 유지하고, signal을 관찰한 작업이 보통 abort reason으로 reject하면서 resource를 정리합니다." },
+  { question: "unhandledrejection listener를 두면 각 Promise의 catch를 생략해도 되나요?", answer: "아닙니다. 전역 listener는 누락을 관찰하는 최후 안전망이며 업무별 복구·사용자 상태·resource cleanup은 해당 비동기 경계에서 처리해야 합니다." },
+);
+expertSession.completionChecklist.push(
+  "AbortSignal을 parent에서 child operation까지 전파하고 already-aborted·mid-flight·success cleanup을 검증했다.",
+  "timeout rejection과 underlying resource cancellation을 분리해 설명하고 둘 다 구현했다.",
+  "사용자 취소·timeout·network·schema 오류를 typed code/cause와 안전한 메시지로 구분했다.",
+  "모든 fire-and-forget·event-handler Promise에 terminal rejection owner가 있고 unhandled rejection이 0임을 검증했다.",
+);

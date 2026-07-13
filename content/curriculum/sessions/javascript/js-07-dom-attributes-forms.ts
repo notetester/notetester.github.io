@@ -404,7 +404,7 @@ const session = {
     { id: "whatwg-attribute-reflection", repository: "WHATWG HTML Standard", path: "common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes", publicUrl: "https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes", usedFor: ["content attribute", "IDL attribute/property", "reflection", "type-specific getter/setter", "serialization"], evidence: "attribute string과 typed IDL reflection을 API별로 구분하는 current HTML model의 기준으로 사용했습니다." },
     { id: "whatwg-boolean-attributes", repository: "WHATWG HTML Standard", path: "common-microsyntaxes.html#boolean-attributes", publicUrl: "https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#boolean-attributes", usedFor: ["presence true", "absence false", "disabled='false'", "conforming values"], evidence: "boolean attribute는 값 문자열이 아니라 존재로 state를 나타낸다는 규칙을 exact disabled example의 기준으로 사용했습니다." },
     { id: "whatwg-input-state", repository: "WHATWG HTML Standard", path: "input.html#the-input-element", publicUrl: "https://html.spec.whatwg.org/multipage/input.html#the-input-element", usedFor: ["value/defaultValue", "checked/defaultChecked", "dirty flags", "indeterminate", "input types", "reset"], evidence: "input의 default/current/dirtiness와 checkbox mixed state를 initial-edit-reset state matrix에 사용했습니다." },
-    { id: "whatwg-form-entry-list", repository: "WHATWG HTML Standard", path: "form-control-infrastructure.html#constructing-the-entry-list", publicUrl: "https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#constructing-the-entry-list", usedFor: ["FormData", "entry list", "name", "disabled", "unchecked checkbox", "duplicate names", "submitter"], evidence: "화면 current state와 실제 submission payload의 포함·누락 차이를 current form entry algorithm에 맞췄습니다." },
+    { id: "whatwg-form-entry-list", repository: "WHATWG HTML Standard", path: "form-control-infrastructure.html#constructing-form-data-set", publicUrl: "https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#constructing-form-data-set", usedFor: ["FormData", "entry list", "name", "disabled", "unchecked checkbox", "duplicate names", "submitter"], evidence: "화면 current state와 실제 submission payload의 포함·누락 차이를 current form entry algorithm에 맞췄습니다." },
     { id: "whatwg-custom-data", repository: "WHATWG HTML Standard", path: "dom.html#custom-data-attribute", publicUrl: "https://html.spec.whatwg.org/multipage/dom.html#custom-data-attribute", usedFor: ["data-* naming", "dataset", "DOMStringMap", "private page metadata", "string values"], evidence: "dataset 이름 변환·string boundary·표준 attribute 우선과 application trust 경계를 공식 custom data model로 보강했습니다." },
     { id: "dom-token-list", repository: "WHATWG DOM Standard", path: "#interface-domtokenlist", publicUrl: "https://dom.spec.whatwg.org/#interface-domtokenlist", usedFor: ["classList", "add/remove/toggle/replace", "force argument", "token validation", "idempotence"], evidence: "class string 전체 조립 대신 fixed token state를 관리하는 API와 오류 조건을 current DOMTokenList interface에 맞췄습니다." },
     { id: "dom-standard", repository: "WHATWG DOM Standard", path: "DOMStringMap-related DOM integration", publicUrl: "https://dom.spec.whatwg.org/", usedFor: ["DOM interface boundary", "node/property state", "event/mutation integration"], evidence: "HTML-specific reflection과 DOM object state를 구분하는 공통 interface/tree 근거로 사용했습니다." },
@@ -425,3 +425,75 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 390;
+expertSession.chapters.push({
+  id: "form-submission-validation-dialog-accessibility",
+  title: "폼 제출·제약 검증·submitter·dialog를 하나의 사용자 작업 흐름으로 설계합니다",
+  lead: "폼은 input 값을 모으는 상자가 아니라 label, 이름, 제약 검증, 제출 버튼의 의도, 성공 control entry list, 오류 복구와 완료 dialog focus까지 연결된 HTML 작업 단위입니다.",
+  explanations: [
+    "각 form control은 보이는 label과 programmatic name을 가져야 합니다. `<label for>`와 control id를 연결하거나 control을 label 안에 넣고, `name`은 FormData와 server parameter key를 결정합니다. placeholder는 입력 예시이지 지속되는 label이 아니며, 같은 id·중복 label target·빈 accessible name은 keyboard와 screen reader 모두의 작업 맥락을 약화합니다.",
+    "form-associated control은 form 내부에 놓는 것이 가장 단순하지만 `form` attribute로 다른 위치의 form owner를 지정할 수도 있습니다. 이때 DOM ancestor만 보고 controls를 수집하지 말고 `form.elements`와 실제 entry-list 규칙을 확인합니다. disabled fieldset, disabled control, name 부재, unchecked checkbox/radio, 일부 button은 제출 entry에서 제외되며 readonly text control은 보통 제출되므로 disabled와 readonly를 업무적으로 교환하지 않습니다.",
+    "native constraint validation은 required, minlength, maxlength, pattern, type, min/max/step 같은 제약과 ValidityState를 제공합니다. `checkValidity()`는 유효 여부를 검사하고 invalid event를 발생시킬 수 있으며, `reportValidity()`는 사용자에게 browser UI까지 요청합니다. client validation은 빠른 피드백일 뿐 보안 경계가 아니므로 server가 같은 schema·권한·업무 규칙을 다시 검증합니다.",
+    "submit event는 form에 걸고 `event.submitter`로 어떤 submit button이 작업을 요청했는지 확인합니다. 저장·미리보기처럼 여러 버튼이 있으면 name/value 또는 allowlisted action을 사용합니다. Enter 제출과 접근성 동작을 보존하려면 click handler만 두지 말고 form submit을 중심에 둡니다.",
+    "`form.requestSubmit(button?)`은 실제 제출 버튼을 누른 것처럼 submitter, constraint validation, submit event를 거칩니다. 반면 legacy `form.submit()`은 validation과 submit event를 우회하므로 일반 UI 흐름을 재현하는 API가 아닙니다. 이름이 `submit`인 control이 form.submit method를 가릴 수 있으므로 control name도 API와 충돌하지 않게 정합니다.",
+    "submit listener에서 `preventDefault()`를 호출한 뒤 FormData를 만들면 그 시점의 successful controls를 snapshot합니다. submitter의 name/value까지 필요하면 `new FormData(form, event.submitter)` 지원 범위를 확인하거나 submitter 값을 명시적으로 추가합니다. checkbox absence, duplicate name, File, 빈 문자열을 JSON object 하나로 무손실 변환할 수 없으므로 entries/getAll 기반 server contract를 먼저 정의합니다.",
+    "비동기 제출 중에는 중복 요청을 막되 사용자가 취소·오류 복구할 수 있어야 합니다. button disabled만으로 server idempotency가 생기지 않으므로 request identifier와 server-side 중복 방지 정책을 둡니다. 완료·오류 어느 경로에서도 busy state, AbortController, listener, focus를 정리하고 raw 개인정보나 FormData 전체를 console/telemetry에 남기지 않습니다.",
+    "완료 확인이 modal이라면 native `<dialog>`의 `showModal()`을 우선 검토합니다. modal dialog는 top layer에 올라가고 바깥 문서가 inert가 되며, 적절한 heading/accessible name과 초기 focus, Escape cancel, close 뒤 논리적 opener로의 return focus가 필요합니다. 단순 fixed overlay와 `display:block`은 이 상호작용 계약을 제공하지 않습니다.",
+    "dialog 안에 긴 설명이 있으면 첫 interactive control이 항상 최선의 초기 focus는 아닙니다. 내용 시작의 정적 요소에 tabindex=-1을 두는 APG 패턴, destructive action의 안전한 기본, viewport scroll을 고려합니다. close 뒤 opener가 제거되었다면 다음 논리적 작업으로 focus를 이동하고 body로 사라지게 두지 않습니다.",
+    "검증은 마우스 성공 경로만 보지 않습니다. 빈 필수값의 invalid 순서, Enter 제출, 여러 submitter, programmatic requestSubmit, reset, double submit, network abort, server error, dialog Escape·Tab·return focus, Accessibility tree, 실제 FormData entries를 함께 관찰합니다. DevTools Elements의 properties와 attributes, Console event trace, Network payload를 같은 실행에서 비교해야 상태 drift를 찾을 수 있습니다.",
+  ],
+  concepts: [
+    { term: "successful control", definition: "form entry list를 구성할 때 name·disabled·type·checkedness·submitter 등 규칙을 만족해 실제 제출 데이터에 포함되는 control입니다.", detail: ["화면에 보인다고 항상 포함되지 않습니다.", "duplicate names와 checkbox absence를 보존합니다."] },
+    { term: "constraint validation", definition: "HTML control의 제약과 ValidityState, invalid/submit lifecycle을 이용하는 browser의 기본 검증 체계입니다.", detail: ["requestSubmit은 검증을 거칩니다.", "server validation을 대체하지 않습니다."] },
+    { term: "submitter", definition: "현재 form submission을 시작한 submit button 또는 input으로 action intent와 override attributes를 제공할 수 있습니다.", detail: ["submit event의 event.submitter로 읽습니다.", "allowlisted 업무 action으로 변환합니다."] },
+    { term: "modal focus lifecycle", definition: "dialog가 열릴 때 의미 있는 내부 위치로 focus를 이동하고 내부에 유지하며 닫힐 때 논리적 출발점으로 복구하는 전체 과정입니다.", detail: ["background inertness와 함께 검증합니다.", "opener가 사라지는 경우의 fallback도 정합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "request-submit-formdata-dialog-contract",
+      title: "requestSubmit의 validation·FormData·native dialog 계약",
+      language: "html",
+      filename: "request-submit-dialog.html",
+      purpose: "빈 required controls에서는 각 invalid event만 발생하고, 값을 채운 뒤에는 submitter를 포함한 entry list를 만들고 modal 완료 dialog를 여는 순서를 exact trace로 확인합니다.",
+      code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>form contract</title></head>\n<body>\n  <form id=\"profile\">\n    <label for=\"name\">이름</label>\n    <input id=\"name\" name=\"name\" required>\n    <label><input id=\"agree\" name=\"agree\" type=\"checkbox\" required> 필수 약관 동의</label>\n    <button id=\"save\" name=\"action\" value=\"save\" type=\"submit\">저장</button>\n  </form>\n  <dialog id=\"done\" aria-labelledby=\"done-title\">\n    <h2 id=\"done-title\">저장 완료</h2>\n    <button id=\"close\" type=\"button\">확인</button>\n  </dialog>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script>\n    const form = document.querySelector('#profile');\n    const nameInput = document.querySelector('#name');\n    const agree = document.querySelector('#agree');\n    const save = document.querySelector('#save');\n    const dialog = document.querySelector('#done');\n    const closeButton = document.querySelector('#close');\n    const out = document.querySelector('#out');\n    const trace = [];\n    const render = () => { out.textContent = trace.join('\\n'); };\n\n    form.addEventListener('invalid', (event) => {\n      trace.push(`invalid:${event.target.name}`);\n      render();\n    }, true);\n\n    form.addEventListener('submit', (event) => {\n      event.preventDefault();\n      const entries = new FormData(form, event.submitter);\n      trace.push(`submit:${new URLSearchParams(entries).toString()}`);\n      dialog.showModal();\n      trace.push(`dialog-open=${dialog.open}`);\n      render();\n      closeButton.focus();\n    });\n\n    closeButton.addEventListener('click', () => dialog.close('confirmed'));\n    form.requestSubmit(save);\n    nameInput.value = '홍길동';\n    agree.checked = true;\n    form.requestSubmit(save);\n  </script>\n</body>\n</html>",
+      walkthrough: [
+        { lines: "1-10", explanation: "지속되는 label, name, required, 명시적 submitter name/value를 갖는 최소 form을 만듭니다." },
+        { lines: "11-15", explanation: "accessible heading과 닫기 button이 있는 native dialog를 정의합니다." },
+        { lines: "18-27", explanation: "form/control/dialog references와 화면에 exact trace를 기록하는 render를 준비합니다." },
+        { lines: "29-33", explanation: "capture invalid listener로 어떤 required control이 제출을 막았는지 순서대로 기록합니다." },
+        { lines: "35-44", explanation: "submit을 가로채 submitter가 포함된 FormData entry list를 만들고 showModal 뒤 open state와 초기 focus를 기록합니다." },
+        { lines: "46-49", explanation: "첫 requestSubmit은 빈 name에서 막히고, 값을 채운 두 번째 requestSubmit은 submit과 dialog 경로를 통과합니다." },
+      ],
+      run: { environment: ["최신 Chromium 또는 Firefox", "request-submit-dialog.html을 UTF-8로 저장", "DevTools Elements·Console·Network·Accessibility pane", "keyboard-only Tab·Shift+Tab·Escape"], command: "브라우저에서 request-submit-dialog.html을 열고 pre 출력, dialog top layer, focus 위치를 확인" },
+      output: { value: "invalid:name\ninvalid:agree\nsubmit:name=%ED%99%8D%EA%B8%B8%EB%8F%99&agree=on&action=save\ndialog-open=true", explanation: ["첫 requestSubmit은 두 required controls에 tree order로 invalid를 발생시키고 submit event로 진행하지 않습니다.", "두 번째 제출은 current control state와 submitter action을 entry list에 포함합니다.", "showModal 뒤 dialog.open은 true이며 background inertness와 focus는 keyboard/Accessibility pane에서 추가 확인합니다."] },
+      experiments: [
+        { change: "agree.checked=true 줄을 제거합니다.", prediction: "name이 유효해진 뒤 invalid:agree가 추가되고 submit은 발생하지 않습니다.", result: "checkbox required도 native constraint validation과 entry-list checkedness에 연결됩니다." },
+        { change: "requestSubmit(save)를 form.submit()으로 바꿉니다.", prediction: "constraint validation과 submit listener를 우회해 실제 navigation이 발생할 수 있습니다.", result: "legacy submit method는 사용자 제출 흐름 재현 API가 아닙니다." },
+        { change: "dialog가 열린 뒤 Tab·Shift+Tab·Escape를 사용하고 닫은 뒤 activeElement를 확인합니다.", prediction: "focus가 modal 작업 안에 머물고 Escape로 닫힌 뒤 logical opener로 돌아가는 native behavior를 관찰할 수 있습니다.", result: "브라우저별 세부 focus와 제품의 명시적 return-focus 보완 여부를 기록합니다." },
+      ],
+      sourceRefs: ["web-modal-visual-state-source", "whatwg-form-entry-list", "whatwg-input-state", "whatwg-dialog", "wai-dialog"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "저장 button click에서는 검증되지만 Enter로 제출하면 handler와 action이 누락된다.", likelyCause: "button click만 듣고 form submit과 event.submitter를 작업 경계로 사용하지 않았습니다.", checks: ["form submit listener 호출 여부를 기록합니다.", "Enter·requestSubmit·각 submit button에서 event.submitter를 확인합니다.", "button type/name/value와 implicit submission 조건을 검사합니다."], fix: "업무 로직을 form submit listener에 두고 submitter를 allowlisted action으로 변환하며 click은 보조 UI에만 사용합니다.", prevention: "mouse·keyboard·requestSubmit·여러 submitter parity 테스트를 둡니다." },
+    { symptom: "완료 overlay가 열렸지만 Tab이 뒤 페이지 control로 이동하고 닫은 뒤 focus가 사라진다.", likelyCause: "CSS display overlay를 modal로 간주해 inertness와 focus lifecycle을 구현하지 않았습니다.", checks: ["Accessibility tree의 role/name을 확인합니다.", "Tab·Shift+Tab·Escape와 document.activeElement를 추적합니다.", "close 뒤 opener 연결 상태를 확인합니다."], fix: "native dialog showModal을 사용하거나 APG modal의 focus containment·Escape·return focus·background inertness를 완전하게 구현합니다.", prevention: "keyboard와 screen reader modal acceptance test를 배포 gate에 둡니다." },
+  ],
+  expertNotes: [
+    "FormData(form, submitter)는 최신 browser 지원 범위를 확인하고 지원 대상이 넓다면 submitter entry를 명시적으로 추가하는 adapter를 테스트합니다. 같은 name의 다중 값을 Object.fromEntries로 접으면 정보가 소실됩니다.",
+    "native validation message는 browser와 locale마다 다르므로 exact 문구에 의존하지 말고 ValidityState와 application의 접근 가능한 오류 요약·field association을 테스트합니다.",
+  ],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "readonly와 disabled control은 제출 entry 관점에서 어떻게 다른가요?", answer: "readonly text control은 일반적으로 이름과 값을 제출하지만 disabled control은 successful control에서 제외됩니다. 두 속성은 UX와 업무 의미가 다릅니다." },
+  { question: "form.requestSubmit()이 form.submit()보다 사용자 제출을 재현하기 좋은 이유는 무엇인가요?", answer: "requestSubmit은 submitter, constraint validation, submit event의 정상 lifecycle을 거치지만 legacy submit method는 이를 우회하기 때문입니다." },
+  { question: "완료 overlay에 role=dialog만 추가하면 modal이 완성되나요?", answer: "아닙니다. accessible name, 초기·내부·복귀 focus, Escape, background inertness와 시각·접근성 상태 동기화까지 필요합니다." },
+);
+expertSession.completionChecklist.push(
+  "label·name·form owner·submitter와 successful-control entry 규칙을 실제 FormData로 검증했다.",
+  "requestSubmit·native constraint validation·server 재검증의 책임 경계를 설명할 수 있다.",
+  "native dialog의 accessible name·초기/내부/복귀 focus·Escape·background inertness를 keyboard와 Accessibility pane에서 검증했다.",
+);

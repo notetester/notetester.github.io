@@ -396,7 +396,7 @@ const session = {
     { id: "web-news-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/ex09_callback.html", usedFor: ["news array", "timer/index globals", "start/stop", "textContent", "modulo-like wrap", "2-second rotation"], evidence: "한 줄 뉴스 start/stop 흐름을 중복 방지·immediate render·controller dispose·visibility와 자동 회전 접근성 capstone으로 확장했습니다." },
     { id: "ecma-execution-contexts", repository: "Ecma International TC39", path: "executable-code-and-execution-contexts.html#sec-execution-contexts", publicUrl: "https://tc39.es/ecma262/multipage/executable-code-and-execution-contexts.html#sec-execution-contexts", usedFor: ["execution context stack", "running context", "call/return", "agent execution", "jobs"], evidence: "동기 function stack과 host callback 실행을 구분하는 ECMAScript language execution model의 기준으로 사용했습니다." },
     { id: "html-event-loops", repository: "WHATWG HTML Standard", path: "webappapis.html#event-loops", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#event-loops", usedFor: ["event loop", "tasks", "task queues/sources", "microtask checkpoint", "rendering update", "run-to-completion integration"], evidence: "browser task selection·microtask·rendering 순서를 단일 global FIFO로 과도하게 단순화하지 않는 current processing model에 사용했습니다." },
-    { id: "html-microtasks", repository: "WHATWG HTML Standard", path: "webappapis.html#microtask-queuing", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#microtask-queuing", usedFor: ["queueMicrotask", "microtask queue", "checkpoint", "exception reporting", "starvation"], evidence: "queueMicrotask와 Promise reaction이 timer task 앞에서 실행되는 exact output과 recursive starvation 설명의 기준으로 사용했습니다." },
+    { id: "html-microtasks", repository: "WHATWG HTML Standard", path: "webappapis.html#perform-a-microtask-checkpoint", publicUrl: "https://html.spec.whatwg.org/multipage/webappapis.html#perform-a-microtask-checkpoint", usedFor: ["queueMicrotask", "microtask queue", "checkpoint", "exception reporting", "starvation"], evidence: "queueMicrotask와 Promise reaction이 timer task 앞에서 실행되는 exact output과 recursive starvation 설명의 기준으로 사용했습니다." },
     { id: "html-timers", repository: "WHATWG HTML Standard", path: "timers-and-user-prompts.html#timers", publicUrl: "https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#timers", usedFor: ["setTimeout/setInterval", "timer initialization", "handles", "clear", "nesting level/minimum delay", "task scheduling"], evidence: "delay가 exact deadline이 아니며 timer handle·repeat·nested clamp를 갖는 current browser timer semantics의 기준으로 사용했습니다." },
     { id: "page-visibility", repository: "W3C Web Performance Working Group", path: "TR/page-visibility-2/", publicUrl: "https://www.w3.org/TR/page-visibility-2/", usedFor: ["document visibilityState", "hidden", "visibilitychange", "background policy", "resource reduction"], evidence: "hidden page에서 cosmetic rotation/polling을 pause하고 visible 복귀 시 resynchronize하는 lifecycle 기준으로 사용했습니다." },
     { id: "high-resolution-time", repository: "W3C Web Performance Working Group", path: "TR/hr-time-3/", publicUrl: "https://www.w3.org/TR/hr-time-3/", usedFor: ["performance.now", "time origin", "monotonic duration", "resolution/privacy", "clock comparison"], evidence: "timer drift와 duration을 wall-clock Date가 아닌 monotonic clock으로 측정하는 기준으로 사용했습니다." },
@@ -415,3 +415,76 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 390;
+expertSession.chapters.push({
+  id: "budgeted-scheduling-cancellation-long-task-visibility",
+  title: "시간 예산·취소·페이지 가시성으로 협력적 scheduling을 운영합니다",
+  lead: "이벤트 루프를 출력 순서 암기로 끝내지 않고, 긴 작업을 나누고 stale callback을 취소하며 background throttling과 실제 지연을 측정하는 운영 모델로 확장합니다.",
+  explanations: [
+    "JavaScript job은 현재 execution context stack이 비워질 때까지 run-to-completion으로 실행됩니다. callback 중간에 timer나 click handler가 임의로 끼어들지는 않지만, 한 callback이 오래 실행되면 input, rendering, timer, network completion이 모두 기다립니다. single-threaded라는 말은 host의 network·timer 구현까지 한 thread라는 뜻이 아니라 JavaScript callback 실행이 직렬화된다는 뜻입니다.",
+    "HTML event loop는 task queue 하나만 단순 FIFO로 소비하는 추상화가 아닙니다. 여러 task source 중 user agent가 runnable task를 선택하고, 한 task 뒤 microtask checkpoint에서 Promise reaction·queueMicrotask를 queue가 빌 때까지 처리한 다음 rendering opportunity를 가질 수 있습니다. microtask가 microtask를 무한히 추가하면 rendering과 다음 task를 굶길 수 있습니다.",
+    "`setTimeout(fn, 0)`은 즉시 실행이나 정확한 deadline 예약이 아닙니다. 최소 지연 뒤 timer task가 runnable해질 수 있다는 요청이며, 현재 task·microtasks·다른 work·nested timer clamp·background policy 때문에 더 늦어집니다. 정확한 경과 시간은 tick 횟수가 아니라 monotonic `performance.now()` 기반으로 계산합니다.",
+    "긴 계산은 작은 chunk로 나눠 task 사이에 control을 host에 돌려줍니다. 한 chunk의 item 개수를 고정하면 느린 device에서 예산을 넘을 수 있으므로 시간 예산을 측정하고, 매 iteration의 실제 비용과 input latency를 profile합니다. queueMicrotask로 yield하면 같은 checkpoint가 계속되어 rendering에 양보하지 못하므로 task scheduling primitive가 필요한 경우를 구분합니다.",
+    "취소는 callback 내부의 `if (stale)` 하나가 아니라 registration과 resource ownership의 계약입니다. timer handle은 clear하고, event listener는 AbortSignal 또는 removeEventListener로 해제하며, async operation에는 같은 signal을 전달합니다. 이미 queue에 들어간 callback이 실행될 수 있는 API라면 generation token과 signal.aborted를 callback 시작에서 다시 확인합니다.",
+    "AbortController는 timeout·interval 자체를 자동 취소하지 않습니다. signal의 abort event에서 clearTimeout/clearInterval을 호출하는 adapter를 만들거나 resource가 signal을 직접 받는 API를 사용합니다. abort reason은 Error/DOMException으로 전달해 사용자 취소·timeout·dispose를 구분하되, 이유 문자열에 개인정보를 넣지 않습니다.",
+    "Page Visibility API는 document가 hidden인지 알려 주지만 사용자가 관심이 없는 모든 상황을 완전히 나타내지는 않습니다. 자동 뉴스·carousel·polling은 hidden에서 pause하고 visible 복귀 시 누락 tick을 몰아 실행하지 말며, 현재 시간/state에서 한 번 resynchronize합니다. focus·hover·reduced motion·사용자 pause도 별도 정책으로 존중합니다.",
+    "browser는 hidden tab의 timer를 강하게 throttle하거나 budget 정책을 적용할 수 있습니다. 따라서 interval callback 수로 wall-clock 진행도를 저장하면 background 복귀 뒤 시간이 틀어집니다. deadline 기반 `remaining = max(0, endAt - now())`처럼 state를 모델링하고 timer는 다음 관찰 시점을 예약하는 도구로 사용합니다.",
+    "Long Tasks API를 지원하는 browser에서는 main thread를 약 50ms 이상 점유한 task entry를 PerformanceObserver로 관찰할 수 있습니다. 이것은 모든 jank의 완전한 원인 분석이나 지원 범위가 동일한 표준이 아니므로 feature detection, Performance panel trace, input latency와 함께 사용합니다. telemetry에는 URL query·DOM text 같은 민감 정보를 넣지 않습니다.",
+    "deterministic test는 real sleep 대신 scheduler port를 주입해 now, schedule, cancel을 제어합니다. unit test는 callback 순서·active handle 최대 1·dispose 후 pending 0·drift resync를 가상 시간으로 검증하고, browser smoke test는 실제 task/microtask/rendering, hidden tab throttling, Long Task 관찰과 keyboard pause를 확인합니다.",
+  ],
+  concepts: [
+    { term: "cooperative scheduling", definition: "작업을 제한된 시간 chunk로 나누고 각 chunk 사이에 host가 input·rendering·다른 task를 처리할 기회를 주는 방식입니다.", detail: ["microtask yield와 task yield를 구분합니다.", "시간 예산을 실제 device에서 측정합니다."] },
+    { term: "timer drift", definition: "요청한 지연과 callback의 실제 실행 시각 차이가 누적되어 tick 기반 상태가 wall clock과 어긋나는 현상입니다.", detail: ["performance.now로 elapsed를 계산합니다.", "background 복귀에서 resynchronize합니다."] },
+    { term: "cancellation ownership", definition: "component가 만든 timer·listener·async resource의 handle과 signal을 소유하고 종료 시 모두 무효화하는 수명 계약입니다.", detail: ["clear와 generation guard를 함께 고려합니다.", "dispose 뒤 callback side effect가 0인지 테스트합니다."] },
+    { term: "long task", definition: "browser main thread를 오래 점유해 사용자 상호작용과 rendering을 지연시킬 수 있는 task 관찰 단위입니다.", detail: ["지원 여부를 feature-detect합니다.", "Performance trace와 함께 원인을 분석합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "event-loop-cancellation-trace",
+      title: "동기 abort·microtask·timer task의 결정적 실행 순서",
+      language: "javascript",
+      filename: "event-loop-cancellation.mjs",
+      purpose: "현재 task 안에서 timer를 등록하고 AbortController로 즉시 clear한 뒤 microtask와 다음 timer task의 exact 순서를 Node에서 검증합니다.",
+      code: "const trace = ['script-start'];\nconst controller = new AbortController();\n\nconst cancelledTimer = setTimeout(() => {\n  trace.push('cancelled-timer-ran');\n}, 5);\n\ncontroller.signal.addEventListener('abort', () => {\n  clearTimeout(cancelledTimer);\n  trace.push(`abort:${controller.signal.reason.name}`);\n}, { once: true });\n\nqueueMicrotask(() => {\n  trace.push('microtask');\n});\n\nsetTimeout(() => {\n  trace.push('timer');\n  console.log(trace.join('\\n'));\n}, 10);\n\ntrace.push('script-end');\ncontroller.abort(new DOMException('dispose', 'AbortError'));",
+      walkthrough: [
+        { lines: "1-2", explanation: "현재 script task의 trace와 수명 owner인 AbortController를 만듭니다." },
+        { lines: "4-6", explanation: "취소되지 않았다면 별도 timer task에서 side effect를 만드는 handle을 등록합니다." },
+        { lines: "8-11", explanation: "abort event는 controller.abort 호출 중 동기적으로 handle을 clear하고 reason type을 기록합니다." },
+        { lines: "13-15", explanation: "현재 task가 끝난 뒤 첫 microtask checkpoint에서 실행할 job을 queue합니다." },
+        { lines: "17-20", explanation: "관찰용 timer task는 최종 trace를 출력해 cancelled callback이 실행되지 않았음을 보여 줍니다." },
+        { lines: "22-23", explanation: "script-end와 synchronous abort가 먼저 기록되고 stack이 빈 뒤 microtask, 이후 timer task가 실행됩니다." },
+      ],
+      run: { environment: ["Node.js 20 이상", "event-loop-cancellation.mjs를 UTF-8로 저장"], command: "node event-loop-cancellation.mjs" },
+      output: { value: "script-start\nscript-end\nabort:AbortError\nmicrotask\ntimer", explanation: ["abort listener는 abort() 호출 중 현재 task에서 동기 실행됩니다.", "queueMicrotask callback은 script task가 끝난 checkpoint에서 실행됩니다.", "관찰 timer는 그 뒤 task로 실행되고 clear된 timer의 문자열은 나타나지 않습니다."] },
+      experiments: [
+        { change: "controller.abort 줄을 queueMicrotask callback 안으로 옮깁니다.", prediction: "microtask 기록 뒤 abort:AbortError가 이어지고 cancelled timer는 여전히 deadline 전에 clear됩니다.", result: "취소 시점과 timer runnable 시점의 경쟁을 명시적으로 추적합니다." },
+        { change: "microtask가 자기 자신을 100000회 다시 queue하도록 바꿉니다.", prediction: "timer task가 크게 지연되고 browser에서는 rendering도 굶을 수 있습니다.", result: "microtask는 rendering에 양보하는 범용 yield가 아닙니다." },
+        { change: "browser에서 visibilitychange로 timer를 pause하고 PerformanceObserver의 longtask 지원을 feature-detect합니다.", prediction: "hidden 동안 tick을 누적하지 않고 visible 복귀 시 now 기준으로 resynchronize해야 합니다.", result: "DevTools Performance에서 실제 delay·long task와 자동 회전 pause 상태를 기록합니다." },
+      ],
+      sourceRefs: ["html-event-loops", "html-microtasks", "html-timers", "page-visibility", "high-resolution-time", "long-tasks"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "hidden tab에서 돌아온 뒤 carousel이 수십 번 빠르게 넘어간다.", likelyCause: "지연된 interval tick을 업무 진행도로 간주하거나 복귀 시 backlog를 재생했습니다.", checks: ["visibilitychange와 실제 callback 시각을 performance.now로 기록합니다.", "index가 tick count인지 elapsed/current state에서 파생되는지 봅니다.", "hidden pause와 visible resync 정책을 확인합니다."], fix: "hidden에서 scheduling을 중단하고 visible 복귀 시 현재 time/state로 한 번 재계산한 뒤 다음 deadline만 예약합니다.", prevention: "fake clock과 실제 background-tab smoke test에서 burst 0과 active handle 최대 1을 검증합니다." },
+    { symptom: "Promise를 사용해 chunk를 나눴는데 화면과 click 반응이 계속 멈춘다.", likelyCause: "각 chunk를 microtask로 이어 같은 checkpoint를 끝없이 연장해 rendering과 다음 task에 양보하지 않았습니다.", checks: ["Performance trace에서 하나의 task 뒤 긴 microtask chain을 봅니다.", "queueMicrotask/Promise.then과 timer/task scheduler 사용을 구분합니다.", "chunk별 시간 예산과 input delay를 측정합니다."], fix: "rendering/input에 양보해야 하는 작업은 적절한 task scheduling 지점으로 나누고 각 chunk를 시간 예산 안에서 종료합니다.", prevention: "large fixture에서 max chunk duration과 interaction latency budget을 자동 측정합니다." },
+  ],
+  expertNotes: [
+    "event loop의 task 선택과 rendering opportunity는 browser가 결정합니다. 특정 queue 간 절대 순서를 비표준 구현 detail로 가정하지 말고 HTML에서 보장하는 checkpoint와 API contract만 의존합니다.",
+    "Long Tasks entry는 원인 code 전체를 자동 특정하지 않으며 cross-origin attribution과 browser 지원 제한이 있습니다. production threshold는 실제 사용자 device 분포와 Core Web Vitals 맥락에서 정합니다.",
+  ],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "queueMicrotask를 긴 계산의 yield로 쓰면 rendering이 보장되나요?", answer: "아닙니다. microtask queue가 빌 때까지 같은 checkpoint가 계속될 수 있어 rendering과 다음 task를 굶길 수 있습니다." },
+  { question: "background tab의 interval tick 수로 경과 시간을 계산하면 왜 위험한가요?", answer: "browser throttling과 long task 때문에 callback 간격이 요청값보다 길어지고 backlog 정책도 달라 tick 수가 wall clock을 나타내지 않기 때문입니다." },
+  { question: "AbortController가 setTimeout을 자동으로 취소하나요?", answer: "아닙니다. abort listener에서 clearTimeout을 호출하는 adapter를 만들거나 signal을 직접 지원하는 API에 전달해야 합니다." },
+);
+expertSession.completionChecklist.push(
+  "task·microtask checkpoint·rendering opportunity와 microtask starvation을 설명할 수 있다.",
+  "performance.now 기반 deadline과 visibility 복귀 resync로 timer drift를 제어했다.",
+  "AbortSignal·timer handle·generation token·dispose를 하나의 cancellation ownership으로 검증했다.",
+  "Performance/Long Tasks 도구로 chunk 예산과 실제 main-thread 지연을 측정했다.",
+);

@@ -379,7 +379,7 @@ const session = {
     { id: "web-weather-test-source", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/test.html", usedFor: ["duplicate weather implementation", "CORS/local fallback comments", "parsererror", "attribute null fallback", "string table"], evidence: "ex14와 독립적으로 반복 구현된 날씨 flow를 code-review/provenance evidence와 safe refactor regression source로 사용했습니다." },
     { id: "web-weather-xml-day09", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/day09/weather.xml", usedFor: ["default current namespace", "weather timestamp attributes", "97 local elements", "Seoul record", "missing ta Gochang", "rain/snow optional attributes"], evidence: "실제 namespace/data values를 읽어 97 rows, missing ta one, Seoul 108|5.7|흐림과 nullable schema golden evidence를 만들었습니다." },
     { id: "web-weather-xml-data", repository: "webstudy 학습 원본", path: "myweb/src/main/webapp/data/weather.xml", usedFor: ["duplicate location fixture", "byte-identical hash", "deployment paths", "source deduplication", "provenance"], evidence: "day09 weather.xml과 SHA-256이 동일한 복사본임을 확인해 duplicate fixture drift와 deployment path를 provenance review에 포함했습니다." },
-    { id: "html-domparser", repository: "WHATWG HTML Standard", path: "dynamic-markup-insertion.html#domparsing", publicUrl: "https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#domparsing", usedFor: ["DOMParser interface", "supported MIME types", "HTML/XML parser selection", "parser error Document", "UTF-8 result", "scripting disabled/no sanitization"], evidence: "parseFromString mode·error·encoding/security semantics와 parser-mode exact example의 current normative 기준으로 사용했습니다." },
+    { id: "html-domparser", repository: "WHATWG HTML Standard", path: "dynamic-markup-insertion.html#the-domparser-interface", publicUrl: "https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#the-domparser-interface", usedFor: ["DOMParser interface", "supported MIME types", "HTML/XML parser selection", "parser error Document", "UTF-8 result", "scripting disabled/no sanitization"], evidence: "parseFromString mode·error·encoding/security semantics와 parser-mode exact example의 current normative 기준으로 사용했습니다." },
     { id: "dom-namespace-query", repository: "WHATWG DOM Standard", path: "#dom-document-getelementsbytagnamens", publicUrl: "https://dom.spec.whatwg.org/#dom-document-getelementsbytagnamens", usedFor: ["namespaceURI/localName", "getElementsByTagNameNS", "collection", "element query", "prefix-independent traversal"], evidence: "current namespace local extraction과 wrong namespace behavior를 expanded-name DOM APIs에 맞췄습니다." },
     { id: "dom-xpath", repository: "WHATWG DOM Standard", path: "#xpath", publicUrl: "https://dom.spec.whatwg.org/#xpath", usedFor: ["XPath evaluator", "namespace resolver", "result types", "fixed queries", "dynamic expression caution"], evidence: "복잡한 namespace-aware XML query 대안과 resolver contract를 current DOM XPath interface로 보강했습니다." },
     { id: "dom-standard", repository: "WHATWG DOM Standard", path: "Node/Document/Element/textContent/mutation", publicUrl: "https://dom.spec.whatwg.org/", usedFor: ["XML/HTML node trees", "attributes/text", "safe HTML node creation", "DocumentFragment", "query/traversal"], evidence: "parsed XML tree와 current HTML rendering tree를 분리하고 safe table nodes를 생성하는 기준으로 사용했습니다." },
@@ -402,3 +402,104 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 460;
+expertSession.chapters.push(
+  {
+    id: "byte-decoding-streaming-domparser-memory",
+    title: "XML bytes·encoding declaration·streaming·DOMParser memory 경계를 분리합니다",
+    lead: "XML pipeline의 첫 입력은 network bytes입니다. Fetch decoding과 XML declaration의 역할을 구분하고, 완전한 문자열·tree를 요구하는 DOMParser 앞에 byte·크기·취소 정책을 둡니다.",
+    explanations: [
+      "HTTP Response는 status·headers와 byte body를 제공합니다. XML parser에 보내기 전에 허용 status와 `application/xml`, `text/xml`, 정의된 `+xml` media type을 검사합니다. server가 HTML 오류 page를 200 또는 XML Content-Type으로 잘못 보내는 경우도 있으므로 media type 성공을 well-formed/schema 성공과 동일시하지 않습니다.",
+      "XML document가 byte stream으로 parser에 직접 전달될 때 encoding declaration과 BOM, transport metadata가 encoding detection에 관여할 수 있습니다. 그러나 browser JavaScript에서 `response.text()`로 이미 Unicode string을 만든 뒤 DOMParser.parseFromString에 넘기면 원래 bytes는 사라졌고 XML declaration이 그 string을 다시 다른 charset으로 decode하지 않습니다.",
+      "Fetch body text decoding 규칙과 generic XML processor의 encoding detection을 섞지 않습니다. 비 UTF-8 legacy XML을 반드시 받아야 한다면 `arrayBuffer()`로 bytes를 읽고 신뢰 가능한 transport/content contract에서 allowlisted TextDecoder label을 선택합니다. 공격자가 선언한 임의 encoding label을 그대로 decoder 선택에 사용하지 않습니다.",
+      "network chunk는 UTF-8 character, entity reference, start/end tag, CDATA 경계와 일치하지 않습니다. byte stream을 직접 decode한다면 한 TextDecoder에 stream:true를 사용해 multi-byte 상태를 이어야 합니다. XML token을 임의 chunk 문자열 정규식으로 자르지 말고, incremental 처리가 필요하면 검증된 streaming XML parser와 명시적 framing/error contract를 선택합니다.",
+      "browser DOMParser.parseFromString은 완전한 string을 받아 Document tree를 구성합니다. Response를 streaming으로 읽었더라도 최종 string과 DOM tree가 동시에 memory에 존재할 수 있고, adapter가 records/HTML nodes를 추가로 만들면 peak memory가 더 커집니다. 대용량 XML에는 server-side SAX/StAX transform, pagination, compact JSON API 같은 architecture 대안을 비교합니다.",
+      "Content-Length는 누락되거나 압축 전후 크기와 다를 수 있고 CORS에서 노출되지 않을 수 있습니다. header는 early reject hint로만 사용하고 실제 read bytes/chars, XML depth·node count·attribute count·text length·record count를 단계별 제한합니다. 한도를 넘으면 reader.cancel과 fetch abort를 실행하고 partial tree를 render하지 않습니다.",
+      "`response.body.getReader()`를 직접 사용하면 stream lock과 cancel ownership이 생깁니다. component dispose, 새 검색, timeout, size error에서 reader와 controller를 함께 중단하고 generation guard로 뒤늦은 parse/render를 막습니다. reader lock 해제는 이미 소비한 Response를 새것으로 만들지 않습니다.",
+      "DOMParser의 XML mode는 malformed input에 항상 throw하는 API로 가정할 수 없습니다. 반환된 Document에서 parsererror element를 namespace 독립적으로 검사하고, 오류 text 전체를 사용자나 telemetry에 노출하지 않습니다. parsererror의 exact markup과 locale은 browser별 구현 detail이므로 존재 여부와 application error code만 contract로 둡니다.",
+      "well-formed Document가 domain-valid하다는 뜻은 아닙니다. root namespaceURI/localName, version, 허용 child structure, required/optional attributes, string/number bounds, uniqueness를 별도 adapter에서 검증합니다. 예상 밖 element를 무시할지 거부할지 forward-compatibility 정책을 version과 함께 정합니다.",
+      "DevTools Network에서 Headers·Response·Timing·Size를 저장하고 Memory/Performance에서 반복 load 뒤 heap과 parse time을 측정합니다. malformed, wrong encoding bytes, split multi-byte, truncated stream, oversize, abort, wrong namespace fixture마다 HTTP→decode→parse→schema 중 어느 stage가 실패했는지 privacy-safe code로 기록합니다.",
+    ],
+    concepts: [
+      { term: "encoding boundary", definition: "bytes가 Unicode string으로 변환되는 단 한 지점과 그 지점이 신뢰하는 BOM·transport·declared charset 정책입니다.", detail: ["DOMParser는 이미 만들어진 string을 다시 decode하지 않습니다.", "legacy charset은 allowlist와 byte fixture로 검증합니다."] },
+      { term: "tree materialization", definition: "완전한 XML text를 node·attribute·text object graph인 Document로 구성해 random access가 가능해지는 대신 memory를 사용하는 과정입니다.", detail: ["DOMParser는 전체 string 입력을 받습니다.", "대용량은 streaming/server transform과 비교합니다."] },
+      { term: "parser stage code", definition: "HTTP, media, decode, well-formedness, namespace/schema, domain validation 단계 중 실패 위치를 안정적인 application code로 나타낸 값입니다.", detail: ["browser parsererror 문구에 의존하지 않습니다.", "raw payload를 telemetry에 넣지 않습니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "XML declaration은 EUC-KR인데 response.text 뒤 DOMParser 결과의 한글이 이미 깨져 있다.", likelyCause: "Fetch가 bytes를 string으로 decode한 뒤 XML declaration이 DOMParser에서 다시 decoding을 결정할 것이라고 기대했습니다.", checks: ["Network에서 실제 response bytes와 Content-Type을 보존합니다.", "response.text 전후와 arrayBuffer+명시적 TextDecoder 결과를 비교합니다.", "BOM·HTTP charset·XML declaration의 일치 여부를 fixture로 확인합니다."], fix: "API contract를 UTF-8로 통일하거나 bytes를 arrayBuffer로 읽고 allowlisted 실제 charset decoder를 encoding boundary에서 한 번 적용한 뒤 DOMParser에 string을 넘깁니다.", prevention: "비 ASCII golden bytes와 잘못된 declaration/transport 조합을 CI fixture로 고정합니다." },
+      { symptom: "큰 XML을 열 때 tab memory가 급증하고 취소해도 parse가 끝날 때까지 멈춘다.", likelyCause: "전체 text와 DOM tree를 materialize한 뒤에야 크기를 검사하고 DOMParser의 synchronous parse 비용을 취소 가능한 것으로 가정했습니다.", checks: ["bytes/text/tree/domain rows별 peak memory를 측정합니다.", "size limit가 reader 단계 이전/중간에 적용되는지 봅니다.", "DOMParser call duration과 main-thread blocking을 Performance에서 확인합니다."], fix: "read 중 byte/char limit로 조기 abort하고 허용 크기를 작게 유지하며, 큰 feed는 server-side streaming transform·pagination·worker-capable parser architecture로 이동합니다.", prevention: "경계 크기·압축 폭탄 유사 fixture에서 memory/time budget과 abort 이후 pending resource 0을 검증합니다." },
+    ],
+    expertNotes: ["XML declaration을 JavaScript string의 decoder 지시문으로 취급하지 마십시오. bytes→string 변환이 완료된 뒤 declaration은 원래 byte sequence를 복원할 수 없습니다.", "DOMParser는 synchronous tree parser이므로 AbortSignal이 parseFromString 실행 중간을 중단하지 않습니다. 입력 한도와 architecture 선택을 parse 호출 전에 끝냅니다."],
+  },
+  {
+    id: "dtd-entity-xxe-xpath-schema-boundary",
+    title: "DTD·entity·XXE·XPath·XSD를 parser별 보안 계약으로 제한합니다",
+    lead: "browser DOMParser에서 한 payload가 안전해 보였다는 관찰을 모든 XML runtime의 보안 보장으로 일반화하지 않습니다. DTD/entity resolution과 schema/query 기능을 parser별 allowlist로 관리합니다.",
+    explanations: [
+      "XML 1.0은 document type declaration, internal/external entity declaration과 entity reference 문법을 정의합니다. XML feature 자체가 취약점이라는 뜻은 아니지만 untrusted document에서 외부 entity resolution이 활성화된 server parser는 local file read, internal network request, credential exposure 같은 XXE 경로를 만들 수 있습니다.",
+      "브라우저 DOMParser의 실제 external entity/network behavior는 server의 Java, .NET, Python, libxml parser 설정을 증명하지 않습니다. 각 runtime·version·factory 옵션에서 DTD, external general/parameter entities, external schema, XInclude, network access를 명시적으로 비활성화하고 secure-processing와 entity expansion/depth/size limits를 test합니다.",
+      "browser application이 DTD를 전혀 필요로 하지 않으면 parse 전에 DOCTYPE/ENTITY를 거부하는 좁은 allowlist policy를 둘 수 있습니다. 이 문자열 precheck는 defense-in-depth와 빠른 오류 분류일 뿐, encoding·obfuscation·parser grammar를 완전하게 이해하는 sanitizer나 server parser secure configuration의 대체물이 아닙니다.",
+      "entity expansion은 external access 없이도 매우 큰 text/tree를 만들어 CPU·memory denial of service를 일으킬 수 있습니다. raw byte limit만으로 expansion 뒤 크기를 제한하지 못할 수 있으므로 entity 기능 비활성화, expansion count, depth, node/text/attribute limits와 overall deadline을 parser 수준에서 설정합니다.",
+      "well-formedness와 validity는 다릅니다. DOMParser는 일반적으로 application XSD를 자동 적용하지 않으며, XSD validation이 필요하면 versioned schema와 별도 validator/tool/server pipeline을 사용합니다. schema validation도 authorization·semantic uniqueness·cross-record business rule을 대신하지 않습니다.",
+      "XPath는 namespace-aware query를 간결하게 만들지만 expression string에 사용자 입력을 이어 붙이면 query semantics가 변하거나 과도한 탐색이 발생할 수 있습니다. expression은 code의 fixed allowlist로 두고 사용자가 입력한 검색어는 XPath 결과 뒤 domain string 비교에 사용하거나 안전한 variable binding을 지원하는 별도 engine을 검토합니다.",
+      "default namespace 문서에서 XPath의 unprefixed element name은 기대와 다르게 no namespace를 가리킬 수 있습니다. resolver가 fixed prefix를 expected namespace URI에 map하게 하고 root namespace/version gate 뒤 query합니다. prefix 철자가 아니라 namespace URI와 local name이 identity라는 원칙을 DOM traversal과 동일하게 유지합니다.",
+      "XPathResult type을 명시하고 snapshot/iterator의 mutation semantics를 구분합니다. count는 NUMBER_TYPE, 단일 node는 FIRST_ORDERED_NODE_TYPE처럼 기대 type을 고정하고 null과 빈 result를 schema error/no-match로 구분합니다. untrusted XML tree에서 거대한 `//*` query를 반복하지 말고 query scope와 count/time budget을 둡니다.",
+      "외부 XML text는 entity-decoded 뒤에도 untrusted data입니다. HTML renderer에는 createElement/textContent를 사용하고 URL·color·class는 allowlist mapping을 적용합니다. Trusted Types는 HTML injection sink를 줄이는 defense이며 XML parser의 XXE나 entity expansion을 해결하지 않습니다.",
+      "보안 regression fixture에는 internal/external DTD, external general/parameter entity, recursive/large expansion, XInclude, external schemaLocation, malformed, wrong namespace, XPath special characters를 포함합니다. server test는 실제 local HTTP sentinel과 denied file target에 접근이 0임을 확인하되 production secret을 fixture로 쓰지 않습니다.",
+      "오류는 DTD_FORBIDDEN, PARSE_ERROR, NAMESPACE_ERROR, SCHEMA_ERROR, LIMIT_EXCEEDED처럼 stage code로 정규화합니다. parser가 반환한 raw document·external URI·file path·entity text를 사용자나 production log에 남기지 않고 source id, safe size bucket, parser version/config fingerprint 정도만 기록합니다.",
+    ],
+    concepts: [
+      { term: "XXE boundary", definition: "untrusted XML과 외부 entity·DTD를 처리할 수 있는 parser/runtime 설정 사이에서 local file·network resolution을 차단하는 보안 경계입니다.", detail: ["browser 동작을 server 보장으로 일반화하지 않습니다.", "실제 runtime config와 sentinel test가 필요합니다."] },
+      { term: "well-formedness versus validity", definition: "XML grammar를 만족해 tree로 parse되는 조건과 XSD/DTD/application schema 제약을 만족하는 조건의 차이입니다.", detail: ["DOMParser 성공은 schema 성공이 아닙니다.", "domain validation은 또 별도입니다."] },
+      { term: "namespace resolver", definition: "XPath expression의 prefix를 document에서 기대하는 namespace URI에 연결하는 함수 또는 mapping입니다.", detail: ["document의 실제 prefix 철자에 의존하지 않습니다.", "fixed query와 expected URI를 사용합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "xml-security-parser-xpath-contract",
+        title: "media type·parsererror·DTD 차단·namespace XPath를 한 계약으로 검증",
+        language: "html",
+        filename: "xml-security-contract.html",
+        purpose: "synthetic XML Response를 text로 한 번 읽고 narrow no-DTD policy, parsererror gate, fixed namespace-aware XPath를 적용해 성공과 오류 code를 browser에서 exact 재현합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>XML security contract</title></head>\n<body>\n  <pre id=\"out\" aria-live=\"polite\"></pre>\n  <script type=\"module\">\n    const EXPECTED_NS = 'urn:weather:v1';\n\n    function parseEnvelope(source) {\n      if (/<!DOCTYPE|<!ENTITY/i.test(source)) {\n        throw Object.assign(new Error('DTD is not allowed'), { code: 'DTD_FORBIDDEN' });\n      }\n      const documentNode = new DOMParser().parseFromString(source, 'application/xml');\n      if (documentNode.getElementsByTagNameNS('*', 'parsererror').length > 0) {\n        throw Object.assign(new Error('Malformed XML'), { code: 'PARSE_ERROR' });\n      }\n      if (documentNode.documentElement.namespaceURI !== EXPECTED_NS) {\n        throw Object.assign(new Error('Unexpected namespace'), { code: 'NAMESPACE_ERROR' });\n      }\n      return documentNode;\n    }\n\n    const valid = '<weather xmlns=\"urn:weather:v1\"><item id=\"108\">서울</item></weather>';\n    const response = new Response(valid, {\n      status: 200,\n      headers: { 'content-type': 'application/xml; charset=utf-8' },\n    });\n    const contentType = response.headers.get('content-type');\n    const source = await response.text();\n    const documentNode = parseEnvelope(source);\n    const count = documentNode.evaluate(\n      'count(/w:weather/w:item)',\n      documentNode,\n      (prefix) => prefix === 'w' ? EXPECTED_NS : null,\n      XPathResult.NUMBER_TYPE,\n    ).numberValue;\n\n    const codeFor = (candidate) => {\n      try { parseEnvelope(candidate); return 'OK'; }\n      catch (error) { return error.code ?? 'UNKNOWN'; }\n    };\n    const lines = [\n      `content-type=${contentType}`,\n      `items=${count}`,\n      `malformed=${codeFor('<weather><item></weather>')}`,\n      `doctype=${codeFor('<!DOCTYPE weather [<!ENTITY xxe SYSTEM \"file:///denied\">]><weather>&xxe;</weather>')}`,\n    ];\n    document.querySelector('#out').textContent = lines.join('\\n');\n    console.log(lines.join('\\n'));\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "UTF-8 HTML shell과 exact 결과를 보여 줄 pre, module script를 준비합니다." },
+          { lines: "7-20", explanation: "고정 namespace와 좁은 DTD/ENTITY 거부, parsererror, root namespace gate를 순서대로 적용합니다." },
+          { lines: "22-29", explanation: "namespace XML을 synthetic Response에 넣고 Content-Type을 보존한 채 body를 한 번 text로 소비합니다." },
+          { lines: "30-36", explanation: "fixed XPath expression과 resolver를 사용해 prefix 철자와 분리된 namespace URI 기준 item count를 구합니다." },
+          { lines: "38-41", explanation: "application error를 안정적인 code로 변환하되 parser 원문을 사용자 출력에 포함하지 않습니다." },
+          { lines: "42-49", explanation: "정상 media/count, malformed parsererror, DTD policy 결과를 화면과 Console에 동일하게 기록합니다." },
+          { lines: "50-52", explanation: "script와 document를 닫으며 Accessibility pane에서 status 이름과 text를 확인합니다." },
+        ],
+        run: { environment: ["최신 Chromium 또는 Firefox", "xml-security-contract.html을 UTF-8로 저장", "DevTools Console·Network·Elements·Accessibility", "keyboard로 문서와 결과 영역 탐색"], command: "브라우저에서 xml-security-contract.html을 열고 pre·Console exact 출력과 DOMParser/XPath 지원을 확인" },
+        output: { value: "content-type=application/xml; charset=utf-8\nitems=1\nmalformed=PARSE_ERROR\ndoctype=DTD_FORBIDDEN", explanation: ["Response metadata를 parser 앞에서 보존하고 body는 한 번만 읽습니다.", "XPath resolver의 w prefix는 expected namespace URI에 연결되어 item 하나를 셉니다.", "malformed XML과 application의 no-DTD 정책은 서로 다른 stable error code가 됩니다."] },
+        experiments: [
+          { change: "valid XML의 namespace를 urn:weather:v2로 바꿉니다.", prediction: "parse는 well-formed이지만 NAMESPACE_ERROR로 거부됩니다.", result: "문법 성공과 versioned application schema gate를 분리합니다." },
+          { change: "XPath를 count(/weather/item)로 바꾸고 resolver를 제거합니다.", prediction: "default namespace elements와 no-namespace 이름이 달라 count가 0이 됩니다.", result: "XPath에서도 expanded name과 namespace resolver가 필요함을 확인합니다." },
+          { change: "server parser fixture에서 외부 entity URL을 local sentinel로 지정합니다.", prediction: "secure configuration에서는 sentinel request와 file read가 0이어야 합니다.", result: "이 browser 문자열 precheck를 server parser secure configuration의 대체물로 사용하지 않습니다." },
+        ],
+        sourceRefs: ["html-domparser", "dom-namespace-query", "dom-xpath", "xml-standard", "xml-namespaces", "xml-schema", "fetch-response", "trusted-types"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "browser DOMParser에서는 외부 file이 읽히지 않아 Java server parser도 안전하다고 결론 냈다.", likelyCause: "서로 다른 runtime/parser의 DTD·external entity defaults와 configuration을 일반화했습니다.", checks: ["production parser factory/version과 effective features를 출력합니다.", "external general/parameter entity, XInclude, schema access를 각각 sentinel test합니다.", "DTD/expansion/depth/size limits를 확인합니다."], fix: "server runtime에서 DTD와 모든 external resolution을 명시 비활성화하고 secure limits를 설정한 뒤 실제 file/network 접근 0을 regression test합니다.", prevention: "parser library upgrade마다 config fingerprint와 XXE/entity fixture suite를 실행합니다." },
+      { symptom: "XPath 검색어에 따옴표나 대괄호를 넣으면 결과가 달라지거나 query가 매우 느려진다.", likelyCause: "사용자 문자열을 XPath expression에 직접 이어 붙여 query syntax와 탐색 범위를 제어하게 했습니다.", checks: ["expression 생성 code와 입력 escaping 시도를 검사합니다.", "fixed query 대비 node visit/time을 측정합니다.", "namespace resolver와 XPathResult type을 확인합니다."], fix: "XPath expression은 code의 fixed allowlist로 두고 사용자 검색은 추출된 validated domain strings에 적용하거나 variable binding을 지원하는 검토된 engine을 사용합니다.", prevention: "XPath metacharacter·large tree·timeout fixture와 fixed-query lint/review gate를 둡니다." },
+    ],
+    expertNotes: ["DOCTYPE 문자열 거부는 이 예제의 좁은 browser application 정책입니다. 모든 encoding·grammar 변형을 안전하게 sanitize하지 않으며 server parser에서 DTD/external resolution을 끄는 일을 대신하지 않습니다.", "XSD validator를 추가해도 외부 schema fetch, recursive types, large validation cost의 새 attack surface가 생길 수 있으므로 local pinned schema와 network-off, size/time limits를 적용합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "response.text로 만든 string의 XML declaration이 DOMParser에서 charset decoding을 다시 결정하나요?", answer: "아닙니다. bytes→string decoding은 이미 끝났으며 DOMParser는 JavaScript string을 XML 문법으로 parse합니다." },
+  { question: "browser DOMParser에서 XXE가 재현되지 않으면 server XML parser도 안전한가요?", answer: "아닙니다. parser/runtime마다 DTD·external entity·XInclude·schema 설정이 달라 실제 production parser의 secure configuration과 sentinel test가 필요합니다." },
+  { question: "DOMParser parse 성공은 XSD와 업무 schema도 유효하다는 뜻인가요?", answer: "아닙니다. well-formedness, namespace/version, XSD validity, application domain validation은 서로 다른 단계입니다." },
+);
+expertSession.completionChecklist.push(
+  "HTTP bytes→Unicode string→XML Document의 encoding 경계를 fixture와 DevTools로 검증했다.",
+  "DOMParser 전 size limit과 parse 뒤 namespace/schema limits를 적용하고 oversize에서 resource를 취소했다.",
+  "production server parser의 DTD·external entity·XInclude·external schema를 비활성화하고 XXE/entity sentinel tests를 통과했다.",
+  "XPath expression과 namespace resolver를 fixed allowlist로 관리하고 사용자 입력을 query code에 보간하지 않았다.",
+);

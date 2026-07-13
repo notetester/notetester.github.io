@@ -398,3 +398,102 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 430;
+expertSession.chapters.push(
+  {
+    id: "content-type-encoding-streaming-backpressure",
+    title: "Content-Type·byte decoding·ReadableStream·backpressure 경계를 보존합니다",
+    lead: "fetch 결과는 곧바로 JSON object가 아니라 status·headers와 byte stream을 가진 Response입니다. media type을 확인하고 body를 한 번 소비하며 decoder·parser·schema 단계를 분리합니다.",
+    explanations: [
+      "Response body는 nullable ReadableStream이며 `text()`, `json()`, `arrayBuffer()`, `blob()` 같은 convenience method는 stream을 소비해 Promise를 반환합니다. `bodyUsed`는 body가 disturbed되었는지 보여 주고, 한 번 읽은 같은 Response를 다시 읽으면 TypeError가 날 수 있습니다. 두 consumer가 정말 필요하면 읽기 전에 clone하되 큰 body의 buffering 비용을 측정합니다.",
+      "HTTP status와 media type은 parser 선택 전에 검사합니다. fetch Promise는 HTTP 404/500만으로 reject되지 않으므로 `response.ok` 또는 허용 status 집합을 확인하고, Content-Type을 case-insensitive media type으로 parse해 `application/json`이나 정의된 `+json`만 JSON parser로 보냅니다. 잘못된 server의 HTML 오류 page를 JSON.parse error 하나로 뭉개지 않습니다.",
+      "Content-Type의 charset parameter는 representation metadata지만 Fetch의 `Response.text()` decoding 규칙과 각 body mixin method의 실제 규격을 확인해야 합니다. 임의 charset을 반드시 지원해야 하면 `arrayBuffer()`로 bytes를 얻고 allowlisted TextDecoder label을 사용하며, unsupported label·invalid sequence·BOM·declared/actual mismatch 정책을 명시합니다.",
+      "UTF-8 multi-byte character는 network chunk 경계에서 나뉠 수 있습니다. chunk마다 `new TextDecoder().decode(chunk)`를 독립 호출하면 replacement character가 생길 수 있으므로 하나의 decoder에 `{ stream: true }`를 사용하고 끝에서 빈 decode로 flush합니다. `fatal:true`는 invalid bytes를 오류로 만들지만 제품이 replacement를 허용할지는 데이터 contract로 결정합니다.",
+      "`response.body.getReader()`를 호출하면 stream이 lock됩니다. read loop는 `{ value, done }`를 처리하고 정상 종료에서 decoder를 flush하며, 취소·오류·size limit에서는 reader.cancel과 AbortController를 연결합니다. lock을 해제한다고 이미 소비한 body가 재사용되는 것은 아니며, reader·signal의 소유자를 명확히 합니다.",
+      "streaming은 전체 buffering을 줄이고 점진 처리를 가능하게 하지만 JSON document 하나는 일반 JSON.parse 전에 완전한 text가 필요합니다. NDJSON처럼 record framing이 있는 format이나 검증된 incremental parser가 없다면 chunk 경계에서 임의 JSON substring을 parse하지 않습니다. streaming parser는 depth·token length·duplicate key·partial record 오류 계약까지 별도 검토합니다.",
+      "backpressure는 consumer 속도를 producer에게 전달하는 stream 계약입니다. Web Streams의 desiredSize와 pull을 이해하지 않고 start에서 대량 chunk를 모두 enqueue하면 memory 이점이 줄어듭니다. network body에서는 user agent가 source를 관리하지만 transform pipeline도 각 stage의 queue size와 취소 전파를 보존해야 합니다.",
+      "Content-Length는 progress hint이지 무조건 신뢰할 수 있는 안전한 실제 크기가 아닙니다. 압축, transfer encoding, CORS header exposure, 잘못된 server 값이 있고 decompressed size는 더 클 수 있습니다. 읽은 byte/character/record 수를 직접 제한하고 초과 시 reader와 fetch를 중단하며 partial data를 성공으로 render하지 않습니다.",
+      "decode된 JSON syntax와 application schema는 별도 gate입니다. JSON.parse 성공 뒤에도 object/array, required keys, string length, finite numeric range, URL scheme, enum을 검사하고 unknown keys 정책을 정합니다. 숫자 precision이 중요한 ID·금액은 wire string 또는 lossless contract를 사용합니다.",
+      "test fixture는 multi-byte 문자를 byte 중간에서 분할하고, empty body, 204, wrong Content-Type, invalid UTF-8, truncated JSON, oversize, mid-stream error, abort를 포함합니다. browser DevTools Network의 Headers·Timing·Response와 code의 status/content-type/bodyUsed trace를 대조하면 transport·decode·parse·schema 단계가 섞인 오류를 찾을 수 있습니다.",
+    ],
+    concepts: [
+      { term: "disturbed body", definition: "Response 또는 Request body stream이 읽히거나 취소되어 다시 소비할 수 없는 상태입니다.", detail: ["bodyUsed로 일부 상태를 관찰합니다.", "clone은 소비 전에 결정합니다."] },
+      { term: "streaming decode", definition: "한 TextDecoder가 chunk 사이의 불완전한 multi-byte sequence 상태를 유지하며 bytes를 text로 변환하는 방식입니다.", detail: ["decode에 stream:true를 사용합니다.", "끝에서 flush하고 invalid-byte 정책을 정합니다."] },
+      { term: "backpressure", definition: "consumer 처리 속도와 queue 여유를 upstream producer에 전달해 무제한 buffering을 피하는 stream 흐름 제어입니다.", detail: ["cancel/error도 upstream에 전파합니다.", "queue size를 profile합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "utf8-stream-response-contract",
+        title: "한글 byte가 chunk 사이에서 갈리는 Response stream을 안전하게 decode",
+        language: "javascript",
+        filename: "response-stream.mjs",
+        purpose: "synthetic HTTP Response의 status·Content-Type을 검사하고 하나의 streaming TextDecoder로 UTF-8 bytes를 복원한 뒤 JSON schema 경계와 bodyUsed를 exact 확인합니다.",
+        code: "const bytes = new TextEncoder().encode('{\"message\":\"안녕\",\"count\":2}');\nconst firstMultibyte = bytes.findIndex((byte) => byte >= 0x80);\nconst split = firstMultibyte + 1;\n\nconst stream = new ReadableStream({\n  start(controller) {\n    controller.enqueue(bytes.slice(0, split));\n    controller.enqueue(bytes.slice(split));\n    controller.close();\n  },\n});\n\nconst response = new Response(stream, {\n  status: 206,\n  headers: {\n    'content-type': 'application/json; charset=utf-8',\n    'cache-control': 'no-store',\n  },\n});\n\nconsole.log(`status=${response.status}, ok=${response.ok}`);\nconsole.log(`content-type=${response.headers.get('content-type')}`);\n\nconst reader = response.body.getReader();\nconst decoder = new TextDecoder('utf-8', { fatal: true });\nlet text = '';\nwhile (true) {\n  const { value, done } = await reader.read();\n  if (done) break;\n  text += decoder.decode(value, { stream: true });\n}\ntext += decoder.decode();\n\nconst data = JSON.parse(text);\nif (typeof data.message !== 'string' || !Number.isInteger(data.count)) {\n  throw new TypeError('SCHEMA_ERROR');\n}\nconsole.log(`message=${data.message}, count=${data.count}`);\nconsole.log(`bodyUsed=${response.bodyUsed}`);",
+        walkthrough: [
+          { lines: "1-3", explanation: "JSON UTF-8 bytes에서 첫 multi-byte character의 첫 byte 뒤를 찾아 의도적으로 잘못된 문자 경계에서 나눕니다." },
+          { lines: "5-10", explanation: "두 chunk를 enqueue하고 close하는 최소 ReadableStream source를 만듭니다." },
+          { lines: "12-19", explanation: "206 status와 JSON media type, no-store metadata를 가진 synthetic Response를 구성합니다." },
+          { lines: "21-22", explanation: "body를 읽기 전에 status/ok와 실제 Content-Type header를 관찰합니다." },
+          { lines: "24-32", explanation: "reader와 단일 fatal UTF-8 decoder를 사용해 chunk 사이 decoder state를 유지하고 마지막에 flush합니다." },
+          { lines: "34-39", explanation: "완전한 text만 JSON.parse하고 최소 schema를 검증한 뒤 domain 값과 disturbed body 상태를 출력합니다." },
+        ],
+        run: { environment: ["Node.js 20 이상", "response-stream.mjs를 UTF-8로 저장"], command: "node response-stream.mjs" },
+        output: { value: "status=206, ok=true\ncontent-type=application/json; charset=utf-8\nmessage=안녕, count=2\nbodyUsed=true", explanation: ["206도 2xx이므로 Response.ok는 true지만 application이 partial content를 허용하는지는 별도 정책입니다.", "한글 byte가 chunk 사이에서 나뉘어도 한 decoder의 streaming state가 원문을 복원합니다.", "reader가 body를 소비한 뒤 bodyUsed는 true이고 같은 Response를 다시 읽지 않습니다."] },
+        experiments: [
+          { change: "각 chunk에서 새 TextDecoder로 stream 옵션 없이 decode합니다.", prediction: "분할된 첫 한글 문자가 replacement character들로 손상될 수 있습니다.", result: "network chunk와 character boundary가 일치하지 않음을 확인합니다." },
+          { change: "Content-Type을 text/html로 바꾸되 JSON.parse는 그대로 둡니다.", prediction: "synthetic data는 우연히 parse되지만 production pipeline은 media-type mismatch로 먼저 실패해야 합니다.", result: "body 내용 sniffing보다 명시적 representation contract를 우선합니다." },
+          { change: "browser fetch adapter에서 다른 origin·credentials 요청을 실행하고 DevTools Network의 preflight, CORS error, Cache와 CSP console을 관찰합니다.", prediction: "JavaScript에 Response가 노출되기 전 정책 단계에서 실패하거나 cache에 의해 network 전송이 달라질 수 있습니다.", result: "CORS·CSP·cache·HTTP·body parsing을 서로 다른 진단 층으로 기록합니다." },
+        ],
+        sourceRefs: ["fetch-standard", "fetch-response", "fetch-cors", "http-semantics", "json-rfc", "csp-connect-src", "tc39-promise-source"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "stream으로 받은 한글 JSON이 간헐적으로 깨져 replacement character와 parse error가 생긴다.", likelyCause: "각 network chunk를 독립 TextDecoder로 decode해 multi-byte sequence가 chunk 경계에서 끊겼습니다.", checks: ["raw byte fixture를 multi-byte 중간에서 분할해 재현합니다.", "하나의 decoder와 stream:true 사용 여부를 확인합니다.", "마지막 decoder flush와 fatal policy를 검사합니다."], fix: "하나의 TextDecoder instance로 모든 chunk를 streaming decode하고 종료에서 flush한 뒤 완전한 framing 단위만 parser에 전달합니다.", prevention: "모든 지원 문자와 split offset을 순회하는 byte-boundary test를 둡니다." },
+      { symptom: "대용량 응답 취소 뒤에도 memory가 유지되고 network download가 계속된다.", likelyCause: "UI Promise만 버리고 reader.cancel·fetch AbortController·buffer references를 정리하지 않았습니다.", checks: ["Network pending/transfer와 heap retaining path를 확인합니다.", "reader lock, controller signal, accumulated chunks owner를 추적합니다.", "size-limit/error/finally 모든 종료 경로를 비교합니다."], fix: "한 lifecycle owner가 reader.cancel과 controller.abort를 실행하고 buffers/references를 해제하며 stale render를 generation으로 차단합니다.", prevention: "oversize·mid-stream error·user cancel 뒤 pending resource와 retained buffer가 0인지 통합 테스트합니다." },
+    ],
+    expertNotes: ["Response.text의 decoding 의미와 charset 지원을 일반 HTTP library의 동작과 혼동하지 말고 Fetch Standard 및 실제 target runtime으로 검증합니다.", "JSON streaming이 필요하면 임의 chunk parse가 아니라 명시적 framing format과 검증된 incremental parser, record별 size/depth/schema limit를 선택합니다."],
+  },
+  {
+    id: "cors-cache-status-network-observability",
+    title: "CORS·cache·status·CSP를 분리해 HTTP 실패를 관측하고 복구합니다",
+    lead: "fetch TypeError 하나를 모두 네트워크 장애라고 부르지 않습니다. browser policy, HTTP representation, cache, body decode, application schema를 단계별로 분류하고 DevTools evidence로 확인합니다.",
+    explanations: [
+      "fetch가 reject하는 TypeError는 DNS/TLS/connection 실패뿐 아니라 CORS·mixed content·CSP 같은 browser policy 차단도 포함할 수 있고 script에 세부 원인이 제한될 수 있습니다. Console과 Network panel을 함께 보고, 사용자에게 내부 보안 정책 문구 대신 안전한 복구 메시지를 제공합니다.",
+      "CORS는 browser가 다른 origin response를 script에 노출할지 정하는 HTTP 기반 공유 protocol입니다. server 인증·인가나 CSRF 방어를 대신하지 않으며 curl/server-to-server 요청을 막지 않습니다. 허용 origin은 요청 Origin을 검증해 정확히 반환하고 credentials와 wildcard 조합 제한, `Vary: Origin` cache 분리를 지킵니다.",
+      "simple request 조건을 벗어난 method/header/content type은 preflight OPTIONS를 유발할 수 있습니다. preflight 성공과 실제 요청 성공은 별개이며 redirect·credentials·allowed headers/methods를 Network panel에서 각각 확인합니다. client에서 임의 Access-Control-Allow-Origin request header를 추가해 해결할 수 없습니다.",
+      "credentials option은 cookie 전송·response exposure와 SameSite/secure cookie 정책에 연결됩니다. cross-origin credential 요청은 명시적 origin과 Access-Control-Allow-Credentials가 필요하지만 이것이 사용자의 업무 권한을 증명하지 않습니다. server는 session/token 검증과 object-level authorization을 수행합니다.",
+      "CSP `connect-src`는 page가 fetch/XHR/WebSocket/EventSource 등으로 연결할 destination을 제한하는 defense-in-depth입니다. CORS가 허용해도 CSP가 막을 수 있고 그 반대도 가능하므로 두 정책을 하나로 설명하지 않습니다. report-only로 필요한 origin을 inventory한 뒤 최소 allowlist를 enforce합니다.",
+      "HTTP status는 복구 정책의 input입니다. 204는 성공이지만 JSON body를 기대하면 안 되고, 304는 일반 fetch application code가 직접 처리하는 응답과 cache revalidation 맥락을 구분하며, 401과 403, 404, 409, 412, 422, 429, 5xx를 모두 generic retry로 만들지 않습니다.",
+      "retry는 method idempotency, request body 재생 가능성, Retry-After, exponential backoff와 jitter, 총 deadline, abort를 고려합니다. POST가 업무적으로 idempotent하지 않다면 자동 retry가 중복 생성·결제를 만들 수 있으므로 idempotency key와 server contract 없이는 재전송하지 않습니다.",
+      "browser HTTP cache는 Cache-Control, validators(ETag/Last-Modified), freshness, Vary와 request cache mode의 영향을 받습니다. `cache: 'no-store'`를 습관적으로 붙이면 성능과 offline behavior를 잃고, 반대로 private 사용자 응답을 public shared cache에 두면 정보 노출 위험이 있습니다. representation별 cacheability를 server와 함께 설계합니다.",
+      "DevTools Network의 Disable cache는 도구가 열린 동안 test 조건을 바꿀 수 있습니다. 정상 cache, hard reload, service worker bypass, offline, slow network를 분리하고 Size/Transferred, from memory/disk cache, request/response headers, Timing을 저장합니다. 테스트에서 cache를 지웠다는 사실도 재현 절차에 기록합니다.",
+      "관측 event는 phase, safe endpoint template, method, status, duration, response size bucket, retry count, abort category, schema error code 정도로 제한합니다. Authorization, cookie, query PII, raw response body를 기록하지 않습니다. correlation id는 server log와 연결하되 사용자에게 공개해도 안전한 값인지 검토합니다.",
+    ],
+    concepts: [
+      { term: "CORS", definition: "browser가 origin 간 요청과 response 노출을 HTTP headers와 preflight로 조정하는 공유 protocol입니다.", detail: ["server authorization을 대체하지 않습니다.", "credential·cache Vary 정책과 함께 봅니다."] },
+      { term: "cache validator", definition: "ETag 또는 Last-Modified처럼 client가 가진 representation이 여전히 유효한지 조건부 요청으로 확인하는 metadata입니다.", detail: ["freshness와 다릅니다.", "Vary가 cache key 선택에 영향을 줍니다."] },
+      { term: "network failure taxonomy", definition: "policy/network, HTTP status, media/decode, syntax, schema, stale/cancel 단계로 실패를 분류해 서로 다른 복구와 telemetry를 적용하는 체계입니다.", detail: ["fetch TypeError 하나로 합치지 않습니다.", "DevTools evidence와 application code를 연결합니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "서버는 200을 기록했지만 browser fetch는 TypeError이고 JavaScript에서 status를 읽을 수 없다.", likelyCause: "응답이 도착했어도 CORS·CSP·mixed-content 같은 browser policy에서 script exposure가 차단됐습니다.", checks: ["Console의 policy 오류와 Network의 request/preflight를 함께 확인합니다.", "Origin·ACAO·credentials·Vary와 CSP connect-src를 검사합니다.", "같은 요청의 curl 성공을 CORS 성공 증거로 오해하지 않습니다."], fix: "server의 정확한 CORS allowlist/credentials/Vary와 page CSP destination을 최소 권한으로 수정하고 client가 response header를 위조하려 하지 않게 합니다.", prevention: "허용/거부 origin·credential·preflight·CSP 조합을 배포 환경 browser E2E로 검증합니다." },
+      { symptom: "새 배포 뒤 일부 사용자만 오래된 JSON schema를 받아 parser가 실패한다.", likelyCause: "Cache-Control/validator/Vary/version contract가 불완전하거나 service worker/cache layer가 오래된 representation을 재사용합니다.", checks: ["Age·Cache-Control·ETag·Vary·ServiceWorker source를 Network에서 봅니다.", "URL/version과 response schema version을 비교합니다.", "memory/disk/CDN/service-worker cache를 각각 우회해 재현합니다."], fix: "versioned representation과 올바른 freshness/validator/Vary, safe migration adapter를 적용하고 private data cacheability를 재검토합니다.", prevention: "old/new schema와 cache revalidation을 포함한 rolling-deploy contract test를 둡니다." },
+    ],
+    expertNotes: ["CORS error 세부 정보는 보안상 JavaScript에 노출되지 않을 수 있으므로 production UI가 Console 문구에 의존하지 않게 하고 server observability와 correlation을 준비합니다.", "cache mode와 HTTP Cache-Control은 같은 층이 아닙니다. request option 하나로 CDN·shared cache·service worker의 모든 behavior를 통제한다고 가정하지 않습니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "Response.ok가 true이면 JSON body와 schema도 유효한가요?", answer: "아닙니다. ok는 200~299 status 범위만 나타내며 Content-Type, byte decoding, JSON syntax와 application schema는 별도 검증해야 합니다." },
+  { question: "CORS를 허용하면 server authorization도 충족되나요?", answer: "아닙니다. CORS는 browser의 cross-origin response 노출 정책이며 server는 인증·인가·CSRF·object-level 권한을 별도로 검증해야 합니다." },
+  { question: "ReadableStream chunk마다 새 TextDecoder를 써도 되는 이유가 있나요?", answer: "문자 경계가 chunk와 정확히 일치한다고 보장된 특수 contract가 아니라면 안 됩니다. 하나의 decoder와 stream:true로 불완전한 multi-byte sequence를 이어야 합니다." },
+);
+expertSession.completionChecklist.push(
+  "status·Content-Type·byte decoding·JSON syntax·schema를 독립된 gate와 오류 code로 분리했다.",
+  "ReadableStream의 lock·bodyUsed·cancel·backpressure와 UTF-8 streaming decoder lifecycle을 검증했다.",
+  "CORS preflight/credentials/Vary와 CSP connect-src, server authorization의 책임을 구분했다.",
+  "Cache-Control·validators·Vary·service worker를 DevTools Network evidence와 rolling-deploy test로 확인했다.",
+);
