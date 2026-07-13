@@ -14,7 +14,9 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "content:validate": "node --experimental-strip-types scripts/validate-detailed-sessions.mjs",
     "content:validate:final": "node --experimental-strip-types scripts/validate-detailed-sessions.mjs --final",
-    "content:coverage": "node --experimental-strip-types scripts/report-curriculum-coverage.mjs"
+    "content:coverage": "node --experimental-strip-types scripts/report-curriculum-coverage.mjs",
+    "content:depth": "node --experimental-strip-types scripts/report-session-depth.mjs",
+    "content:depth:strict": "node --experimental-strip-types scripts/report-session-depth.mjs --strict"
   },
   "dependencies": {
     "next": "16.2.6",
