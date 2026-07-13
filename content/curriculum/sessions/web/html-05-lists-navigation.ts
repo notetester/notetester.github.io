@@ -301,4 +301,149 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "list-dom-ownership-numbering-markers",
+    title: "목록의 의미는 marker 모양보다 li ownership·순서·중첩 관계에서 시작합니다",
+    lead: "들여쓰기만 그럴듯한 ul·ol을 만들면 nested list가 sibling으로 빠지거나 numbering이 DOM과 다르게 보일 수 있습니다. direct child와 descendant를 분리해 tree를 검사합니다.",
+    explanations: [
+      "ul과 ol의 list item은 li로 표현하고 nested list는 해당 상위 li 안에 둡니다. sibling으로 배치해 margin만 밀면 화면은 비슷해도 어느 항목의 하위인지 DOM 관계가 전달되지 않습니다. `:scope > li`로 direct items, `querySelectorAll('li')`로 전체 depth를 따로 세면 nesting 오류를 빨리 찾을 수 있습니다.",
+      "ol은 순서가 task 결과에 영향을 주는 절차·순위·연대기에 사용합니다. start는 첫 marker 기준, reversed는 descending numbering, li value는 특정 item 번호를 명시합니다. 보이는 marker를 임의 숫자 text로 중복 입력하면 copy·screen reader·CSS 변화에서 숫자가 두 번 들릴 수 있으므로 semantic numbering과 visible content를 분리합니다.",
+      "ul은 순서가 바뀌어도 의미가 유지되는 동등 항목 집합입니다. bullet을 숨기려고 list semantics까지 제거할 필요는 없습니다. CSS `list-style:none`은 browser·assistive technology 조합에 따라 list 노출에 영향을 줄 가능성을 검토하고 navigation에서는 nav landmark와 list 관계를 Accessibility tree에서 실제 확인합니다.",
+      "marker 표현은 `::marker`, list-style-type, counter style로 바꿀 수 있지만 marker에 핵심 label·상태를 넣으면 복사·high contrast·screen reader에서 누락될 수 있습니다. 완료·오류·필수 상태는 item text와 programmatic state로 전달하고 marker는 보조 표현으로 둡니다.",
+    ],
+    concepts: [
+      { term: "list item ownership", definition: "어떤 li가 어느 ul·ol의 direct item이고 어떤 nested list가 어느 li에 속하는지 나타내는 DOM 부모·자식 관계입니다.", detail: ["indentation CSS가 아니라 tree가 의미를 결정합니다.", "direct와 descendant count를 분리해 검증합니다."] },
+      { term: "ordinal value", definition: "ordered list에서 각 item에 부여되는 순서 번호 값입니다.", detail: ["start·reversed·li value가 계산에 관여합니다.", "단순 화면 bullet style과 별도입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "ordered-list-dom-numbering-audit",
+        title: "start·reversed·li value와 nested list ownership을 DOM property로 검사",
+        language: "html",
+        filename: "ordered-list-contract.html",
+        purpose: "화면 marker를 문자열로 추측하지 않고 ordered list의 reflected properties와 direct/descendant tree 관계를 exact output으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>목록 구조 점검</title>\n</head>\n<body>\n  <main>\n    <h1>배포 점검 순서</h1>\n    <ol id=\"plan\" start=\"3\" reversed>\n      <li id=\"deploy\">배포 준비\n        <ol id=\"checks\">\n          <li>lint 실행</li>\n          <li id=\"typed\" value=\"7\">type 검사</li>\n        </ol>\n      </li>\n      <li value=\"1\">회고 기록</li>\n    </ol>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const plan = document.querySelector(\"#plan\");\n    const nested = document.querySelector(\"#checks\");\n    const lines = [\n      `start=${plan.start}`,\n      `reversed=${plan.reversed}`,\n      `directItems=${plan.querySelectorAll(\":scope > li\").length}`,\n      `allItems=${plan.querySelectorAll(\"li\").length}`,\n      `nestedParent=${nested.parentElement.tagName}`,\n      `nestedOwner=${nested.parentElement.id}`,\n      `explicitValue=${document.querySelector(\"#typed\").value}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "독립 문서와 main/h1을 준비합니다." },
+          { lines: "8-19", explanation: "start=3·reversed인 outer ol 안 첫 li가 nested ol을 소유하게 하고 nested 두 번째 li와 outer 마지막 li에 명시 value를 둡니다." },
+          { lines: "20-22", explanation: "outer와 nested list를 DOM에서 선택합니다." },
+          { lines: "23-32", explanation: "reflected start/reversed/value와 direct·전체 item 수, nested list의 실제 parent tag/id를 고정 문자열로 기록합니다." },
+          { lines: "33-36", explanation: "문서를 닫습니다. browser marker font나 locale과 무관하게 semantic structure를 검증합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "ordered-list-contract.html을 열고 #result와 Elements의 ol/li nesting을 확인" },
+        output: { value: "start=3\nreversed=true\ndirectItems=2\nallItems=4\nnestedParent=LI\nnestedOwner=deploy\nexplicitValue=7", explanation: ["outer ol의 direct item은 두 개지만 nested item까지 descendant li는 네 개입니다.", "nested ol의 parent는 id=deploy인 LI이므로 하위 단계 ownership이 tree에 표현됩니다.", "start·reversed·li value는 DOM property로 반영되어 CSS marker 모양과 별도로 검사할 수 있습니다."] },
+        experiments: [
+          { change: "nested ol을 deploy li 밖 sibling으로 옮기고 CSS margin으로 같은 위치를 만듭니다.", prediction: "화면은 비슷해도 nestedParent가 MAIN 또는 다른 container가 되어 ownership 의미를 잃습니다.", result: "nested list는 의미상 소유하는 li 안에 둡니다." },
+          { change: "reversed를 제거하고 start=3만 유지합니다.", prediction: "DOM reversed가 false가 되고 marker 진행 방향이 ascending으로 바뀝니다.", result: "순서 방향은 visible 숫자 text가 아니라 ol contract로 표현합니다." },
+        ],
+        sourceRefs: ["web-list-source", "whatwg-grouping-content"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "하위 목록이 화면에서는 들여쓰기됐지만 screen reader에서 상위 item과 관계없이 별도 list로 읽힌다.", likelyCause: "nested ul/ol을 상위 li 안이 아니라 sibling으로 두고 CSS margin만 적용했습니다.", checks: ["Elements에서 nested list.parentElement를 봅니다.", "`:scope > li`와 전체 li count를 비교합니다.", "Accessibility tree의 list depth·item count를 확인합니다."], fix: "nested list를 의미상 소유하는 li 안으로 이동하고 heading·label이 필요한 깊이인지 정보 구조를 재검토합니다.", prevention: "DOM ownership assertion과 keyboard/screen-reader list hierarchy review를 component test에 둡니다." },
+    ],
+    comparisons: [{ title: "절차를 어떤 구조로 표현할까요?", options: [
+      { name: "ol/li", chooseWhen: "실행 순서·순위·연대기가 결과 이해에 필수일 때", avoidWhen: "항목 교환이 의미에 영향을 주지 않을 때", tradeoffs: ["순서 의미와 marker를 기본 제공합니다.", "start·reversed·value 변경이 content 의미와 일치해야 합니다."] },
+      { name: "ul/li", chooseWhen: "동등한 특징·재료·navigation link 집합일 때", avoidWhen: "독자가 단계 번호를 따라야 할 때", tradeoffs: ["집합과 item 관계를 제공합니다.", "순서를 전달하지 않습니다."] },
+      { name: "heading/sections", chooseWhen: "각 항목이 긴 독립 content와 고유 heading·landmark를 가질 때", avoidWhen: "짧은 병렬 item을 단순히 나열할 때", tradeoffs: ["중간 진입과 문서 outline이 좋아집니다.", "작은 목록을 과도하게 분절할 수 있습니다."] },
+    ] }],
+    expertNotes: ["virtualized list는 화면에 일부 item만 DOM에 두므로 전체 count·position semantics와 find-in-page·print·screen reader 탐색이 달라집니다. 큰 data set은 pagination·windowing 선택과 접근성 acceptance를 별도 설계합니다.", "user-generated list marker나 label을 CSS generated content로 그대로 넣지 말고 textContent·escaping을 사용합니다. 번호 자체를 권한·database identity로 신뢰하지 않습니다."],
+  },
+  {
+    id: "breadcrumb-current-location-orientation",
+    title: "breadcrumb와 aria-current는 사용자가 전체 정보 구조에서 현재 위치를 복구하게 합니다",
+    lead: "깊은 URL로 바로 들어온 사용자는 앞 페이지를 보지 않았습니다. 현재 page title·heading과 함께 간결한 breadcrumb navigation을 제공하면 상위 범주로 이동하고 위치를 상기할 수 있습니다.",
+    explanations: [
+      "breadcrumb는 보통 이름 있는 nav와 ordered list로 계층 순서를 표현합니다. 모든 site navigation을 반복하는 것이 아니라 현재 위치까지의 대표 path를 보여 줍니다. 여러 taxonomy path가 가능한 content는 사용자 mental model과 canonical IA에 맞는 한 경로를 선택하고 지나치게 긴 trail은 responsive 전략을 설계합니다.",
+      "현재 item에는 `aria-current=page`를 사용합니다. 현재 page를 link로 둘지 plain text로 둘지는 reloading·copy link 요구에 따라 선택할 수 있지만, `aria-selected`는 tabs/listbox selection 같은 다른 state이므로 breadcrumb current page에 대체 사용하지 않습니다.",
+      "slash·chevron separator는 이미 list·nav가 관계를 전달하므로 장식으로 처리해 반복 announcement를 피할 수 있습니다. CSS pseudo-element가 high contrast에서 사라져도 link text와 ordered relation만으로 이해되어야 합니다. separator 자체에 link를 넣지 않습니다.",
+      "breadcrumb schema metadata를 추가하더라도 화면 navigation과 값이 drift하지 않도록 같은 route model에서 생성합니다. label에 사용자 개인정보·secret query를 그대로 포함하지 않고 decoded route parameter를 escaping·length limit한 뒤 표시합니다.",
+    ],
+    concepts: [
+      { term: "breadcrumb trail", definition: "현재 page까지의 상위 정보 구조를 순서대로 보여 주는 보조 navigation입니다.", detail: ["이름 있는 nav와 ol로 표현할 수 있습니다.", "browser back history와 같은 개념이 아닙니다."] },
+      { term: "aria-current", definition: "link·step·date 등 related items 집합에서 현재 항목을 나타내는 ARIA state입니다.", detail: ["page·step 등 적절한 token을 사용합니다.", "focus·selection과 구분합니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "current navigation 항목이 focus와 같은 색으로만 표시되고 screen reader에서는 어느 page인지 알 수 없다.", likelyCause: "현재 위치 state를 CSS class에만 두거나 aria-selected를 site link에 오용했습니다.", checks: ["aria-current=page가 실제 current link 하나에 있는지 봅니다.", "focus-visible과 current style을 구분합니다.", "page title·h1·breadcrumb 마지막 이름이 일치하는지 확인합니다."], fix: "current link에 aria-current=page와 비색상 visible indicator를 제공하고 route 전환 때 title·h1·state를 함께 갱신합니다.", prevention: "route manifest에서 current state를 단일 생성하고 accessibility tree·SPA navigation integration test를 실행합니다." },
+    ],
+    expertNotes: ["breadcrumb는 사용자의 실제 click history가 아닙니다. history stack을 그대로 노출하면 개인 navigation path와 민감 query가 UI·telemetry에 유출될 수 있습니다.", "SPA에서 route 변경 후 breadcrumb만 바꾸고 focus·document title을 갱신하지 않으면 사용자 orientation이 깨집니다. main heading focus 또는 적절한 announcement 정책을 함께 설계합니다."],
+  },
+  {
+    id: "disclosure-navigation-keyboard-resilience",
+    title: "responsive site navigation은 menu role보다 native link·button disclosure와 predictable keyboard가 기본입니다",
+    lead: "일상적으로 '메뉴'라고 부른다는 이유로 role=menu를 붙이면 desktop application식 arrow-key·roving tabindex 계약을 요구합니다. 일반 site navigation은 nav·list·link와 submenu를 여는 button으로 더 단순하고 견고하게 구현할 수 있습니다.",
+    explanations: [
+      "상위 항목이 page로 이동하면서 하위 목록도 여는 두 역할을 한 a click에 섞으면 keyboard·touch·hover 사용자가 예측하기 어렵습니다. navigation link와 disclosure button을 분리하거나 product가 선택한 한 역할을 명확히 합니다. button은 aria-expanded와 aria-controls를 실제 hidden state와 동기화합니다.",
+      "일반 disclosure navigation의 Tab sequence에는 button과 열린 submenu link가 DOM 순서로 포함됩니다. Enter/Space로 button을 열고 Escape로 닫을 때 focus를 trigger로 돌려 줍니다. optional arrow keys를 추가해도 Tab을 제거하지 않고 browser·screen reader command와 충돌을 검증합니다.",
+      "mobile hamburger button에는 accessible name, expanded state, controlled nav id와 충분한 target이 필요합니다. CSS breakpoint가 바뀌었을 때 hidden attribute·inert·display state와 aria-expanded가 drift하지 않아야 하며 orientation change·zoom·large text에서 focus가 offscreen으로 사라지지 않게 합니다.",
+      "navigation data를 CMS에서 생성할 때 href scheme/origin, duplicate id, 최대 depth·item count와 label을 검증합니다. 무제한 nested menus는 DOM·layout·keyboard 비용과 사용자 인지 부담을 늘립니다. 서버 authorization이 없는 hidden admin link는 보안 제어가 아니며 권한 없는 route는 server에서도 거부합니다.",
+    ],
+    concepts: [
+      { term: "disclosure button", definition: "관련 content의 표시/숨김을 전환하고 aria-expanded로 현재 상태를 알리는 native button입니다.", detail: ["aria-controls로 대상 id를 참조할 수 있습니다.", "이동 link와 역할을 분리합니다."] },
+      { term: "navigation menu versus ARIA menu", definition: "site links를 일상적으로 menu라 부르는 것과 application widget role=menu가 요구하는 focus·keyboard contract의 차이입니다.", detail: ["일반 site navigation에는 menu role이 대개 필요 없습니다.", "ARIA widget을 선택하면 전체 pattern을 구현해야 합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "breadcrumb-disclosure-navigation-state",
+        title: "breadcrumb current page와 disclosure button의 state·ownership을 한 문서에서 검증",
+        language: "html",
+        filename: "navigation-state-contract.html",
+        purpose: "두 이름 있는 nav, ordered breadcrumb, current page, button-controlled nested list를 programmatic activation한 뒤 exact DOM state로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>목록과 탐색 | HTML 학습자료</title>\n</head>\n<body>\n  <nav aria-label=\"현재 위치\">\n    <ol id=\"crumbs\">\n      <li><a href=\"/web/\">웹</a></li>\n      <li><a href=\"/web/html/\">HTML</a></li>\n      <li><a href=\"/web/html/lists\" aria-current=\"page\">목록과 탐색</a></li>\n    </ol>\n  </nav>\n  <nav aria-label=\"HTML 학습 주제\">\n    <ul>\n      <li>\n        <button id=\"topics-toggle\" type=\"button\" aria-expanded=\"false\" aria-controls=\"topics\">HTML 주제 펼치기</button>\n        <ul id=\"topics\" hidden>\n          <li><a href=\"/web/html/document\">문서 구조</a></li>\n          <li><a href=\"/web/html/lists\" aria-current=\"page\">목록과 탐색</a></li>\n        </ul>\n      </li>\n    </ul>\n  </nav>\n  <main><h1>목록과 탐색</h1><pre id=\"result\"></pre></main>\n  <script>\n    const toggle = document.querySelector(\"#topics-toggle\");\n    const topics = document.querySelector(\"#topics\");\n    toggle.addEventListener(\"click\", () => {\n      const expanded = toggle.getAttribute(\"aria-expanded\") === \"true\";\n      toggle.setAttribute(\"aria-expanded\", String(!expanded));\n      topics.hidden = expanded;\n    });\n    toggle.click();\n    const navNames = [...document.querySelectorAll(\"nav\")].map((nav) => nav.getAttribute(\"aria-label\"));\n    const lines = [\n      `navNames=${navNames.join(\",\")}`,\n      `crumbItems=${document.querySelectorAll(\"#crumbs > li\").length}`,\n      `crumbCurrent=${document.querySelector(\"#crumbs [aria-current=page]\").textContent}`,\n      `expanded=${toggle.getAttribute(\"aria-expanded\")}`,\n      `submenuHidden=${topics.hidden}`,\n      `submenuParent=${topics.parentElement.tagName}`,\n      `topicLinks=${topics.querySelectorAll(\"a\").length}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-14", explanation: "독립 title과 이름 있는 breadcrumb nav, 세 단계 ol, 마지막 current-page link를 만듭니다." },
+          { lines: "15-27", explanation: "두 번째 이름 있는 nav에서 native button이 hidden nested list를 aria-controls로 소유하고 각 link를 li 안에 둡니다." },
+          { lines: "28-35", explanation: "click handler가 aria-expanded와 hidden을 같은 boolean 전환으로 동기화하고 programmatic activation으로 실제 native button click path를 실행합니다." },
+          { lines: "36-46", explanation: "landmark names, breadcrumb/current, disclosure state, submenu ownership과 link count를 exact text로 기록합니다." },
+          { lines: "47-49", explanation: "문서를 닫습니다. 실제 production에서는 Escape와 focus return도 keyboard event test로 추가합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "navigation-state-contract.html을 열고 #result와 Accessibility tree의 두 navigation 이름·current state를 확인" },
+        output: { value: "navNames=현재 위치,HTML 학습 주제\ncrumbItems=3\ncrumbCurrent=목록과 탐색\nexpanded=true\nsubmenuHidden=false\nsubmenuParent=LI\ntopicLinks=2", explanation: ["두 nav는 목적이 다른 accessible name으로 구분됩니다.", "breadcrumb의 마지막 link와 submenu current link 모두 route의 현재 page를 aria-current=page로 표현합니다.", "button activation 뒤 expanded=true와 hidden=false가 동기화되고 submenu는 상위 LI가 소유합니다."] },
+        experiments: [
+          { change: "button을 a href=#로 바꾸고 preventDefault 없이 submenu를 토글합니다.", prediction: "URL fragment와 scroll/history가 불필요하게 바뀌며 link와 disclosure 역할이 섞입니다.", result: "이동하지 않는 action은 native button으로 구현합니다." },
+          { change: "nav 둘의 aria-label을 모두 `탐색`으로 바꿉니다.", prediction: "landmark 목록에서 현재 위치와 주제 navigation을 구분하기 어려워집니다.", result: "여러 같은 종류 landmark에는 목적을 설명하는 고유 이름을 줍니다." },
+        ],
+        sourceRefs: ["web-menu-source", "whatwg-sections-nav", "wai-page-structure", "wai-menus-source", "wai-apg-disclosure-nav", "wai-apg-breadcrumb", "wai-apg-keyboard"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "hamburger를 열어도 aria-expanded는 false이고 닫힌 submenu link에 Tab focus가 들어가거나 focus가 사라진다.", likelyCause: "visual CSS class, hidden/inert state, ARIA state와 focus lifecycle을 서로 다른 code path에서 갱신했습니다.", checks: ["button name·expanded·controls와 target id를 확인합니다.", "Tab/Shift+Tab/Enter/Space/Escape 순서를 기록합니다.", "breakpoint·orientation change 뒤 hidden/display/inert와 activeElement를 봅니다."], fix: "한 state reducer에서 DOM visibility와 aria-expanded를 동기화하고 닫을 때 trigger로 focus를 복구하며 hidden subtree를 tab sequence에서 제거합니다.", prevention: "mobile/desktop breakpoint와 keyboard·screen reader를 결합한 component integration test를 유지합니다." },
+    ],
+    comparisons: [{ title: "navigation submenu를 어떤 interaction으로 만들까요?", options: [
+      { name: "항상 펼친 nested links", chooseWhen: "항목 수가 적고 즉시 scan이 중요할 때", avoidWhen: "작은 화면에서 매우 긴 navigation을 만들 때", tradeoffs: ["JavaScript 없이 가장 견고합니다.", "화면 공간과 인지 부담이 늘 수 있습니다."] },
+      { name: "button disclosure", chooseWhen: "일반 site navigation의 하위 link를 필요할 때 펼칠 때", avoidWhen: "button이 실제 page 이동까지 동시에 해야 할 때", tradeoffs: ["native button과 Tab sequence를 유지합니다.", "expanded·hidden·Escape·focus를 동기화해야 합니다."] },
+      { name: "ARIA menu/menubar", chooseWhen: "desktop application식 command menu와 전체 arrow-key·roving focus contract가 진짜 필요할 때", avoidWhen: "일반 web page link navigation일 때", tradeoffs: ["복합 widget semantics를 제공합니다.", "구현·AT test 비용과 사용자 기대가 크게 늘어납니다."] },
+    ] }],
+    expertNotes: ["CSS hover만으로 submenu를 열면 touch·keyboard에서 접근할 수 없고 pointer가 떠날 때 content가 갑자기 사라질 수 있습니다. click disclosure를 baseline으로 하고 hover는 optional preview 수준으로 제한합니다.", "navigation analytics에 full href·user-specific label을 수집하면 privacy 문제가 생깁니다. stable route id와 disclosure action category만 최소 수집하고 retention을 제한합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "nested ul을 상위 li 다음 sibling으로 두고 margin만 주면 같은 의미인가요?", answer: "아닙니다. 화면 위치는 비슷해도 어느 item의 하위 목록인지 DOM ownership이 사라집니다. nested list는 소유하는 li 안에 둡니다." },
+  { question: "ol의 start·reversed·li value는 무엇을 표현하나요?", answer: "ordered list의 시작 ordinal, 진행 방향, 특정 item의 명시 ordinal을 표현합니다. 장식 marker와 별도 semantic 값입니다." },
+  { question: "breadcrumb는 browser 뒤로 가기 history와 같은가요?", answer: "아닙니다. breadcrumb는 site 정보 구조의 현재 위치까지 대표 경로이고 browser history는 사용자가 실제 방문한 시간 순서입니다." },
+  { question: "현재 navigation link에는 aria-selected를 쓰나요?", answer: "일반적으로 aria-current=page를 사용합니다. aria-selected는 tab·listbox 등 selection을 지원하는 widget state입니다." },
+  { question: "일반 site navigation에 role=menu를 붙이면 더 접근 가능한가요?", answer: "대개 아닙니다. menu role은 application widget식 arrow-key와 focus management를 기대하게 하므로 nav·list·link·button disclosure가 더 적합합니다." },
+  { question: "disclosure button의 aria-expanded만 바꾸면 충분한가요?", answer: "아닙니다. controlled content의 hidden/display/inert 상태와 동기화하고 Escape·focus return·Tab sequence를 함께 구현해야 합니다." },
+  { question: "CSS로 flex order를 바꾸면 keyboard navigation 순서도 자동으로 따라오나요?", answer: "보통 DOM tab 순서를 따릅니다. source DOM을 논리적인 읽기·focus 순서로 만들고 시각 재배치를 과도하게 사용하지 않습니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "`:scope > li`와 descendant li count로 direct item과 nested depth를 구분할 수 있다.",
+  "ol start·reversed·li value를 의미에 맞게 사용하고 marker text 중복을 피할 수 있다.",
+  "breadcrumb를 이름 있는 nav·ol·aria-current=page로 만들고 title·h1과 current label을 일치시킬 수 있다.",
+  "일반 site navigation과 ARIA menu widget의 keyboard·focus 계약 차이를 설명할 수 있다.",
+  "native button disclosure에서 aria-expanded·aria-controls·hidden·Escape·focus return을 동기화할 수 있다.",
+  "320px·200% zoom·long label·orientation change에서 navigation reflow와 visible focus를 검증할 수 있다.",
+  "CMS navigation href scheme·depth·count·label을 검증하고 hidden link를 authorization으로 오해하지 않을 수 있다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "wai-apg-disclosure-nav", repository: "W3C WAI ARIA Authoring Practices Guide", path: "patterns/disclosure/examples/disclosure-navigation/", publicUrl: "https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation/", usedFor: ["site navigation과 menu role 경계", "list hierarchy", "button aria-expanded·controls", "Tab·Escape·optional arrow keys"], evidence: "2026-07-14에 WAI APG의 disclosure navigation 예제와 일반 navigation에 menu role을 사용하지 않는 이유, keyboard·state guidance와 production 전 AT test 경고를 확인했습니다." },
+  { id: "wai-apg-breadcrumb", repository: "W3C WAI ARIA Authoring Practices Guide", path: "patterns/breadcrumb/examples/breadcrumb/", publicUrl: "https://www.w3.org/WAI/ARIA/apg/patterns/breadcrumb/examples/breadcrumb/", usedFor: ["breadcrumb nav label", "ordered list", "aria-current=page", "장식 separator"], evidence: "2026-07-14에 breadcrumb를 이름 있는 nav와 ol로 구성하고 current page를 표시하며 separator를 accessibility tree에서 중복 노출하지 않는 예제를 확인했습니다." },
+  { id: "wai-apg-keyboard", repository: "W3C WAI ARIA Authoring Practices Guide", path: "practices/keyboard-interface/", publicUrl: "https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/", usedFor: ["Tab sequence", "visible·persistent focus", "DOM order", "focus와 selection 차이", "composite widget keyboard"], evidence: "2026-07-14에 keyboard-operable interaction, predictable focus, DOM 기반 tab order와 ARIA composite focus 관리 원칙을 확인했습니다." },
+);
+
 export default session;

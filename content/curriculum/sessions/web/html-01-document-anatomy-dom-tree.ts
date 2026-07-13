@@ -255,4 +255,172 @@ const session = {
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["링크·URL은 html-03, image/media는 html-04, heading/text content는 html-02에서 element별로 확장합니다.", "parser insertion mode·accessibility tree·SPA document shell·client secret 경계는 원본 첫 문서를 전문가 수준 mental model로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "dom-node-taxonomy-and-collections",
+    title: "DOM은 화면 그림이 아니라 서로 다른 node type과 관계를 가진 살아 있는 tree입니다",
+    lead: "Elements panel에서 element만 보면 indentation text·comment·document type을 놓칩니다. Node와 Element API, 정적 NodeList와 live HTMLCollection을 구분해야 mutation 뒤 결과를 정확히 예측할 수 있습니다.",
+    explanations: [
+      "Document는 tree의 소유자이고 documentElement는 html element입니다. html 아래 head와 body가 있고 각 element 사이의 줄바꿈·들여쓰기도 Text node가 될 수 있습니다. 주석은 Comment node이며 화면 box가 없다고 DOM에서 사라지는 것은 아닙니다. nodeType·nodeName·parentNode·childNodes는 모든 node를, tagName·children·firstElementChild는 element 중심 관계를 관찰합니다.",
+      "childNodes는 Text와 Comment까지 포함하지만 children은 Element만 포함합니다. 따라서 `firstChild`가 줄바꿈 Text인 문서에서 곧바로 classList를 읽으면 실패할 수 있습니다. 구조를 찾는 목적이면 firstElementChild·children·querySelector를, 정확한 parser 산출물 감사이면 childNodes와 nodeType을 사용합니다.",
+      "querySelectorAll이 돌려주는 NodeList는 호출 시점의 정적 결과인 반면 getElementsByTagName·children 같은 HTMLCollection은 이후 mutation을 반영하는 live collection입니다. live collection을 순회하면서 child를 추가·삭제하면 length와 index가 즉시 변하므로 snapshot이 필요할 때 `Array.from(collection)`으로 고정합니다.",
+      "DOM 순서는 CSS의 시각적 재배치와 다를 수 있습니다. flex `order`, grid placement, absolute positioning으로 화면 순서를 바꾸더라도 keyboard·screen reader·copy 순서는 보통 document tree를 따릅니다. 정보와 interaction 순서는 source DOM에서 먼저 올바르게 만들고 시각 재배치는 보조로 사용합니다.",
+    ],
+    concepts: [
+      { term: "Node와 Element", definition: "Node는 Document·DocumentType·Element·Text·Comment 등을 아우르는 DOM tree 기본 interface이고 Element는 tag와 attribute를 갖는 node 종류입니다.", detail: ["모든 Element는 Node이지만 모든 Node가 Element는 아닙니다.", "API가 어떤 종류를 반환하는지 확인해야 null·property 오류를 줄입니다."] },
+      { term: "live collection", definition: "원본 DOM이 바뀌면 별도 재조회 없이 현재 구성과 length가 달라지는 collection입니다.", detail: ["HTMLCollection이 대표적입니다.", "mutation 중 순회는 snapshot 또는 역순 처리가 안전합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "dom-node-kinds-and-live-collections",
+        title: "Text·Comment·Element와 정적·live collection을 실제 mutation으로 구분",
+        language: "html",
+        filename: "dom-node-kinds.html",
+        purpose: "같은 main에서 childNodes와 children의 차이, querySelectorAll과 getElementsByTagName의 mutation 반영 차이를 브라우저가 출력한 고정 문자열로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>DOM 노드 종류</title>\n</head>\n<body>\n  <main id=\"note\">\n    <!-- 학습 메모 -->\n    <h1>DOM 노드 구분</h1>\n    <p>첫 문단</p>\n  </main>\n  <pre id=\"result\"></pre>\n  <script>\n    const main = document.querySelector(\"#note\");\n    const staticParagraphs = main.querySelectorAll(\"p\");\n    const liveParagraphs = main.getElementsByTagName(\"p\");\n    const added = document.createElement(\"p\");\n    added.textContent = \"추가 문단\";\n    main.append(added);\n\n    const textCount = [...main.childNodes]\n      .filter((node) => node.nodeType === Node.TEXT_NODE).length;\n    const commentCount = [...main.childNodes]\n      .filter((node) => node.nodeType === Node.COMMENT_NODE).length;\n    const lines = [\n      `childNodes=${main.childNodes.length}`,\n      `children=${main.children.length}`,\n      `textNodes=${textCount}`,\n      `comments=${commentCount}`,\n      `firstElement=${main.firstElementChild.tagName}`,\n      `staticParagraphs=${staticParagraphs.length}`,\n      `liveParagraphs=${liveParagraphs.length}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-13", explanation: "표준 문서 안 main에 indentation Text, 한 Comment, h1과 p Element를 둡니다. 결과 pre는 main 밖이라 관찰 대상 collection에 섞이지 않습니다." },
+          { lines: "14-20", explanation: "mutation 전 정적 NodeList와 live HTMLCollection을 얻은 뒤 새 p를 생성해 append합니다." },
+          { lines: "22-25", explanation: "childNodes에서 nodeType 상수로 Text와 Comment를 세어 element-only API와 비교합니다." },
+          { lines: "26-35", explanation: "전체 node 수, element 수, 첫 element, mutation 전후 collection 길이를 newline으로 고정해 화면의 pre에 기록합니다." },
+          { lines: "36-38", explanation: "script와 문서를 닫습니다. 이 출력은 console formatter가 아니라 plain text라 브라우저별 객체 표현 차이가 없습니다." },
+        ],
+        run: { environment: ["Chromium·Firefox·Safari 계열 현대 browser", "JavaScript 활성화", "network 불필요"], command: "dom-node-kinds.html을 열고 #result의 일곱 줄을 확인" },
+        output: { value: "childNodes=8\nchildren=3\ntextNodes=4\ncomments=1\nfirstElement=H1\nstaticParagraphs=1\nliveParagraphs=2", explanation: ["append된 p까지 element child는 세 개지만 indentation Text와 Comment까지 세면 childNodes는 여덟 개입니다.", "정적 NodeList는 mutation 전 p 하나를 유지하고 live HTMLCollection은 두 개로 갱신됩니다.", "tagName은 HTML DOM에서 대문자 H1로 직렬화됩니다."] },
+        experiments: [
+          { change: "`main.firstChild.tagName`을 출력합니다.", prediction: "firstChild는 indentation Text이므로 tagName이 undefined입니다.", result: "구조 element가 필요할 때 firstElementChild를 선택해야 합니다." },
+          { change: "liveParagraphs를 앞에서부터 순회하며 각 p를 remove합니다.", prediction: "제거 즉시 index가 당겨져 일부 node를 건너뛸 수 있습니다.", result: "Array.from으로 snapshot을 만들거나 while(collection.length) 같은 명시적 전략을 사용합니다." },
+        ],
+        sourceRefs: ["dom-standard", "mdn-dom-guide", "whatwg-dom-conformance"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "첫 child에 classList를 적용했는데 undefined 오류가 나거나 예상하지 않은 공백 node가 선택된다.", likelyCause: "firstChild·childNodes가 indentation Text까지 반환한다는 사실을 element-only API처럼 가정했습니다.", checks: ["nodeType과 nodeName을 출력합니다.", "firstChild와 firstElementChild를 비교합니다.", "View Source의 줄바꿈·공백을 확인합니다."], fix: "element 구조가 목적이면 firstElementChild·children·querySelector를 사용하고 Text가 목적이면 nodeType을 분기합니다.", prevention: "DOM API wrapper와 test fixture에 Text·Comment가 섞인 문서를 포함합니다." },
+    ],
+    comparisons: [{ title: "현재 DOM 집합을 어떤 collection으로 보관할까요?", options: [
+      { name: "정적 NodeList", chooseWhen: "조회 시점 snapshot을 순회·비교할 때", avoidWhen: "이후 mutation을 자동 반영해야 할 때", tradeoffs: ["순회 중 DOM 변경에도 대상 집합이 안정적입니다.", "최신 상태가 필요하면 다시 조회해야 합니다."] },
+      { name: "live HTMLCollection", chooseWhen: "현재 element children·tag 집합을 즉시 반영해야 할 때", avoidWhen: "순회 중 같은 collection을 mutation할 때", tradeoffs: ["자동으로 최신 DOM을 반영합니다.", "length/index가 도중에 변해 디버깅이 어려울 수 있습니다."] },
+    ] }],
+    expertNotes: ["대규모 subtree에서 반복 query와 layout-dependent property를 섞으면 style/layout flush 비용이 커질 수 있습니다. DOM 조회 결과를 필요한 scope에서 재사용하되 live collection의 최신성 의미를 명시합니다.", "Accessibility tree는 DOM을 그대로 복사하지 않습니다. CSS visibility, native semantics, ARIA, accessible name 계산을 반영하므로 DOM tree와 별도로 브라우저 도구에서 확인합니다."],
+  },
+  {
+    id: "safe-dom-construction-and-mutation",
+    title: "DOM 변경은 문자열 HTML 삽입이 아니라 신뢰 경계·의미·focus를 보존하는 작업입니다",
+    lead: "사용자 문자열을 화면에 보여 주는 단순 요구도 innerHTML을 선택하는 순간 HTML parser와 scriptable URL·event attribute를 함께 허용할 수 있습니다. plain text와 제한된 rich content를 다른 pipeline으로 다룹니다.",
+    explanations: [
+      "textContent는 문자열을 Text node로 넣으므로 `<strong>` 같은 문자가 markup으로 해석되지 않습니다. 사용자 이름·검색어·오류 메시지처럼 markup이 필요 없는 값의 기본 선택입니다. `innerHTML`은 HTML fragment parser를 호출하므로 입력이 신뢰되지 않으면 XSS sink가 됩니다.",
+      "제한된 rich text가 정말 필요하면 검증된 sanitizer와 작은 allowlist, URL scheme·origin 정책, Trusted Types 같은 방어를 application 경계에서 설계합니다. 단순 regex로 tag를 지우는 방식은 entity·malformed markup·namespace·URL 우회를 모두 처리하지 못합니다.",
+      "createElement·setAttribute·classList·append로 구조를 만들면 code review에서 element와 data 경계를 볼 수 있습니다. 그래도 `href`, `src`, `style`, event handler 같은 속성은 별도 정책이 필요합니다. 안전한 DOM API라는 이름이 business authorization이나 URL 검증을 대신하지 않습니다.",
+      "subtree를 통째로 교체하면 현재 focus, selection, media 재생 상태와 event listener가 사라질 수 있습니다. stable key와 최소 mutation을 사용하고 사용자 action 뒤 focus가 합리적인 위치에 남는지 keyboard로 검증합니다.",
+    ],
+    concepts: [
+      { term: "HTML injection sink", definition: "문자열을 HTML·script·URL 문맥으로 해석해 공격자가 DOM 구조나 실행 경로를 바꿀 수 있는 API 지점입니다.", detail: ["innerHTML·insertAdjacentHTML 등이 대표적입니다.", "입력 검증과 출력 문맥 방어가 함께 필요합니다."] },
+      { term: "textContent", definition: "node의 descendant text를 읽거나 문자열을 Text node로 교체하는 DOM property입니다.", detail: ["markup 문자를 literal text로 다룹니다.", "사용자에게 보이는 line break·layout은 CSS와 element 구조가 결정합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "safe-textcontent-user-label",
+        title: "공격처럼 보이는 문자열을 실행 가능한 markup이 아닌 Text node로 출력",
+        language: "html",
+        filename: "safe-user-label.html",
+        purpose: "신뢰하지 않는 plain text를 textContent에 넣었을 때 element가 생성되지 않고 원문이 그대로 남는 것을 DOM query로 관찰합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>안전한 텍스트 출력</title>\n</head>\n<body>\n  <main>\n    <h1>사용자 표시 이름</h1>\n    <p id=\"label\"></p>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const untrusted = '<img src=x onerror=alert(1)><strong>관리자</strong>';\n    const label = document.querySelector(\"#label\");\n    label.textContent = untrusted;\n\n    const lines = [\n      `text=${label.textContent}`,\n      `elementChildren=${label.children.length}`,\n      `containsImage=${label.querySelector(\"img\") !== null}`,\n      `containsStrong=${label.querySelector(\"strong\") !== null}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-11", explanation: "표준 문서와 사용자 표시 영역, 기계적으로 확인할 result 영역을 분리합니다." },
+          { lines: "12-15", explanation: "event attribute와 strong처럼 보이는 신뢰하지 않는 문자열을 textContent로 할당합니다. parser를 호출하지 않고 Text node 하나를 만듭니다." },
+          { lines: "17-23", explanation: "보이는 원문과 element child 수, img·strong selector 결과를 한 문자열로 기록합니다." },
+          { lines: "24-27", explanation: "문서를 닫습니다. alert가 실행되지 않는다는 소극적 주장 대신 생성 element가 0이라는 DOM 결과를 검증합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "safe-user-label.html을 열고 #result text와 Elements의 #label child를 확인" },
+        output: { value: "text=<img src=x onerror=alert(1)><strong>관리자</strong>\nelementChildren=0\ncontainsImage=false\ncontainsStrong=false", explanation: ["꺾쇠와 attribute 문자열이 그대로 text로 보이고 img·strong element는 생성되지 않습니다.", "plain text 요구에서는 sanitizer보다 더 작은 공격 표면인 textContent가 기본입니다.", "rich HTML 요구가 생기면 이 예제를 innerHTML로 바꾸는 대신 별도 allowlist pipeline을 설계해야 합니다."] },
+        experiments: [
+          { change: "untrusted 값을 정상 사용자 이름 `홍길동`으로 바꿉니다.", prediction: "elementChildren=0과 두 selector false는 유지되고 text만 바뀝니다.", result: "plain text invariant는 입력 내용에 의존하지 않습니다." },
+          { change: "label.innerHTML = untrusted로 바꾼 별도 격리 fixture를 검사하되 event 실행은 차단합니다.", prediction: "img와 strong element가 생성됩니다.", result: "같은 문자열도 선택한 DOM sink에 따라 parser 적용 여부가 달라집니다." },
+        ],
+        sourceRefs: ["dom-standard", "whatwg-parsing-algorithms", "mdn-dom-guide"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "댓글·검색어를 출력한 뒤 예상하지 않은 element가 생기거나 event handler가 실행된다.", likelyCause: "plain text를 innerHTML·insertAdjacentHTML 같은 HTML parsing sink에 전달했습니다.", checks: ["입력 source와 DOM sink를 따라갑니다.", "Elements에서 생성된 element·attribute를 확인합니다.", "sanitizer version·allowlist·URL policy와 CSP report를 확인합니다."], fix: "plain text는 textContent로 바꾸고 rich text는 검증된 sanitizer·URL allowlist·Trusted Types 정책을 거칩니다.", prevention: "lint·code review·security test에서 HTML sink 사용을 중앙화하고 malicious fixture를 유지합니다." },
+    ],
+    expertNotes: ["textContent는 XSS 경계를 줄이지만 Unicode bidi control, confusable identifier, 지나치게 긴 text 같은 display·abuse 문제는 별도 validation이 필요합니다.", "DOM mutation telemetry에 원문 사용자 content를 기록하면 privacy 사고가 됩니다. element id·operation type·error category처럼 최소한의 비식별 정보만 수집합니다."],
+  },
+  {
+    id: "template-fragment-lifecycle-validation",
+    title: "template·DocumentFragment·문서 lifecycle을 이해하면 대량 DOM 생성과 검증을 예측 가능하게 만들 수 있습니다",
+    lead: "template의 content는 현재 document 화면에 즉시 렌더링되는 child가 아니라 별도 DocumentFragment입니다. clone·bind·append 단계를 나누면 중복 id, event 연결, 성능과 hydration mismatch를 검토할 수 있습니다.",
+    explanations: [
+      "template element의 markup은 parser가 읽지만 template.content라는 inert DocumentFragment 안에 보관됩니다. cloneNode(true)로 복제한 뒤 data를 textContent로 주입하고 실제 document에 append해야 화면과 document query 대상이 됩니다. template 안 script·resource의 활성화 경계는 종류와 삽입 방식에 따라 달라지므로 신뢰하지 않는 template을 안전하다고 가정하지 않습니다.",
+      "DocumentFragment에 여러 node를 모아 한 번 append하면 fragment의 children이 destination으로 이동하고 fragment는 비게 됩니다. 이것이 무조건 단일 layout만 만든다고 단정할 수는 없지만, 반복 DOM 연결과 관찰 가능한 중간 상태를 줄여 update를 transaction처럼 구성하는 데 도움이 됩니다.",
+      "defer script는 document parsing과 병렬 fetch 후 document 순서를 지키며 DOMContentLoaded 전에 실행됩니다. module은 기본적으로 defer와 비슷하지만 dependency graph·top-level await가 timing에 영향을 줄 수 있습니다. 단순히 `setTimeout`으로 DOM 준비를 추측하지 말고 script 위치·defer/module 계약 또는 DOMContentLoaded를 사용합니다.",
+      "View Source는 server가 보낸 text, Elements는 parser·script 이후 현재 DOM입니다. SSR hydration에서는 server markup과 첫 client render가 일치해야 하며, clock·random·locale·권한 data 차이는 mismatch를 만듭니다. build에서 validator, runtime에서 DOM assertion, 접근성 tree와 keyboard 수동 검사를 각각 맡깁니다.",
+    ],
+    concepts: [
+      { term: "DocumentFragment", definition: "parent가 없는 가벼운 node tree로, append할 때 fragment 자체가 아니라 그 children이 destination으로 이동합니다.", detail: ["template.content가 DocumentFragment입니다.", "완성 전 subtree를 document 밖에서 조립할 수 있습니다."] },
+      { term: "DOMContentLoaded", definition: "HTML parsing과 defer/module script 실행이 끝나 DOM을 안전하게 탐색할 수 있음을 알리는 document event입니다.", detail: ["image 등 모든 subresource load 완료를 기다리는 load와 다릅니다.", "async script timing과는 별도입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "template-document-fragment-batch",
+        title: "template clone 두 개를 fragment에서 완성한 뒤 main으로 한 번에 이동",
+        language: "html",
+        filename: "template-fragment.html",
+        purpose: "template.content의 inert성, clone별 text 주입, DocumentFragment append 뒤 이동 semantics를 exact DOM count로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>학습 카드 조립</title>\n</head>\n<body>\n  <main id=\"cards\"><h1>HTML 핵심 카드</h1></main>\n  <template id=\"card-template\">\n    <article class=\"card\"><h2></h2><p></p></article>\n  </template>\n  <pre id=\"result\"></pre>\n  <script>\n    const template = document.querySelector(\"#card-template\");\n    const fragment = document.createDocumentFragment();\n    for (const [title, body] of [[\"DOM\", \"현재 문서 tree\"], [\"접근성\", \"의미와 이름\"]]) {\n      const card = template.content.firstElementChild.cloneNode(true);\n      card.querySelector(\"h2\").textContent = title;\n      card.querySelector(\"p\").textContent = body;\n      fragment.append(card);\n    }\n    const before = fragment.childElementCount;\n    document.querySelector(\"#cards\").append(fragment);\n    const headings = [...document.querySelectorAll(\"#cards article h2\")]\n      .map((heading) => heading.textContent).join(\",\");\n    const lines = [\n      `fragmentBefore=${before}`,\n      `fragmentAfter=${fragment.childElementCount}`,\n      `articles=${document.querySelectorAll(\"#cards article\").length}`,\n      `headings=${headings}`,\n      `templateStill=${template.content.childElementCount}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-12", explanation: "main과 화면에 직접 나타나지 않는 card template, 결과 영역을 선언합니다. template 안에는 id를 두지 않아 clone 뒤 중복 id를 피합니다." },
+          { lines: "13-21", explanation: "template의 첫 element를 deep clone하고 각 카드의 text만 textContent로 주입해 detached fragment에 모읍니다." },
+          { lines: "22-25", explanation: "append 전 fragment child 수를 저장하고 main에 이동한 뒤 실제 document heading을 DOM 순서로 수집합니다." },
+          { lines: "26-33", explanation: "fragment가 비었는지, article 두 개와 heading 순서, 원본 template content가 남았는지를 plain text로 기록합니다." },
+          { lines: "34-36", explanation: "script와 문서를 닫습니다. fragment의 이동과 template 원본 보존을 독립적으로 확인할 수 있습니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "template-fragment.html을 열고 #result와 #cards의 DOM 순서를 확인" },
+        output: { value: "fragmentBefore=2\nfragmentAfter=0\narticles=2\nheadings=DOM,접근성\ntemplateStill=1", explanation: ["DocumentFragment의 두 article은 main으로 이동하므로 append 뒤 fragment child 수는 0입니다.", "template.content는 복제 원본이므로 여전히 article 하나를 보유합니다.", "실제 document query에는 template content가 섞이지 않고 main에 삽입된 두 article만 포함됩니다."] },
+        experiments: [
+          { change: "template article에 고정 id='card'를 추가해 두 번 clone합니다.", prediction: "실제 document에 중복 id가 생겨 getElementById와 label/reference 계약이 모호해집니다.", result: "clone template에는 id를 피하거나 삽입마다 unique id와 참조 attribute를 함께 생성합니다." },
+          { change: "두 번째 카드 삽입 전에 fragment를 console에서 펼쳐 둡니다.", prediction: "DevTools lazy object view가 나중 상태를 보일 수 있습니다.", result: "관찰 시점의 원시 count·문자열 snapshot을 남겨 디버깅 ambiguity를 줄입니다." },
+        ],
+        sourceRefs: ["web-index-jsp-source", "dom-standard", "whatwg-dom-conformance", "whatwg-metadata"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "template로 만든 카드가 보이지 않거나 document.querySelector가 template 내부 항목을 찾지 못한다.", likelyCause: "template.content를 clone·append하지 않고 template의 inert content가 현재 document child라고 가정했습니다.", checks: ["template.content.nodeType과 childElementCount를 확인합니다.", "clone이 실제 destination에 append됐는지 봅니다.", "중복 id와 hidden/CSS 상태를 확인합니다."], fix: "template.content에서 필요한 subtree를 clone하고 data를 안전하게 주입한 뒤 명시적 destination에 append합니다.", prevention: "component test에서 삽입 전후 fragment·destination count와 unique id·accessible name을 검증합니다." },
+    ],
+    comparisons: [{ title: "DOM 준비 시점을 어떻게 보장할까요?", options: [
+      { name: "body 끝 script", chooseWhen: "작은 문서에서 앞서 파싱된 DOM만 즉시 사용할 때", avoidWhen: "dependency·cache·module graph가 커져 head resource 관리가 필요할 때", tradeoffs: ["mental model이 단순합니다.", "공통 head resource 정책과 분리될 수 있습니다."] },
+      { name: "defer 또는 module", chooseWhen: "head에서 resource를 발견하면서 parser 이후 순서 있는 실행이 필요할 때", avoidWhen: "독립 third-party script가 parsing과 무관하게 즉시 실행돼야 할 때", tradeoffs: ["parsing을 막지 않고 DOM 준비 전후 계약이 명확합니다.", "module dependency와 top-level await timing을 이해해야 합니다."] },
+      { name: "DOMContentLoaded listener", chooseWhen: "script가 async·동적 위치 등 여러 경로에서 실행되어 DOM 준비 여부를 분기해야 할 때", avoidWhen: "이미 event가 지난 뒤 listener만 등록할 수 있는 code path에서 readyState 처리가 없을 때", tradeoffs: ["문서 lifecycle을 직접 표현합니다.", "중복 initialization 방지와 already-loaded branch가 필요합니다."] },
+    ] }],
+    expertNotes: ["SSR template와 client component가 같은 landmark·heading·id를 생성하는지 DOM snapshot과 hydration warning을 함께 봅니다. production warning을 숨기는 방식은 mismatch를 해결하지 않습니다.", "대량 append 성능은 node 수·style selector·layout read/write 교차에 좌우됩니다. fragment 사용만으로 충분하다고 가정하지 말고 Performance trace에서 style/layout/paint와 interaction latency를 측정합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "childNodes와 children은 무엇이 다른가요?", answer: "childNodes는 Text·Comment 등 모든 child Node를 포함하고 children은 child Element만 포함하는 live HTMLCollection입니다." },
+  { question: "querySelectorAll 결과는 DOM mutation 뒤 자동 갱신되나요?", answer: "아닙니다. 일반적으로 호출 시점의 정적 NodeList입니다. getElementsByTagName이나 children 같은 live collection과 구분합니다." },
+  { question: "firstChild에 classList가 없을 수 있는 이유는 무엇인가요?", answer: "indentation 줄바꿈이 첫 Text node일 수 있기 때문입니다. 첫 element가 필요하면 firstElementChild를 사용합니다." },
+  { question: "사용자 이름을 출력할 때 innerHTML보다 textContent가 기본인 이유는 무엇인가요?", answer: "textContent는 문자열을 HTML로 parsing하지 않고 Text node로 넣어 불필요한 element·event attribute 생성 공격면을 닫기 때문입니다." },
+  { question: "template 안 content가 즉시 화면과 document query에 포함되나요?", answer: "아닙니다. template.content라는 inert DocumentFragment에 있고 clone 또는 이동해 실제 document에 append해야 합니다." },
+  { question: "DocumentFragment를 append하면 fragment 자체가 DOM element로 남나요?", answer: "아닙니다. fragment의 children이 destination으로 이동하고 fragment는 비게 됩니다." },
+  { question: "DOMContentLoaded와 load는 같은 시점인가요?", answer: "아닙니다. DOMContentLoaded는 parsing과 defer/module 실행 완료를 뜻하고 load는 image 등 관련 resource 완료까지 기다립니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "Node·Element·Text·Comment·DocumentType의 nodeType과 tree 관계를 구분할 수 있다.",
+  "childNodes·children, firstChild·firstElementChild를 목적에 맞게 선택할 수 있다.",
+  "정적 NodeList와 live HTMLCollection을 mutation 전후 exact count로 검증할 수 있다.",
+  "plain text는 textContent로 출력하고 rich HTML sanitizer·URL policy 책임을 분리할 수 있다.",
+  "createElement·classList·append로 DOM 구조와 신뢰하지 않는 data 경계를 드러낼 수 있다.",
+  "template.content를 clone해 DocumentFragment에서 조립하고 중복 id를 방지할 수 있다.",
+  "script 위치·defer/module·DOMContentLoaded의 lifecycle을 설명하고 source·DOM·접근성 tree를 함께 검증할 수 있다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "dom-standard", repository: "WHATWG DOM Living Standard", path: "dom/", publicUrl: "https://dom.spec.whatwg.org/", usedFor: ["node tree", "Node·Element·Text·Comment", "NodeList·HTMLCollection", "DocumentFragment", "mutation"], evidence: "2026-07-14에 WHATWG DOM의 tree·node interfaces·old-style collections·DocumentFragment와 mutation algorithm 구성을 확인했습니다." },
+  { id: "whatwg-parsing-algorithms", repository: "WHATWG HTML Living Standard", path: "multipage/parsing.html", publicUrl: "https://html.spec.whatwg.org/multipage/parsing.html", usedFor: ["HTML fragment parsing", "tree construction", "script와 parser lifecycle", "error recovery"], evidence: "2026-07-14에 HTML parsing과 tree-construction 규칙을 확인해 innerHTML fragment parsing·source/DOM 차이와 lifecycle 설명의 기준으로 사용했습니다." },
+  { id: "whatwg-dom-conformance", repository: "WHATWG HTML Living Standard", path: "multipage/dom.html", publicUrl: "https://html.spec.whatwg.org/multipage/dom.html", usedFor: ["HTML document DOM", "content model", "semantics와 DOM", "global attributes"], evidence: "2026-07-14에 HTML 문서가 DOM node tree로 표현되는 규칙과 document conformance 경계를 확인했습니다." },
+  { id: "whatwg-metadata", repository: "WHATWG HTML Living Standard", path: "multipage/semantics.html#the-meta-element", publicUrl: "https://html.spec.whatwg.org/multipage/semantics.html#the-meta-element", usedFor: ["head metadata", "charset", "title과 document shell", "template 생성 문서의 metadata 책임"], evidence: "2026-07-14에 head metadata element 정의와 문서 metadata 배치 규칙을 확인했습니다." },
+  { id: "mdn-dom-guide", repository: "MDN Web Docs", path: "en-US/docs/Web/API/Document_Object_Model", publicUrl: "https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model", usedFor: ["DOM 입문 mental model", "document·node API", "DOM 생성·조작", "browser 실습 연결"], evidence: "2026-07-14에 MDN의 DOM 소개와 주요 interface·node 생성/조작 학습 경로를 WHATWG normative source의 실습 보조 자료로 확인했습니다." },
+);
+
 export default session;

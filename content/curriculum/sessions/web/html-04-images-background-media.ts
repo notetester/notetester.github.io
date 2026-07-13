@@ -876,4 +876,139 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "image-fetch-decode-layout-performance-contract",
+    title: "이미지는 URL 하나가 아니라 선택·fetch·decode·layout·paint가 이어지는 성능 계약입니다",
+    lead: "파일 크기만 줄여도 width·height가 없으면 layout shift가 생기고, 모든 image를 lazy로 만들면 첫 화면 LCP가 늦어질 수 있습니다. content 역할과 viewport 위치를 기준으로 속성과 측정 지표를 함께 정합니다.",
+    explanations: [
+      "width와 height content attributes는 원본 pixel 크기를 강제하는 단순 CSS가 아니라 intrinsic aspect ratio를 계산해 resource가 오기 전 공간을 예약하는 데 사용됩니다. responsive CSS로 `max-width:100%; height:auto`를 적용해도 올바른 비율 attribute를 유지하면 cumulative layout shift를 줄일 수 있습니다. 실제 표시 비율과 다른 값을 넣으면 왜곡·shift가 생깁니다.",
+      "loading=lazy는 viewport 밖 non-critical image의 network·decode 비용을 미룰 수 있지만 hero/LCP image에 무조건 적용하면 가장 중요한 content가 늦어집니다. `fetchpriority=high/low`도 browser scheduler에 주는 hint일 뿐 보장이나 bandwidth 생성 도구가 아닙니다. preload·priority를 남발하면 서로 경쟁하므로 waterfall과 LCP attribution으로 결정합니다.",
+      "decoding=async는 decode scheduling hint이며 decode 완료·paint 시점을 application에 보장하지 않습니다. 실제 decode가 필요한 script flow에서는 `HTMLImageElement.decode()` promise와 error fallback을 사용하되, network failure·unsupported format·memory pressure를 처리합니다. complete=true도 성공만 의미하지 않을 수 있으므로 naturalWidth와 error event를 함께 봅니다.",
+      "responsive candidate 선택은 srcset descriptor, sizes, viewport, device pixel ratio, supported type와 browser cache 정책이 함께 결정합니다. `currentSrc`가 기대와 다르면 raw src만 보지 말고 picture/source media·type, sizes의 실제 slot width, Network initiator와 DPR을 기록합니다. screenshot만으로 전송 byte를 알 수 없습니다.",
+    ],
+    concepts: [
+      { term: "intrinsic aspect ratio", definition: "media 자체 width와 height가 만드는 비율로, resource load 전후 layout 공간과 responsive sizing 계산에 사용됩니다.", detail: ["HTML width/height attribute로 사전 힌트를 제공할 수 있습니다.", "CSS rendered size와 원본 pixel 수는 별개입니다."] },
+      { term: "decode", definition: "압축된 image bytes를 browser가 화면에 사용할 pixel representation으로 해석하는 단계입니다.", detail: ["network 완료와 별도 비용입니다.", "decode scheduling hint와 완료 promise를 구분합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "image-intrinsic-rendered-contract",
+        title: "1×1 data image로 intrinsic·attribute·rendered dimensions와 load 상태 비교",
+        language: "html",
+        filename: "image-dimension-contract.html",
+        purpose: "network 변동 없는 tiny image를 decode한 뒤 natural size, HTML dimension attributes, CSS rendered size와 loading hints를 exact output으로 기록합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>이미지 크기 계약</title>\n  <style>img { display: block; width: 160px; height: auto; }</style>\n</head>\n<body>\n  <main>\n    <h1>이미지 pipeline 점검</h1>\n    <img id=\"pixel\" src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==\" alt=\"\" width=\"160\" height=\"90\" loading=\"eager\" decoding=\"async\" fetchpriority=\"low\">\n    <pre id=\"result\">decode 대기</pre>\n  </main>\n  <script>\n    const image = document.querySelector(\"#pixel\");\n    async function inspect() {\n      try { await image.decode(); } catch { /* error 상태도 아래에서 관찰 */ }\n      const rect = image.getBoundingClientRect();\n      const lines = [\n        `complete=${image.complete}`,\n        `natural=${image.naturalWidth}x${image.naturalHeight}`,\n        `attributes=${image.getAttribute(\"width\")}x${image.getAttribute(\"height\")}`,\n        `rendered=${Math.round(rect.width)}x${Math.round(rect.height)}`,\n        `loading=${image.loading}`,\n        `decoding=${image.decoding}`,\n        `fetchPriority=${image.fetchPriority}`,\n        `altLength=${image.alt.length}`,\n      ];\n      document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n    }\n    inspect();\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "CSS rendered width를 160px로 고정하고 height:auto로 intrinsic ratio를 사용하도록 준비합니다." },
+          { lines: "8-13", explanation: "network가 필요 없는 1×1 transparent GIF에 decorative empty alt, 160×90 HTML dimension attributes와 명시적 loading/decode/priority hints를 둡니다." },
+          { lines: "14-18", explanation: "image.decode를 기다리되 failure도 catch해 이후 complete·natural size 관찰이 반드시 실행되게 합니다." },
+          { lines: "19-29", explanation: "natural, raw attribute, layout rect와 reflected hint·alt 값을 plain text로 기록합니다." },
+          { lines: "30-34", explanation: "inspect를 호출하고 문서를 닫습니다. 비동기 결과가 `decode 대기`를 실제 값으로 교체합니다." },
+        ],
+        run: { environment: ["Chromium 계열 현대 browser", "JavaScript 활성화", "network 불필요"], command: "image-dimension-contract.html을 열고 #result가 decode 대기에서 여덟 줄로 바뀔 때까지 기다림" },
+        output: { value: "complete=true\nnatural=1x1\nattributes=160x90\nrendered=160x160\nloading=eager\ndecoding=async\nfetchPriority=low\naltLength=0", explanation: ["resource intrinsic ratio는 1:1이라 CSS height:auto의 rendered box는 160×160입니다.", "HTML attributes 160×90은 실제 resource와 비율이 달라 load 전 예약 공간과 최종 layout 사이 shift 위험을 보여 줍니다.", "empty alt는 decorative image 계약이며 정보 image라면 목적을 전달하는 대체 text가 필요합니다."] },
+        experiments: [
+          { change: "height attribute를 160으로 고칩니다.", prediction: "attribute ratio와 decoded intrinsic ratio가 모두 1:1이 되어 예약 공간과 최종 box가 일치합니다.", result: "width/height는 asset pipeline이 실제 metadata에서 생성해야 합니다." },
+          { change: "첫 화면 핵심 hero에 loading=lazy를 적용하고 Performance panel에서 LCP를 비교합니다.", prediction: "환경에 따라 fetch 시작이 늦어져 LCP가 악화될 수 있습니다.", result: "loading hint는 위치·우선순위별 실제 metric으로 결정합니다." },
+        ],
+        sourceRefs: ["web-img-source", "web-float-source", "web-image-assets", "whatwg-images", "wai-images"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "페이지 처음 열 때 text가 아래로 밀리거나 hero가 늦게 나타나는데 모든 img에 lazy·low priority가 붙어 있다.", likelyCause: "실제 asset 비율과 다른 width/height 또는 LCP image까지 지연하는 일괄 loading policy를 사용했습니다.", checks: ["naturalWidth/Height와 attribute·rendered ratio를 비교합니다.", "Performance의 Layout Shift와 LCP attribution을 확인합니다.", "Network initiator·priority·currentSrc·transferred bytes를 봅니다."], fix: "asset metadata에서 정확한 dimension을 생성하고 above-the-fold 핵심 image는 eager/default 적정 priority로, offscreen image만 측정 근거에 따라 lazy 처리합니다.", prevention: "image manifest에 dimensions·format·byte budget을 두고 CLS/LCP·broken asset·candidate selection을 CI와 RUM에서 감시합니다." },
+    ],
+    comparisons: [{ title: "image loading priority를 어떻게 정할까요?", options: [
+      { name: "eager/default", chooseWhen: "첫 화면 핵심 content나 곧 필요한 작은 image일 때", avoidWhen: "긴 page 아래 gallery 전체일 때", tradeoffs: ["필요 resource 발견·fetch가 빠릅니다.", "초기 bandwidth 경쟁이 커질 수 있습니다."] },
+      { name: "lazy", chooseWhen: "viewport에서 멀고 없어도 초기 task가 가능한 image일 때", avoidWhen: "LCP hero·첫 card·layout 판단에 즉시 필요한 media일 때", tradeoffs: ["초기 transfer·decode를 줄입니다.", "scroll 접근 시 지연·placeholder 설계가 필요합니다."] },
+      { name: "priority hint", chooseWhen: "waterfall evidence로 browser 기본 우선순위가 핵심 resource와 어긋날 때", avoidWhen: "모든 resource를 high로 표시하거나 측정 없이 최적화할 때", tradeoffs: ["scheduler 의도를 보완합니다.", "hint일 뿐이며 과용하면 구분 가치가 사라집니다."] },
+    ] }],
+    expertNotes: ["image CDN transformation URL에는 signed parameter·cache key·format negotiation이 얽힙니다. 원본 private asset URL과 user identifiers를 client log·markup에 노출하지 않고 signed URL 만료와 cache partition을 검토합니다.", "browser benchmark는 cold/warm cache, DPR, viewport, network/CPU throttling을 기록해야 재현됩니다. 한 번의 DevTools screenshot으로 성능 결론을 내리지 않습니다."],
+  },
+  {
+    id: "media-state-captions-and-user-control",
+    title: "audio·video는 파일 표시가 아니라 비동기 state machine과 사용자 제어·caption 계약입니다",
+    lead: "controls가 보인다는 사실만으로 접근 가능한 media가 되지 않습니다. 대체 transcript, synchronized captions, keyboard control, autoplay 정책과 failure state를 content lifecycle 전체에서 관리합니다.",
+    explanations: [
+      "media element는 networkState·readyState·currentTime·paused·ended·error와 load metadata/canplay/play/pause/timeupdate/ended/error event를 가집니다. event 순서를 하나의 고정 happy path로 가정하지 말고 seeking, retry, source fallback, background tab과 slow network를 포함한 state transition을 검증합니다.",
+      "controls attribute는 browser native UI를 제공하므로 custom player보다 keyboard·platform integration baseline이 강합니다. custom controls가 필요하면 native button, accessible names, focus order, slider semantics, elapsed/remaining time announcement와 fullscreen/captions state를 전부 구현하고 target browser·screen reader 조합에서 검증합니다.",
+      "caption track은 대화뿐 아니라 이해에 필요한 비음성 소리를 synchronized text로 제공합니다. transcript는 검색·번역·빠른 탐색에 유용하지만 영상 속 동작·시각 정보가 핵심이면 audio description 또는 동등한 text 설명이 별도로 필요합니다. auto-generated caption은 사람 검수 전 정확성을 보장하지 않습니다.",
+      "autoplay는 data·주의·소리와 접근성 문제 때문에 browser policy로 차단될 수 있고 muted 조건에서도 사용자를 놀라게 할 수 있습니다. explicit play를 baseline으로 두고 motion이 자동 시작되면 pause/stop/hide control과 reduced-motion/data preference를 고려합니다. play() promise rejection을 정상 분기로 처리합니다.",
+    ],
+    concepts: [
+      { term: "media ready state", definition: "재생 위치에서 metadata·현재 frame·미래 data가 어느 정도 준비되었는지를 나타내는 단계적 상태입니다.", detail: ["network state와 다릅니다.", "buffering과 canplay 판단에 사용되지만 무한 재생 보장은 아닙니다."] },
+      { term: "caption track", definition: "시간에 맞춰 대화와 중요한 소리 정보를 제공하는 synchronized text track입니다.", detail: ["언어와 label을 명확히 합니다.", "transcript·audio description과 목적이 다릅니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "media-and-embed-contract-inspection",
+        title: "network 요청 없이 video track과 iframe privacy attributes 검사",
+        language: "html",
+        filename: "media-embed-contract.html",
+        purpose: "실제 media를 재생하지 않고도 controls·preload·playsinline·caption metadata와 iframe title·sandbox·referrer policy의 authoring contract를 DOM으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>미디어 계약 점검</title>\n</head>\n<body>\n  <main>\n    <h1>미디어와 embed 속성</h1>\n    <video id=\"lesson\" controls preload=\"metadata\" playsinline>\n      <track kind=\"captions\" srclang=\"ko\" label=\"한국어 자막\" default>\n      브라우저가 video를 지원하지 않습니다. <a href=\"transcript.html\">대본 읽기</a>\n    </video>\n    <iframe id=\"demo\" title=\"격리된 HTML 실행 결과\" loading=\"lazy\" referrerpolicy=\"no-referrer\" sandbox=\"allow-scripts\" srcdoc=\"<!doctype html><title>demo</title><p>격리 예제</p>\"></iframe>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const video = document.querySelector(\"#lesson\");\n    const track = video.querySelector(\"track\");\n    const frame = document.querySelector(\"#demo\");\n    const lines = [\n      `controls=${video.controls}`,\n      `preload=${video.preload}`,\n      `playsInline=${video.playsInline}`,\n      `track=${track.kind}:${track.srclang}:${track.label}:${track.default}`,\n      `frameTitle=${frame.title}`,\n      `frameLoading=${frame.loading}`,\n      `framePolicy=${frame.referrerPolicy}`,\n      `frameSandbox=${frame.getAttribute(\"sandbox\")}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "표준 문서와 독립 title·main을 준비합니다." },
+          { lines: "8-16", explanation: "native controls video에 metadata preload·inline playback·한국어 default captions와 visible transcript fallback을 두고, iframe에는 고유 title·lazy·no-referrer·최소 sandbox token을 둡니다." },
+          { lines: "17-20", explanation: "video, track, iframe element를 DOM에서 찾습니다." },
+          { lines: "21-31", explanation: "boolean/reflected media properties와 track metadata, iframe privacy/security attributes를 exact string으로 기록합니다." },
+          { lines: "32-34", explanation: "외부 resource fetch나 playback 없이 authoring contract만 검증하고 문서를 닫습니다." },
+        ],
+        run: { environment: ["Chromium 계열 현대 browser", "JavaScript 활성화", "network 불필요"], command: "media-embed-contract.html을 열고 #result와 Accessibility tree의 video/iframe 이름을 확인" },
+        output: { value: "controls=true\npreload=metadata\nplaysInline=true\ntrack=captions:ko:한국어 자막:true\nframeTitle=격리된 HTML 실행 결과\nframeLoading=lazy\nframePolicy=no-referrer\nframeSandbox=allow-scripts", explanation: ["video는 native controls와 inline playback 계약을 DOM property로 반영합니다.", "track은 captions 종류·한국어·visible label·default 상태를 보존합니다.", "iframe은 사용자용 title과 referrer·sandbox 최소 권한을 독립 attribute로 가집니다."] },
+        experiments: [
+          { change: "iframe sandbox에 allow-same-origin을 추가합니다.", prediction: "embedded document의 origin capability가 커지고 allow-scripts 조합의 위험도 다시 평가해야 합니다.", result: "기능이 필요하다는 증거 없이 sandbox token을 늘리지 않습니다." },
+          { change: "video의 controls를 제거합니다.", prediction: "custom control이 없으므로 keyboard·touch 사용자가 재생과 정지를 할 수 없습니다.", result: "native controls를 baseline으로 유지하거나 완전한 accessible custom player를 구현합니다." },
+        ],
+        sourceRefs: ["web-media-source", "web-iframe-source", "web-media-assets", "whatwg-media", "whatwg-iframe", "wai-audio-video"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "video가 어떤 환경에서는 자동 재생되지 않고 custom play button도 focus·상태를 전달하지 못한다.", likelyCause: "autoplay 성공을 전제로 native controls를 제거하고 play() rejection·keyboard·caption state를 구현하지 않았습니다.", checks: ["play() promise rejection과 browser autoplay policy를 확인합니다.", "Tab/Space/Enter·screen reader에서 control name/state/order를 봅니다.", "caption·transcript·error fallback과 reduced-motion 조건을 점검합니다."], fix: "explicit user activation과 native controls를 baseline으로 복구하고 custom UI는 button/slider semantics·focus·state·caption control을 완전 구현합니다.", prevention: "slow network·blocked autoplay·missing source·keyboard·screen reader·caption 품질 matrix를 media release gate에 둡니다." },
+    ],
+    expertNotes: ["timeupdate를 매 frame UI rendering trigger로 사용하지 말고 animation frame 또는 적절한 throttling과 state ownership을 설계합니다. background tab과 seeking에서 event 빈도가 달라질 수 있습니다.", "caption·transcript에는 개인정보와 저작권 content가 포함될 수 있습니다. 저장·검색 indexing·번역 vendor 전송·retention과 access control을 media asset lifecycle에 포함합니다."],
+  },
+  {
+    id: "embed-boundaries-fallback-and-observability",
+    title: "iframe·object·third-party media는 별도 browsing context이자 공급망·privacy 경계입니다",
+    lead: "embed가 화면에 보이는지는 첫 단계뿐입니다. origin, sandbox capability, permissions, referrer, CSP, consent, fallback과 장애 관측을 최소 권한으로 설계해야 합니다.",
+    explanations: [
+      "iframe은 부모와 독립 document와 navigation history를 가진 nested browsing context입니다. same-origin policy 때문에 cross-origin content의 DOM을 읽을 수 없으며, 협력이 필요하면 구체적인 targetOrigin과 schema validation을 갖춘 postMessage protocol을 사용합니다. `*` origin과 신뢰하지 않는 message data를 피합니다.",
+      "sandbox는 token이 없는 가장 제한된 상태에서 필요한 capability만 추가합니다. allow-scripts, allow-forms, allow-popups, allow-same-origin은 서로 다른 위험을 열며 같은-origin content에 allow-scripts+allow-same-origin을 함께 주면 격리 기대가 약해질 수 있습니다. Permissions Policy와 CSP frame-src/frame-ancestors는 별도 방어입니다.",
+      "third-party video·map은 초기 load부터 cookie·IP·referrer와 많은 script를 전송할 수 있습니다. click-to-load placeholder, privacy-enhanced endpoint, no-referrer, consent와 self-hosted poster/transcript를 검토합니다. 사용자가 거부해도 핵심 주소·대본·task가 남아야 합니다.",
+      "object/embed fallback은 plugin-era legacy와 MIME handling risk가 있어 새 interactive content에는 iframe·native media·download link를 우선합니다. third-party 장애·CSP block·offline에서 blank rectangle이 되지 않도록 title, 설명, direct link, status message와 retry를 제공합니다.",
+    ],
+    concepts: [
+      { term: "nested browsing context", definition: "iframe처럼 부모 document 안에 포함되지만 독립 document·window·navigation을 가지는 browsing 환경입니다.", detail: ["origin policy가 DOM 접근을 제한합니다.", "focus와 title을 부모 navigation과 함께 검토합니다."] },
+      { term: "capability allowlist", definition: "embed가 실제 기능에 필요한 권한만 명시적으로 허용하고 나머지는 닫는 정책입니다.", detail: ["sandbox·Permissions Policy·CSP가 서로 다른 층을 담당합니다.", "token 조합의 상호작용을 test합니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "third-party iframe이 차단되면 빈 영역만 남고 부모가 내부 DOM 오류를 읽으려다 SecurityError가 난다.", likelyCause: "cross-origin browsing context를 같은 DOM subtree로 가정하고 fallback·message protocol·observability를 설계하지 않았습니다.", checks: ["frame final origin·CSP·X-Frame-Options와 console을 확인합니다.", "title·direct link·placeholder·consent state를 봅니다.", "postMessage origin·schema와 sandbox/allow tokens를 감사합니다."], fix: "cross-origin DOM 직접 접근을 제거하고 최소 권한 postMessage 또는 server API를 사용하며 usable direct-link fallback을 제공합니다.", prevention: "provider outage·consent denied·CSP blocked·offline·keyboard focus·message spoof fixture를 integration test에 둡니다." },
+    ],
+    comparisons: [{ title: "외부 media를 어떻게 제공할까요?", options: [
+      { name: "즉시 third-party iframe", chooseWhen: "사용자 동의·privacy·성능 비용이 정당화되고 핵심 기능이 embed 자체일 때", avoidWhen: "첫 방문부터 불필요한 tracking·large script를 유발할 때", tradeoffs: ["provider 기능을 빠르게 제공합니다.", "privacy·availability·performance를 외부에 의존합니다."] },
+      { name: "click-to-load placeholder", chooseWhen: "사용자 선택 전 제3자 request를 미루고 poster·설명을 먼저 제공할 때", avoidWhen: "한 번의 추가 activation이 핵심 긴급 task를 막을 때", tradeoffs: ["초기 data·tracking을 줄이고 intent를 얻습니다.", "consent state와 fallback UX를 구현해야 합니다."] },
+      { name: "self-hosted native media", chooseWhen: "asset 권리·delivery·caption·privacy를 직접 통제할 수 있을 때", avoidWhen: "encoding·CDN·streaming 운영 역량과 권리가 없을 때", tradeoffs: ["player·privacy·availability를 통제합니다.", "storage·transcoding·bandwidth·접근성 운영 책임이 커집니다."] },
+    ] }],
+    expertNotes: ["postMessage payload는 JSON처럼 보인다는 이유로 신뢰하지 않습니다. event.origin·event.source·versioned schema·capability를 검사하고 secret을 message나 URL에 넣지 않습니다.", "embed health telemetry는 provider URL의 민감 query와 사용자 content를 제거하고 load/error/timeout·consent category·fallback activation 정도만 최소 수집합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "img의 width와 height attribute를 CSS가 덮어쓰면 쓸모가 없나요?", answer: "아닙니다. resource load 전 intrinsic aspect ratio와 공간 예약에 사용되어 layout shift를 줄일 수 있습니다. 실제 asset 비율과 일치해야 합니다." },
+  { question: "모든 image에 loading=lazy를 붙이면 항상 빨라지나요?", answer: "아닙니다. 첫 화면 LCP image의 fetch를 늦출 수 있어 viewport 위치와 waterfall·LCP 측정으로 선택해야 합니다." },
+  { question: "image.complete가 true면 성공적으로 decode됐다는 뜻인가요?", answer: "항상 아닙니다. 실패·빈 source 경우도 고려해 naturalWidth, decode promise와 error event를 함께 확인합니다." },
+  { question: "caption과 transcript는 같은 대체 수단인가요?", answer: "아닙니다. caption은 재생 시각에 동기화된 대화·소리 정보이고 transcript는 전체 text를 별도로 탐색·검색하게 합니다. 영상 정보에는 audio description도 필요할 수 있습니다." },
+  { question: "iframe sandbox에 allow-scripts와 allow-same-origin을 넣으면 더 안전한가요?", answer: "자동으로 그렇지 않습니다. capability를 크게 열고 특히 same-origin content에서는 격리 기대를 약화할 수 있어 필요한 token만 허용해야 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "natural·attribute·rendered dimensions와 aspect ratio를 비교해 CLS 원인을 진단할 수 있다.",
+  "LCP image와 offscreen image에 eager/lazy·fetch priority를 서로 다르게 적용하고 waterfall로 검증할 수 있다.",
+  "media ready/network state·play promise·caption·transcript·native controls를 failure path까지 설계할 수 있다.",
+  "iframe title·sandbox·Permissions Policy·CSP·referrer와 postMessage origin/schema를 최소 권한으로 감사할 수 있다.",
+  "third-party media가 차단·거부·offline이어도 poster·설명·direct link·대본으로 핵심 task를 유지할 수 있다.",
+);
+
 export default session;

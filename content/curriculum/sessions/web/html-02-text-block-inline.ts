@@ -439,4 +439,107 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "whitespace-dom-rendered-text-audit",
+    title: "공백은 source·DOM text·CSS formatting·복사와 음성 출력에서 서로 다른 결과를 만듭니다",
+    lead: "일반 문단에서 여러 공백이 하나처럼 보인다는 관찰만 외우면 parser가 문자를 지웠다고 오해합니다. textContent와 computed white-space를 함께 기록해 어느 계층이 결과를 결정했는지 확인합니다.",
+    explanations: [
+      "HTML parser는 일반적인 source의 공백 문자를 Text node에 남길 수 있습니다. 기본 `white-space: normal` formatting이 연속 collapsible whitespace를 하나의 간격으로 표현하고 필요할 때 줄을 접습니다. 따라서 View Source, textContent, 화면, clipboard와 accessible text는 같은 문자열 표현이라고 단정할 수 없습니다.",
+      "pre는 preformatted text를 나타내며 기본 `white-space: pre`로 공백과 줄바꿈 위치를 보존합니다. code sample·ASCII 표처럼 위치 자체가 정보일 때 적합하지만 긴 한 줄은 작은 viewport에서 overflow를 만들 수 있어 `overflow:auto`, 적절한 wrapping 정책, keyboard scroll 가능성을 검토합니다.",
+      "`&nbsp;`는 의미 없는 layout 간격을 만드는 도구가 아닙니다. 줄이 분리되면 안 되는 단위처럼 non-breaking semantics가 실제로 필요할 때 제한적으로 쓰고, column 정렬·간격은 CSS gap·margin·grid를 사용합니다. 많은 non-breaking spaces는 reflow와 확대를 방해합니다.",
+      "innerText는 현재 rendered layout과 hidden 상태를 고려하고 읽는 과정에서 style/layout 계산을 요구할 수 있지만 textContent는 DOM descendant text를 중심으로 읽습니다. 데이터 직렬화에는 textContent, 사용자가 보는 줄 경계 검사가 꼭 필요할 때만 innerText를 사용하고 성능 trace로 반복 호출 비용을 확인합니다.",
+    ],
+    concepts: [
+      { term: "collapsible whitespace", definition: "CSS white-space 처리에서 연속 공백·줄바꿈 일부가 하나의 간격처럼 layout되는 문자 구간입니다.", detail: ["DOM에서 문자가 삭제됐다는 뜻은 아닙니다.", "white-space 속성과 line breaking 규칙이 결과를 결정합니다."] },
+      { term: "preformatted text", definition: "작성자가 지정한 공백과 줄 위치가 콘텐츠 의미의 일부인 text입니다.", detail: ["pre가 대표적인 semantic container입니다.", "작은 화면 overflow와 음성 이해 가능성을 별도로 검토합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "whitespace-dom-and-computed-style",
+        title: "같은 공백 문자열을 p와 pre에 넣고 DOM text와 computed white-space 비교",
+        language: "html",
+        filename: "whitespace-layers.html",
+        purpose: "parser가 보존한 Text node와 CSS가 선택한 공백 formatting mode를 browser output으로 분리합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>공백 계층 점검</title>\n  <style>pre { overflow: auto; }</style>\n</head>\n<body>\n  <main>\n    <h1>공백은 어느 계층에서 바뀌나요?</h1>\n    <p id=\"normal\">Alpha   Beta\nGamma</p>\n    <pre id=\"preserved\">Alpha   Beta\nGamma</pre>\n    <output id=\"result\"></output>\n  </main>\n  <script>\n    const visible = (value) => value.replaceAll(\" \", \"·\").replaceAll(\"\\n\", \"↵\");\n    const paragraph = document.querySelector(\"#normal\");\n    const pre = document.querySelector(\"#preserved\");\n    const lines = [\n      `pText=${visible(paragraph.textContent)}`,\n      `preText=${visible(pre.textContent)}`,\n      `pWhiteSpace=${getComputedStyle(paragraph).whiteSpace}`,\n      `preWhiteSpace=${getComputedStyle(pre).whiteSpace}`,\n      `pDisplay=${getComputedStyle(paragraph).display}`,\n      `preDisplay=${getComputedStyle(pre).display}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "표준 문서와 긴 pre가 viewport 전체를 밀지 않도록 overflow 정책을 둡니다." },
+          { lines: "8-14", explanation: "p와 pre에 source 기준 완전히 같은 세 공백·한 줄바꿈 문자열을 넣고 결과 영역을 분리합니다." },
+          { lines: "15-18", explanation: "공백을 가운데점, newline을 화살표로 바꾸는 관찰 함수와 두 element 참조를 만듭니다." },
+          { lines: "19-28", explanation: "textContent, computed white-space와 display를 고정된 key=value 문자열로 기록합니다." },
+          { lines: "29-32", explanation: "문서를 닫습니다. 시각 screenshot 없이도 DOM 문자열과 CSS formatting mode를 재현할 수 있습니다." },
+        ],
+        run: { environment: ["Chromium·Firefox·Safari 계열 현대 browser", "JavaScript 활성화", "network 불필요"], command: "whitespace-layers.html을 열고 #result의 여섯 줄과 실제 p/pre 줄바꿈을 비교" },
+        output: { value: "pText=Alpha···Beta↵Gamma\npreText=Alpha···Beta↵Gamma\npWhiteSpace=normal\npreWhiteSpace=pre\npDisplay=block\npreDisplay=block", explanation: ["p와 pre의 textContent는 같은 세 공백·newline을 유지합니다.", "기본 computed white-space만 normal과 pre로 달라 화면 공백 표현이 달라집니다.", "둘 다 기본 block box지만 그 사실이 semantic 역할을 같게 만들지는 않습니다."] },
+        experiments: [
+          { change: "p에 `white-space: pre`를 적용합니다.", prediction: "p의 element 의미는 유지되지만 공백 표현은 pre처럼 보존됩니다.", result: "HTML semantics와 CSS formatting을 독립 축으로 검증할 수 있습니다." },
+          { change: "pre에 매우 긴 URL 한 줄을 넣고 320px viewport에서 keyboard로 확인합니다.", prediction: "overflow:auto이면 페이지 전체가 아니라 pre 영역에 scroll이 생깁니다.", result: "공백 보존 선택에는 reflow·focus·scroll acceptance가 따라야 합니다." },
+        ],
+        sourceRefs: ["web-day01-paragraph-source", "whatwg-grouping", "csswg-display"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "p의 source 줄바꿈이 사라졌다고 보고 parser bug를 의심하거나 공백 맞춤을 위해 nbsp를 반복한다.", likelyCause: "DOM text 보존과 CSS white-space collapse를 같은 계층으로 보았습니다.", checks: ["View Source와 textContent를 visible delimiter로 출력합니다.", "Computed의 white-space·display를 확인합니다.", "320px와 200% 확대에서 overflow·reflow를 검사합니다."], fix: "위치가 의미이면 pre 또는 명시적 white-space 정책을 쓰고, 단순 간격·정렬은 CSS layout으로 이동합니다.", prevention: "content fixture에 연속 공백·newline·긴 token·다국어 text를 넣고 DOM/Computed/reflow를 함께 회귀 검증합니다." },
+    ],
+    expertNotes: ["Unicode에는 ASCII space 외 non-breaking space, zero-width 문자, line/paragraph separator가 있습니다. validation·검색·길이 제한에서는 code unit 수만 보지 말고 product가 허용하는 normalization과 grapheme 정책을 문서화합니다.", "layout-dependent innerText를 large table loop에서 반복 읽으면 forced layout이 발생할 수 있습니다. DOM read와 style/layout read를 구분해 trace하고 batch합니다."],
+  },
+  {
+    id: "machine-readable-inline-semantics",
+    title: "inline 요소는 글꼴 효과보다 문장 속 역할과 machine-readable metadata를 전달합니다",
+    lead: "time·abbr·code·mark는 기본 화면에서 모두 inline처럼 보일 수 있지만 서로 다른 의미·attribute·검색과 접근성 계약을 가집니다. 시각 효과가 같아도 가장 구체적인 element를 선택합니다.",
+    explanations: [
+      "time의 datetime은 사람이 읽는 표현과 기계가 해석하는 날짜·시간 값을 연결합니다. locale 표시를 자유롭게 유지하면서 일정·검색·parser에 표준 값을 제공할 수 있지만 timezone 없는 local time이 어느 지역 기준인지 문서 계약을 정해야 합니다.",
+      "abbr의 title은 약어 확장 정보를 보완할 수 있지만 hover에만 의존하면 keyboard·touch·screen reader에서 항상 전달된다고 보장할 수 없습니다. 첫 등장에 본문으로 풀어 쓰고 약어를 괄호에 두는 방식이 가장 견고하며 title은 추가 정보로 사용합니다.",
+      "code는 computer code fragment, kbd는 사용자 입력, samp는 프로그램 출력을 뜻합니다. monospace 글꼴만 원한다면 CSS를 사용하고, code block은 pre 안 code로 공백 구조와 의미를 함께 표현합니다. 실제 secret·token·개인 경로를 code example에 포함하지 않습니다.",
+      "mark는 현재 문맥과 관련되어 highlight된 text를 뜻하고 strong은 중요성, em은 stress emphasis입니다. 검색 결과 강조처럼 관련성이 사라지면 mark도 제거해야 합니다. 색만으로 상태를 전달하지 않고 surrounding text와 contrast를 확인합니다.",
+    ],
+    concepts: [
+      { term: "machine-readable value", definition: "사람용 표시와 별도로 parser·검색·application이 일관되게 해석할 수 있도록 attribute에 넣는 표준화된 값입니다.", detail: ["time의 datetime이 예입니다.", "timezone·형식·validation 책임이 필요합니다."] },
+      { term: "phrasing semantics", definition: "문단 흐름 안 특정 text 범위의 역할·중요성·발화·기술적 종류를 표현하는 HTML 의미입니다.", detail: ["기본 inline display와 같은 개념이 아닙니다.", "화면 style은 CSS로 변경할 수 있습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "inline-semantics-metadata-inspection",
+        title: "time·abbr·code·mark의 tag·metadata·computed display를 한 문장에서 검사",
+        language: "html",
+        filename: "inline-semantics.html",
+        purpose: "모두 기본 inline display여도 tagName과 attribute가 서로 다른 semantic 계약을 갖는다는 사실을 브라우저 DOM으로 출력합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>문장 속 의미 점검</title>\n</head>\n<body>\n  <main>\n    <h1>배포 기록</h1>\n    <p id=\"sentence\">\n      <time datetime=\"2026-07-14T09:30:00+09:00\">7월 14일 오전 9시 30분</time>에\n      <abbr title=\"Document Object Model\">DOM</abbr> 예제의\n      <code>textContent</code> 결과를 <mark>재검증</mark>했습니다.\n    </p>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const items = [...document.querySelectorAll(\"#sentence > *\")];\n    const time = document.querySelector(\"time\");\n    const abbr = document.querySelector(\"abbr\");\n    const lines = [\n      `elements=${items.map((item) => item.tagName).join(\",\")}`,\n      `datetime=${time.dateTime}`,\n      `abbrTitle=${abbr.title}`,\n      `allInline=${items.every((item) => getComputedStyle(item).display === \"inline\")}`,\n      `visibleText=${document.querySelector(\"#sentence\").textContent.replace(/\\s+/g, \" \" ).trim()}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "독립 문서 metadata와 main을 준비합니다." },
+          { lines: "8-16", explanation: "한 문장 안에 표준 datetime, 약어 확장, code fragment, 문맥상 highlight를 각각 구체적인 element로 표시합니다." },
+          { lines: "17-20", explanation: "문장의 direct child element와 time·abbr DOM property를 얻습니다." },
+          { lines: "21-28", explanation: "tag 순서, reflected metadata, computed display, whitespace-normalized visible text를 exact string으로 만듭니다." },
+          { lines: "29-31", explanation: "결과를 pre에 기록하고 문서를 닫습니다. default style이 바뀌어도 tag·metadata 검사는 독립적으로 남습니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "inline-semantics.html을 열고 #result와 Accessibility tree의 문장 이름을 확인" },
+        output: { value: "elements=TIME,ABBR,CODE,MARK\ndatetime=2026-07-14T09:30:00+09:00\nabbrTitle=Document Object Model\nallInline=true\nvisibleText=7월 14일 오전 9시 30분에 DOM 예제의 textContent 결과를 재검증했습니다.", explanation: ["네 element는 기본 display가 모두 inline이지만 tagName과 metadata 계약은 서로 다릅니다.", "time.dateTime과 abbr.title은 attribute 값을 DOM property로 반영합니다.", "문장 전체의 공백은 관찰용으로 normalization해 source indentation과 사용자용 text를 구분했습니다."] },
+        experiments: [
+          { change: "abbr title을 제거하고 본문을 `Document Object Model(DOM)`으로 바꿉니다.", prediction: "hover 없이도 모든 사용자가 첫 등장 의미를 읽을 수 있습니다.", result: "본문 확장이 title-only 설명보다 견고한 baseline입니다." },
+          { change: "mark를 span class=highlight로 바꿉니다.", prediction: "CSS 색은 같게 만들 수 있지만 현재 문맥과 관련된 highlight 의미는 사라집니다.", result: "의미가 필요한지 장식만 필요한지 먼저 결정합니다." },
+        ],
+        sourceRefs: ["web-day01-formatting-source", "whatwg-text-level", "wai-headings"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "약어·시간·코드가 모두 span이고 색·font가 사라지면 무엇인지 구분되지 않는다.", likelyCause: "문장 속 역할을 element semantics가 아니라 CSS class만으로 표현했습니다.", checks: ["CSS를 끄고 문장을 읽습니다.", "DOM tagName과 datetime/title을 확인합니다.", "keyboard·touch에서 title-only 정보가 도달하는지 봅니다."], fix: "time·abbr·code·mark 등 가장 구체적인 element를 사용하고 필요한 설명은 visible text로 제공합니다.", prevention: "content style guide에 inline element 선택 표와 CSS-off·accessibility tree review를 둡니다." },
+    ],
+    expertNotes: ["datetime을 application에서 읽을 때 Date parser의 timezone·calendar 가정을 명시하고 server canonical value와 display locale을 분리합니다.", "semantic element가 자동으로 좋은 문구를 만들지는 않습니다. code 안 secret redaction, abbr 첫 등장 설명, mark 남용과 contrast는 사람 review가 필요합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "일반 p에서 여러 공백이 하나처럼 보이면 DOM에서도 하나만 남나요?", answer: "그렇다고 단정할 수 없습니다. textContent에는 원문 공백이 남고 CSS white-space: normal이 layout에서 collapse할 수 있습니다." },
+  { question: "pre를 쓰면 긴 code도 responsive 문제가 자동 해결되나요?", answer: "아닙니다. 공백 보존 때문에 긴 줄 overflow가 생길 수 있어 overflow·wrapping·320px·keyboard scroll을 검증해야 합니다." },
+  { question: "time의 보이는 문자열과 datetime은 왜 분리하나요?", answer: "사람에게는 locale에 맞는 표현을, 기계에는 표준화된 날짜·시간 값을 제공하기 위해서입니다. timezone 계약도 함께 정합니다." },
+  { question: "abbr의 title만으로 약어 설명을 끝내도 되나요?", answer: "권장하지 않습니다. hover를 못 쓰는 환경에서도 이해되도록 첫 등장 visible text에서 풀어 쓰고 title은 보조로 사용합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "source whitespace·DOM textContent·computed white-space·화면 표현을 네 계층으로 비교할 수 있다.",
+  "preformatted content와 일반 문단을 의미에 따라 선택하고 긴 줄의 reflow·keyboard scroll을 검증할 수 있다.",
+  "time·abbr·code·kbd·samp·mark의 문장 속 역할과 필요한 metadata를 설명할 수 있다.",
+  "CSS를 끄고도 inline semantics가 이해되는지 확인하며 title-only·색상-only 정보 전달을 피할 수 있다.",
+);
+
 export default session;

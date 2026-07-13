@@ -188,10 +188,10 @@ const session = {
           purpose: "원본의 빈 a destination과 href=#을 modern heading id와 명시적 #top으로 바꾸고, URL hash와 실제 target을 console에서 확인합니다.",
           code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>링크 학습 목차</title>\n  <style>\n    html { scroll-behavior: smooth; }\n    section { min-height: 55vh; scroll-margin-top: 1rem; padding: 1rem; }\n    :target { background: #fff4c2; border-inline-start: 0.35rem solid #8a5a00; }\n    a:focus-visible { outline: 0.2rem solid #005fcc; outline-offset: 0.2rem; }\n    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }\n  </style>\n</head>\n<body>\n  <header id=\"top\">\n    <h1>URL과 링크</h1>\n  </header>\n  <nav aria-label=\"이 문서의 목차\">\n    <a href=\"#url-parts\">URL 구성</a>\n    <a href=\"#relative-path\">상대 경로</a>\n  </nav>\n  <main>\n    <section id=\"url-parts\">\n      <h2>URL 구성</h2>\n      <p>scheme, host, path, query, fragment를 구분합니다.</p>\n      <a href=\"#top\">문서 맨 위로</a>\n    </section>\n    <section id=\"relative-path\">\n      <h2>상대 경로</h2>\n      <p>base URL과 href로 최종 URL을 계산합니다.</p>\n      <a href=\"#top\">문서 맨 위로</a>\n    </section>\n  </main>\n  <script>\n    const target = document.querySelector(location.hash);\n    console.log(\"hash=\" + location.hash);\n    console.log(\"target=\" + target.id);\n    console.log(\"heading=\" + target.querySelector(\"h2\").textContent);\n  </script>\n</body>\n</html>",
           walkthrough: [
-            { lines: "1-17", explanation: "표준 문서와 :target 강조, keyboard focus 표시, reduced motion override를 준비합니다. scroll-margin-top은 target이 고정 header에 가리는 상황에도 적용할 수 있습니다." },
-            { lines: "19-26", explanation: "top이라는 실제 destination을 header에 두고 nav에 목적을 설명하는 aria-label과 두 fragment link를 둡니다." },
-            { lines: "27-39", explanation: "각 section 자체에 unique id를 붙입니다. 빈 a를 target 표식으로 추가하지 않고 heading이 포함된 의미 단위를 직접 target으로 만듭니다." },
-            { lines: "40-46", explanation: "실행 URL의 hash로 target element를 찾고 id와 h2 text를 안정된 문자열로 출력합니다. 실행 명령에 fragment를 반드시 포함하므로 null이 아닙니다." },
+            { lines: "1-13", explanation: "표준 문서와 :target 강조, keyboard focus 표시, reduced motion override를 준비합니다. scroll-margin-top은 target이 고정 header에 가리는 상황에도 적용할 수 있습니다." },
+            { lines: "14-21", explanation: "top이라는 실제 destination을 header에 두고 nav에 목적을 설명하는 aria-label과 두 fragment link를 둡니다." },
+            { lines: "22-33", explanation: "각 section 자체에 unique id를 붙입니다. 빈 a를 target 표식으로 추가하지 않고 heading이 포함된 의미 단위를 직접 target으로 만듭니다." },
+            { lines: "34-41", explanation: "실행 URL의 hash로 target element를 찾고 id와 h2 text를 안정된 문자열로 출력합니다. 실행 명령에 fragment를 반드시 포함하므로 null이 아닙니다." },
           ],
           run: { environment: ["Python 3의 간단한 HTTP server", "현대 browser와 DevTools Console"], command: "fragment-navigation.html이 있는 폴더에서 `python -m http.server 8000` 실행 후 browser로 http://localhost:8000/fragment-navigation.html#relative-path 열기" },
           output: {
@@ -616,5 +616,118 @@ const session = {
     ],
   },
 } satisfies DetailedSession;
+
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "document-base-url-and-canonical-resolution",
+    title: "모든 상대 URL은 현재 파일 문자열이 아니라 document base URL과 표준 URL parser로 해석됩니다",
+    lead: "`../`를 눈으로 세는 습관은 trailing slash, reverse proxy subpath, `<base>`, query·fragment가 섞이면 쉽게 깨집니다. browser가 계산한 element.href와 URL component를 acceptance 값으로 기록합니다.",
+    explanations: [
+      "상대 href는 document의 base URL과 URL Standard parser에 전달됩니다. 일반 문서에서는 응답 URL이 fallback base가 되지만 head의 첫 유효한 `<base href>`가 document base를 바꿀 수 있습니다. directory처럼 보이는 URL도 마지막 slash 유무에 따라 마지막 segment를 파일처럼 교체할지 그 아래에 결합할지가 달라집니다.",
+      "base는 a만이 아니라 img src, script src, form action, CSS URL 등 document 안 상대 URL 전반에 영향을 줍니다. micro-frontend나 SPA router 문제를 한 줄로 해결하려고 추가하면 resource·form destination까지 다른 origin으로 향할 수 있으므로 threat model과 integration matrix가 필요합니다. 첫 base만 적용되고 URL-taking element보다 앞에 위치해야 합니다.",
+      "`element.getAttribute('href')`는 작성한 raw string을, `element.href`는 document base로 해석·직렬화한 absolute URL을 반환합니다. 디버깅할 때 둘을 함께 기록하면 source 생성 오류와 runtime base 오류를 분리할 수 있습니다. URL의 origin·pathname·search·hash도 문자열 split 대신 URL object로 읽습니다.",
+      "canonical URL은 검색·공유의 대표 주소를 표현하지만 잘못된 canonical이 실제 navigation routing을 자동 교정하지는 않습니다. deployment base, application route, static asset base, API base를 서로 다른 configuration으로 모델링하고 local·preview·subpath·custom domain에서 link crawl을 실행합니다.",
+    ],
+    concepts: [
+      { term: "document base URL", definition: "문서 안 상대 URL을 absolute URL로 해석할 때 browser가 사용하는 기준 URL입니다.", detail: ["응답 URL 또는 첫 유효한 base href가 결정합니다.", "모든 URL-taking attribute에 광범위한 영향을 줍니다."] },
+      { term: "URL serialization", definition: "parser가 만든 URL record를 일관된 absolute string으로 다시 표현하는 과정입니다.", detail: ["dot segment와 기본 component를 정규화합니다.", "application 보안 allowlist는 serialization 뒤 origin·protocol을 검사합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "base-element-url-resolution-matrix",
+        title: "base href 아래 relative·root-relative·fragment URL의 최종 component 검사",
+        language: "html",
+        filename: "base-url-matrix.html",
+        purpose: "실행 server 위치와 무관한 HTTPS base를 선언하고 세 href의 raw attribute와 browser-resolved property를 exact output으로 비교합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <base href=\"https://learn.example/courses/html/lessons/\">\n  <title>기준 URL 점검</title>\n</head>\n<body>\n  <main>\n    <h1>링크 해석 결과</h1>\n    <a id=\"relative\" href=\"../css/index.html?mode=review#grid\">CSS Grid 복습</a>\n    <a id=\"root\" href=\"/account/profile\">프로필</a>\n    <a id=\"fragment\" href=\"#result\">결과로 이동</a>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const relative = document.querySelector(\"#relative\");\n    const parsed = new URL(relative.href);\n    const lines = [\n      `base=${document.baseURI}`,\n      `raw=${relative.getAttribute(\"href\")}`,\n      `resolved=${relative.href}`,\n      `origin=${parsed.origin}`,\n      `path=${parsed.pathname}`,\n      `search=${parsed.search}`,\n      `hash=${parsed.hash}`,\n      `root=${document.querySelector(\"#root\").href}`,\n      `fragment=${document.querySelector(\"#fragment\").href}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "head의 URL-taking element보다 먼저 고정 HTTPS base를 선언해 local server나 file 위치와 무관한 결과를 만듭니다." },
+          { lines: "8-15", explanation: "parent-relative, origin-root-relative, same-document fragment라는 세 종류 link와 결과 target을 둡니다." },
+          { lines: "16-18", explanation: "raw href가 아닌 resolved property를 URL object로 parsing합니다." },
+          { lines: "19-30", explanation: "baseURI, raw/resolved href와 component, 다른 두 href를 key=value 문자열로 출력합니다." },
+          { lines: "31-33", explanation: "문서를 닫습니다. 실제 link activation 없이도 navigation destination 계산을 검증할 수 있습니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 연결 불필요"], command: "base-url-matrix.html을 열고 #result의 아홉 줄을 확인" },
+        output: { value: "base=https://learn.example/courses/html/lessons/\nraw=../css/index.html?mode=review#grid\nresolved=https://learn.example/courses/html/css/index.html?mode=review#grid\norigin=https://learn.example\npath=/courses/html/css/index.html\nsearch=?mode=review\nhash=#grid\nroot=https://learn.example/account/profile\nfragment=https://learn.example/courses/html/lessons/#result", explanation: ["`../`는 lessons segment를 제거하지만 `/account`는 origin 바로 아래에서 시작합니다.", "fragment-only href도 현재 base URL을 유지한 absolute property로 직렬화됩니다.", "getAttribute의 raw string과 href property의 resolved URL은 서로 다른 디버깅 증거입니다."] },
+        experiments: [
+          { change: "base href 끝 slash를 제거해 `.../lessons`로 바꿉니다.", prediction: "lessons가 directory가 아니라 교체할 마지막 segment처럼 해석되어 relative destination이 달라집니다.", result: "route·asset base의 trailing-slash 정책을 deployment contract에 고정해야 합니다." },
+          { change: "두 번째 base href를 추가합니다.", prediction: "첫 base href가 계속 document base를 결정합니다.", result: "중복 base를 validator와 DOM assertion으로 금지합니다." },
+        ],
+        sourceRefs: ["web-link-navigation-source", "whatwg-url", "whatwg-base-element"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "local root에서는 link가 되지만 `/docs/v2/` subpath 배포에서 asset·form·a가 서로 다른 위치로 간다.", likelyCause: "document base, route base, origin-root-relative path와 application context를 한 개 문자열처럼 다뤘습니다.", checks: ["document.URL과 document.baseURI를 기록합니다.", "getAttribute와 resolved href/action/src를 비교합니다.", "response redirect와 reverse-proxy forwarded prefix를 확인합니다.", "첫 base element의 위치·중복·injection 여부를 봅니다."], fix: "public base contract에 맞게 URL constructor나 framework router를 사용하고 base element가 필요하면 모든 URL-taking attribute를 integration test합니다.", prevention: "root·subpath·preview·custom-domain matrix에서 internal link crawl과 form/resource destination assertions를 실행합니다." },
+    ],
+    comparisons: [{ title: "application link를 어떤 기준으로 생성할까요?", options: [
+      { name: "문서 상대 URL", chooseWhen: "같은 배포 tree 안 함께 이동하는 정적 문서 묶음일 때", avoidWhen: "route가 여러 mount point·locale·tenant prefix를 오갈 때", tradeoffs: ["portable한 static bundle을 만들 수 있습니다.", "현재 document 깊이와 trailing slash에 민감합니다."] },
+      { name: "origin-root-relative URL", chooseWhen: "origin root의 public route가 항상 고정될 때", avoidWhen: "GitHub Pages 같은 subpath·reverse proxy context에 mount될 때", tradeoffs: ["어느 문서 깊이에서도 간단합니다.", "deployment context prefix를 건너뜁니다."] },
+      { name: "URL/router helper", chooseWhen: "base path·locale·query encoding·route parameter를 중앙 계약으로 관리할 때", avoidWhen: "helper가 open redirect나 arbitrary scheme을 그대로 허용할 때", tradeoffs: ["환경 차이와 encoding을 한 곳에서 처리합니다.", "helper 자체의 allowlist와 contract test가 필요합니다."] },
+    ] }],
+    expertNotes: ["base injection은 한 element만 바꿔도 이후 상대 resource와 form destination을 공격 origin으로 돌릴 수 있습니다. CSP base-uri와 HTML sanitization, trusted template boundary를 함께 적용합니다.", "URL string을 log에 그대로 남기면 query·fragment의 token·검색어·개인 식별자가 유출될 수 있습니다. route pattern, origin category, status처럼 최소 정보로 telemetry를 설계합니다."],
+  },
+  {
+    id: "navigation-intent-names-and-policy",
+    title: "좋은 링크는 destination뿐 아니라 목적·context change·download·보안 정책을 activation 전에 설명합니다",
+    lead: "`여기`, `클릭`, URL 원문 같은 link text는 link 목록이나 검색 결과에서 문맥을 잃습니다. 사용자는 이름만 보고 이동·새 탭·download 여부를 예측할 수 있어야 합니다.",
+    explanations: [
+      "a의 accessible name은 보통 descendant text와 연결된 labeling에서 계산됩니다. 같은 `자세히` link가 반복되면 surrounding context가 있더라도 link 목록에서는 구분이 어려울 수 있습니다. visible text 자체를 `DOM 노드 자세히 보기`처럼 목적 중심으로 쓰는 것이 sighted·screen reader·voice input 사용자 모두에게 견고합니다.",
+      "새 탭은 사용자가 context를 잃거나 back button이 예상대로 동작하지 않는 경험을 만들 수 있습니다. 꼭 필요할 때만 `_blank`를 사용하고 visible text에 `(새 탭)`처럼 고지합니다. opener 관계와 referrer privacy는 별도 축이며 rel·referrerpolicy를 threat model과 analytics 요구에 맞춰 명시합니다.",
+      "download attribute는 동일-origin·data/blob 등의 조건과 server Content-Disposition, browser 정책에 영향을 받으므로 무조건 저장을 보장하지 않습니다. file type·size·언어를 link 근처에 알리고 generated file의 object URL을 적절히 revoke하며 민감 export authorization은 server가 확인합니다.",
+      "mailto·tel·custom protocol은 외부 application을 열 수 있고 javascript·data URL은 실행·피싱 위험이 있습니다. 사용자 입력 URL은 parsing 뒤 https/http 등 허용 scheme과 destination policy를 검사하고 redirect endpoint도 최종 destination을 allowlist합니다. HTML escaping만으로 안전한 URL이 되지는 않습니다.",
+    ],
+    concepts: [
+      { term: "link purpose", definition: "사용자가 hyperlink를 activation했을 때 어떤 resource·기능·context change가 일어날지 이름과 문맥으로 식별할 수 있는 의미입니다.", detail: ["가능하면 link text만으로 구체적이어야 합니다.", "새 탭·download 같은 예상 밖 변화도 고지합니다."] },
+      { term: "URL scheme policy", definition: "application이 link destination으로 허용할 protocol과 origin·path 범위를 명시하고 parser 결과로 검사하는 보안 규칙입니다.", detail: ["HTML escaping과 별도입니다.", "redirect chain과 encoded form도 검증합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "link-purpose-and-navigation-policy-audit",
+        title: "내부 이동·새 탭·download 링크의 이름과 DOM 정책을 activation 전 검사",
+        language: "html",
+        filename: "link-contracts.html",
+        purpose: "서로 다른 navigation intent를 구체적인 visible text로 표현하고 target·rel·referrerpolicy·download 값을 exact DOM output으로 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <base href=\"https://learn.example/courses/html/\">\n  <title>링크 계약 점검</title>\n</head>\n<body>\n  <main>\n    <h1>관련 학습자료</h1>\n    <nav aria-label=\"HTML 관련 학습자료\">\n      <a id=\"internal\" href=\"dom/nodes.html\">DOM 노드 학습 노트</a>\n      <a id=\"external\" href=\"https://html.spec.whatwg.org/\" target=\"_blank\" rel=\"noopener\" referrerpolicy=\"strict-origin-when-cross-origin\">HTML 표준 원문(새 탭)</a>\n      <a id=\"download\" href=\"data:text/plain,HTML%20checklist\" download=\"html-checklist.txt\">HTML 체크리스트 다운로드</a>\n    </nav>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const internal = document.querySelector(\"#internal\");\n    const external = document.querySelector(\"#external\");\n    const download = document.querySelector(\"#download\");\n    const lines = [\n      `internalName=${internal.textContent}`,\n      `internalHref=${internal.href}`,\n      `externalName=${external.textContent}`,\n      `externalTarget=${external.target}`,\n      `externalRel=${external.rel}`,\n      `referrerPolicy=${external.referrerPolicy}`,\n      `downloadName=${download.download}`,\n      `navName=${document.querySelector(\"nav\").getAttribute(\"aria-label\")}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "고정 base와 독립적인 문서 title을 제공해 internal resolved URL도 재현 가능하게 만듭니다." },
+          { lines: "8-17", explanation: "이름 있는 nav 안에 내부 문서, 고지된 새 탭 외부 문서, 명시적 filename을 가진 download를 서로 다른 visible text로 둡니다." },
+          { lines: "18-22", explanation: "세 link를 id로 찾고 element DOM property를 읽습니다." },
+          { lines: "23-32", explanation: "이름·resolved URL·target·rel·referrer policy·download filename·landmark label을 exact 문자열로 기록합니다." },
+          { lines: "33-35", explanation: "activation하지 않고 계약을 검증하므로 test가 외부 navigation이나 실제 download를 유발하지 않습니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 연결 불필요"], command: "link-contracts.html을 열고 #result와 Accessibility tree의 navigation·link 이름을 확인" },
+        output: { value: "internalName=DOM 노드 학습 노트\ninternalHref=https://learn.example/courses/html/dom/nodes.html\nexternalName=HTML 표준 원문(새 탭)\nexternalTarget=_blank\nexternalRel=noopener\nreferrerPolicy=strict-origin-when-cross-origin\ndownloadName=html-checklist.txt\nnavName=HTML 관련 학습자료", explanation: ["세 link 이름만 읽어도 destination과 새 탭·download intent를 구분할 수 있습니다.", "resolved internal href는 base 아래 absolute URL로 계산됩니다.", "noopener와 referrerPolicy는 각각 opener 관계와 referrer 범위를 표현합니다."] },
+        experiments: [
+          { change: "세 visible text를 모두 `여기`로 바꿉니다.", prediction: "DOM href는 유지되지만 link 목록과 voice command에서 목적을 구분하기 어려워집니다.", result: "정확한 destination만으로 usable link가 완성되지는 않습니다." },
+          { change: "external rel을 noreferrer로 바꿉니다.", prediction: "opener 차단과 함께 destination에 referrer를 보내지 않는 정책이 됩니다.", result: "privacy 요구와 유입 analytics 손실을 검토해 최소 정책을 선택합니다." },
+        ],
+        sourceRefs: ["web-anchor-comment-source", "whatwg-a-element", "whatwg-links", "w3c-link-purpose", "w3c-new-window-warning"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "screen reader link 목록에 `자세히`가 여러 번 반복되고 새 탭·download 여부를 activation 전 알 수 없다.", likelyCause: "link purpose와 context change를 visible name에 포함하지 않고 주변 layout·icon·title attribute에만 의존했습니다.", checks: ["Accessibility tree에서 link name만 목록으로 읽습니다.", "CSS·icon을 끄고 text만 확인합니다.", "target·download·rel·referrerpolicy와 실제 response header를 확인합니다."], fix: "destination을 식별하는 visible text를 쓰고 새 탭·file type/size·download를 activation 전에 고지합니다.", prevention: "content lint의 금지 generic label과 keyboard/screen-reader link-list review를 publishing gate에 둡니다." },
+    ],
+    expertNotes: ["SPA에서 a click을 intercept해 client routing하더라도 modifier-click, copy link, open in new tab, status bar URL, keyboard activation을 보존해야 합니다. href를 실제 destination으로 두고 progressive enhancement합니다.", "automated link checker가 200만 확인하면 login page로 redirect된 broken link나 다른 언어·tenant resource를 놓칩니다. final URL·content type·canonical·auth boundary를 privacy-safe하게 검증합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "getAttribute('href')와 element.href는 같은 값을 반환하나요?", answer: "항상 같지 않습니다. getAttribute는 작성한 raw string, href property는 document base로 parsing·serialization된 absolute URL을 반환합니다." },
+  { question: "base element는 a href에만 영향을 주나요?", answer: "아닙니다. img·script·form·CSS 등 문서의 상대 URL 전반과 default target에 광범위하게 영향을 줄 수 있습니다." },
+  { question: "URL path 끝 slash가 상대 경로 해석에 왜 중요한가요?", answer: "slash가 없으면 마지막 segment를 file처럼 교체하고, 있으면 directory 아래에 결합할 수 있어 최종 URL이 달라지기 때문입니다." },
+  { question: "링크 text가 `여기`여도 주변 문단이 설명하면 항상 충분한가요?", answer: "항상 충분하지 않습니다. link 목록·voice input·검색 결과처럼 문맥을 잃는 사용을 위해 가능한 한 text 자체가 목적을 식별해야 합니다." },
+  { question: "download attribute가 있으면 모든 URL이 반드시 저장되나요?", answer: "아닙니다. origin, scheme, response header와 browser 정책이 영향을 줍니다. file 정보와 server authorization도 별도로 필요합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "document.URL·baseURI·raw getAttribute·resolved href를 함께 기록해 상대 경로 오류를 진단할 수 있다.",
+  "base element가 link·resource·form에 미치는 범위를 설명하고 CSP base-uri·sanitization을 설계할 수 있다.",
+  "URL object로 origin·pathname·search·hash를 검사하고 허용 scheme·redirect destination 정책을 적용할 수 있다.",
+  "link 이름만으로 목적·새 탭·download를 예측하게 만들고 Accessibility tree·modifier-click·link crawler로 검증할 수 있다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "whatwg-base-element", repository: "WHATWG HTML Living Standard", path: "multipage/semantics.html#the-base-element", publicUrl: "https://html.spec.whatwg.org/multipage/semantics.html#the-base-element", usedFor: ["document base URL", "base href·target", "첫 base와 tree order", "relative URL 전역 영향", "unsafe sanitization boundary"], evidence: "2026-07-14에 base element가 document base URL과 default navigable을 정하고 첫 href/target만 적용되며 URL-taking element보다 앞서야 한다는 living standard 규칙을 확인했습니다." },
+);
 
 export default session;
