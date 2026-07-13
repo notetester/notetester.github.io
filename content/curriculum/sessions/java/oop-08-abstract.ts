@@ -1199,7 +1199,7 @@ public class NegativeAbstractContracts {
     "공개 code·output·evidence에 credential·실제 개인 literal·identity hash·로컬 절대 경로가 없음을 확인했다.",
     "원본6·JLS SE21·Java SE21 APIs·OpenJDK21·ProcessStartInfo 출처와 보충 범위를 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-09-interface"],
   sources: [
     { id: "java-class05-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class05/Ex01_Abstract.java", usedFor: ["abstract base declaration", "fields and constructor", "concrete play", "abstract sound", "zero-method comment correction"], evidence: "abstract class에 fields2·public constructor·concrete play·abstract sound가 함께 있고 주석이 ‘one or more’와 ‘zero also possible’를 모두 담아 앞 표현을 교정할 근거가 됨을 확인했습니다. 개인 field literals는 공개하지 않았습니다." },
     { id: "java-class05-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class05/Ex02_Dog.java", usedFor: ["concrete Dog obligation", "abstract Cat deferral", "abstract Cow implementation", "concrete descendants", "auxiliary warnings"], evidence: "한 source에 Dog, abstract Cat/Cow intermediates, concrete Cat/Cow가 있고 defer·implement·re-override paths와 다른 source 접근 warning의 declaration owners를 확인했습니다." },
