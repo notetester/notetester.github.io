@@ -334,4 +334,112 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "control-value-group-autofill-contract",
+    title: "control의 label·group·name·value·autocomplete는 보이는 UI와 server data를 연결하는 하나의 contract입니다",
+    lead: "적절한 input type만 고르는 것으로 끝나지 않습니다. 질문·선택 cardinality·machine value·help·autofill purpose를 함께 정의해야 keyboard와 server가 같은 field를 이해합니다.",
+    explanations: [
+      "label은 control의 지속적인 accessible name과 activation target을 제공합니다. placeholder나 주변 div text는 label 관계를 자동으로 만들지 않습니다. explicit for/id 또는 label wrapping을 사용하고 같은 page의 id가 unique한지 확인합니다.",
+      "fieldset/legend는 radio·checkbox처럼 options가 공유하는 질문을 제공합니다. 각 option label은 `이메일`, `문자`처럼 선택지를, legend는 `연락 방법`처럼 group purpose를 설명합니다. visual border가 필요 없어도 semantic group은 유지할 수 있습니다.",
+      "select multiple과 same-name checkbox는 repeated entries이며 textarea의 newline·maxlength와 select option value는 server schema에 맞춰야 합니다. visible label을 domain value로 그대로 쓰지 말고 stable code를 value로 사용해 번역·문구 변경과 저장 계약을 분리합니다.",
+      "autocomplete token은 field purpose를 browser/password manager에 알려 반복 입력을 줄입니다. off를 무조건 지정해도 browser policy가 다를 수 있으며 민감 field는 수집 최소화·HTTPS·server retention과 함께 설계합니다. one-time-code·new-password 등 목적에 맞는 token을 사용합니다.",
+    ],
+    concepts: [
+      { term: "accessible name", definition: "보조기술과 voice input이 control을 식별하는 programmatic 이름입니다.", detail: ["visible label과 일치할수록 견고합니다.", "placeholder-only name을 피합니다."] },
+      { term: "stable domain value", definition: "화면 문구·언어와 독립적으로 server가 option을 식별하는 name/value code입니다.", detail: ["allowlist로 검증합니다.", "label 변경이 저장 data를 바꾸지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "grouped-controls-values-output-audit",
+        title: "fieldset·radio·select·textarea·output의 이름과 FormData values 검사",
+        language: "html",
+        filename: "grouped-control-contract.html",
+        purpose: "여러 control의 visible labels, group question, stable machine values와 live character output을 exact DOM/FormData 결과로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>control contract</title></head>\n<body>\n  <main>\n    <h1>프로필 알림 설정</h1>\n    <form id=\"profile\">\n      <fieldset>\n        <legend>선호 연락 방법</legend>\n        <label><input type=\"radio\" name=\"contact\" value=\"email\" checked> 이메일</label>\n        <label><input type=\"radio\" name=\"contact\" value=\"sms\"> 문자</label>\n      </fieldset>\n      <label for=\"zone\">시간대</label>\n      <select id=\"zone\" name=\"timezone\"><option value=\"Asia/Seoul\" selected>서울</option><option value=\"UTC\">협정 세계시</option></select>\n      <label for=\"bio\">한 줄 소개</label>\n      <textarea id=\"bio\" name=\"bio\" maxlength=\"20\" aria-describedby=\"count\">HTML 복습 중</textarea>\n      <output id=\"count\" for=\"bio\">0/20</output>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector(\"#profile\");\n    const bio = document.querySelector(\"#bio\");\n    const count = document.querySelector(\"#count\");\n    count.value = `${bio.value.length}/${bio.maxLength}`;\n    const entries = [...new FormData(form)].map(([name, value]) => `${name}=${value}`);\n    const lines = [\n      `legend=${form.querySelector(\"legend\").textContent}`,\n      `checked=${form.elements.contact.value}`,\n      `timezone=${form.elements.timezone.value}`,\n      `bio=${bio.value}`,\n      `count=${count.value}`,\n      `entries=${entries.join(\"|\")}`,\n      `description=${bio.getAttribute(\"aria-describedby\")}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "독립 문서와 form을 준비합니다." },
+          { lines: "8-19", explanation: "legend가 있는 radio group, explicit label select, maxlength textarea와 연결된 output을 작성합니다." },
+          { lines: "20-26", explanation: "textarea 길이를 output value에 반영하고 FormData machine values를 수집합니다." },
+          { lines: "27-36", explanation: "group question, selected values, visible bio/count, entry list와 description id를 기록합니다." },
+          { lines: "37-39", explanation: "문서를 닫습니다. browser accessibility snapshot에서 group·radio·combobox·textbox 이름을 별도로 확인합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "grouped-control-contract.html을 열고 #result와 Accessibility tree의 group/control names를 확인" },
+        output: { value: "legend=선호 연락 방법\nchecked=email\ntimezone=Asia/Seoul\nbio=HTML 복습 중\ncount=9/20\nentries=contact=email|timezone=Asia/Seoul|bio=HTML 복습 중\ndescription=count", explanation: ["visible 한국어 option text와 server value Asia/Seoul이 분리됩니다.", "radio group은 하나의 selected stable value만 전송합니다.", "output은 textarea description으로 연결되고 value property가 9/20을 반영합니다."] },
+        experiments: [
+          { change: "legend를 삭제하고 CSS heading만 둡니다.", prediction: "개별 radio names는 남아도 공유 질문 관계가 약해집니다.", result: "choice group에는 fieldset/legend를 유지합니다." },
+          { change: "textarea를 20자를 넘도록 사용자 입력합니다.", prediction: "maxLength와 tooLong state가 submission을 제한하고 counter도 현재 길이를 보여야 합니다.", result: "input event로 output을 갱신하고 server에서도 code-point/byte limit을 검증합니다." },
+        ],
+        sourceRefs: ["web-controls-choice-source", "web-controls-textarea-source", "web-controls-application-source", "whatwg-form-elements", "wai-form-labels"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "radio를 들으면 이메일·문자만 반복되고 어떤 질문의 선택인지 모르며 server에는 번역된 label이 저장된다.", likelyCause: "fieldset/legend가 없고 option text를 stable value로 사용했습니다.", checks: ["Accessibility tree의 group name을 확인합니다.", "FormData name/value와 server enum을 비교합니다.", "label·id uniqueness와 번역 전후 value를 봅니다."], fix: "공유 질문을 fieldset/legend로 묶고 각 option에 locale-independent allowlisted value를 지정합니다.", prevention: "group accessible name과 localized label/stable value contract를 component test에 둡니다." },
+    ],
+    expertNotes: ["textarea length는 JavaScript string length, Unicode grapheme, server code point/byte limit이 다를 수 있습니다. 허용 기준과 normalization을 schema에 명시합니다.", "autocomplete·autofill test에는 실제 개인정보 대신 synthetic profile을 쓰고 screenshot·telemetry에 populated values가 남지 않게 합니다."],
+  },
+  {
+    id: "constraint-invalid-event-server-authority",
+    title: "native constraint validation은 빠른 사용자 feedback이고 server validation은 우회 불가능한 최종 권위입니다",
+    lead: "required·type·range가 browser에서 동작해도 formnovalidate, direct HTTP, disabled JavaScript와 조작된 DOM으로 우회할 수 있습니다. 같은 field schema를 두 층에서 검증하고 error recovery를 사용자 중심으로 만듭니다.",
+    explanations: [
+      "ValidityState는 valueMissing, typeMismatch, patternMismatch, tooShort/tooLong, rangeUnderflow/Overflow, stepMismatch, badInput, customError를 구분합니다. 무조건 `잘못된 입력`으로 합치지 말고 사용자가 고칠 수 있는 구체적인 instruction을 field와 연결합니다.",
+      "invalid event는 invalid controls에서 발생하고 bubble하지 않으므로 form capture listener 또는 각 control listener를 사용합니다. 첫 오류만 focus해도 summary에는 모든 오류를 나열하고 각 항목을 field fragment로 연결합니다. aria-invalid와 aria-describedby는 실제 current error와 동기화합니다.",
+      "setCustomValidity(message)는 customError를 만들며 값이 회복되면 반드시 빈 문자열로 해제합니다. browser localized validationMessage를 그대로 product analytics에 수집하지 않고 stable error code를 별도로 관리합니다.",
+      "formnovalidate submitter와 form.noValidate는 interactive validation을 건너뛸 수 있고 attacker는 direct request를 보냅니다. server는 syntax·range·business uniqueness·authorization·CSRF를 다시 검증하고 field-level stable error response를 반환합니다.",
+    ],
+    concepts: [
+      { term: "ValidityState", definition: "constraint validation 실패 원인을 boolean flags로 제공하는 browser interface입니다.", detail: ["원인별 error message를 만들 수 있습니다.", "server error model과 mapping하되 server가 authoritative합니다."] },
+      { term: "formnovalidate", definition: "특정 submitter activation에서 form의 interactive constraint validation을 건너뛰는 boolean attribute입니다.", detail: ["draft/save 같은 의도에 사용할 수 있습니다.", "server validation을 건너뛰게 하지는 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "invalid-event-summary-bypass-audit",
+        title: "두 native validation 오류를 summary에 연결하고 formnovalidate bypass를 실제 submit event로 관찰",
+        language: "html",
+        filename: "validation-lifecycle.html",
+        purpose: "ValidityState·invalid event order·aria-invalid/error links와 native validation을 건너뛴 submit event를 exact output으로 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>validation lifecycle</title></head>\n<body>\n  <main>\n    <h1>신청 정보 확인</h1>\n    <div id=\"summary\" role=\"alert\"><h2>입력을 확인하세요</h2><ul></ul></div>\n    <form id=\"application\">\n      <label for=\"email\">이메일</label><input id=\"email\" name=\"email\" type=\"email\" value=\"wrong\" required aria-describedby=\"email-error\"><span id=\"email-error\"></span>\n      <label for=\"quantity\">수량</label><input id=\"quantity\" name=\"quantity\" type=\"number\" min=\"1\" value=\"0\" aria-describedby=\"quantity-error\"><span id=\"quantity-error\"></span>\n      <button id=\"bypass\" type=\"submit\" formnovalidate>검증 없이 임시 저장</button>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector(\"#application\");\n    const invalidIds = [];\n    form.addEventListener(\"invalid\", (event) => {\n      invalidIds.push(event.target.id);\n      event.target.setAttribute(\"aria-invalid\", \"true\");\n      const message = event.target.id === \"email\" ? \"이메일 형식을 확인하세요\" : \"수량은 1 이상이어야 합니다\";\n      document.querySelector(`#${event.target.id}-error`).textContent = message;\n      const item = document.createElement(\"li\");\n      item.innerHTML = `<a href=\"#${event.target.id}\">${message}</a>`;\n      document.querySelector(\"#summary ul\").append(item);\n    }, true);\n    const formValid = form.checkValidity();\n    let submitEvent = false;\n    form.addEventListener(\"submit\", (event) => { event.preventDefault(); submitEvent = true; });\n    const bypass = document.querySelector(\"#bypass\");\n    form.requestSubmit(bypass);\n    const lines = [\n      `formValid=${formValid}`,\n      `invalidOrder=${invalidIds.join(\",\")}`,\n      `emailState=${form.elements.email.validity.typeMismatch ? \"typeMismatch\" : \"valid\"}`,\n      `quantityState=${form.elements.quantity.validity.rangeUnderflow ? \"rangeUnderflow\" : \"valid\"}`,\n      `summaryItems=${document.querySelectorAll(\"#summary li\").length}`,\n      `bypassFormNoValidate=${bypass.formNoValidate}`,\n      `submitEvent=${submitEvent}`,\n      `serverMustValidate=true`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-8", explanation: "alert summary, invalid email/range fields와 formnovalidate draft button을 준비합니다." },
+          { lines: "9-22", explanation: "capture invalid listener가 순서·aria-invalid·field message와 summary fragment links를 동기화합니다." },
+          { lines: "23-28", explanation: "checkValidity로 두 invalid events를 발생시키고 formnovalidate submitter로 실제 submit event가 가능한지 관찰합니다." },
+          { lines: "29-40", explanation: "native validity 원인·summary count·bypass와 server authority를 exact string으로 기록합니다." },
+          { lines: "41-44", explanation: "문서를 닫습니다. production에서는 innerHTML 대신 createElement/textContent로 link text도 안전하게 구성합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "validation-lifecycle.html을 열고 #result, alert summary와 invalid controls의 accessibility state를 확인" },
+        output: { value: "formValid=false\ninvalidOrder=email,quantity\nemailState=typeMismatch\nquantityState=rangeUnderflow\nsummaryItems=2\nbypassFormNoValidate=true\nsubmitEvent=true\nserverMustValidate=true", explanation: ["checkValidity는 email 다음 quantity 순서로 invalid event를 발생시킵니다.", "formnovalidate submitter는 invalid fields가 있어도 submit event에 도달합니다.", "따라서 native validation은 UX layer이고 server가 모든 request를 재검증해야 합니다."] },
+        experiments: [
+          { change: "email을 learner@example.com, quantity를 2로 수정하고 error state를 clear합니다.", prediction: "checkValidity=true가 되고 aria-invalid·field error·summary를 제거해야 합니다.", result: "invalid뿐 아니라 recovery lifecycle을 구현합니다." },
+          { change: "formnovalidate를 제거합니다.", prediction: "requestSubmit에서 native validation이 다시 실행되어 submitEvent는 false로 남습니다.", result: "submitter별 validation policy가 명시적으로 드러납니다." },
+        ],
+        sourceRefs: ["web-controls-signup-source", "whatwg-input", "wai-form-validation", "wai-form-notifications"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "오류를 수정했는데 aria-invalid·summary가 남거나 formnovalidate draft가 production 생성 endpoint까지 통과한다.", likelyCause: "invalid state만 추가하고 valid recovery를 구현하지 않았거나 server가 client validation flag를 신뢰했습니다.", checks: ["input/change마다 ValidityState와 customValidity clear를 확인합니다.", "summary link·aria-describedby·aria-invalid 제거를 봅니다.", "direct request와 formnovalidate request의 server validation/authorization을 비교합니다."], fix: "field state machine에 invalid→valid cleanup을 넣고 server가 모든 endpoint 의도별 schema·business rule·authorization을 재검증합니다.", prevention: "각 ValidityState boundary와 recovery, formnovalidate/direct HTTP bypass를 E2E contract suite에 둡니다." },
+    ],
+    expertNotes: ["예제는 controlled static message로 innerHTML link를 만들지만 production에서 server/user message를 HTML sink에 넣지 않습니다. element와 href를 createElement/setAttribute, text는 textContent로 구성합니다.", "브라우저 validationMessage는 locale·browser마다 달라 exact automation에 적합하지 않습니다. ValidityState와 stable application error code를 assertion하고 사용자 문구는 locale review합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "label text와 option value는 같은 문자열이어야 하나요?", answer: "아닙니다. label은 사용자 언어, value는 server가 검증하는 stable domain code로 분리할 수 있습니다." },
+  { question: "radio마다 label이 있으면 fieldset/legend는 필요 없나요?", answer: "공유 질문이 필요한 group에는 legend가 option labels의 공통 문맥을 제공합니다." },
+  { question: "autocomplete는 단순 on/off만 있나요?", answer: "아닙니다. name, email, tel, one-time-code, new-password 등 field purpose token을 사용합니다." },
+  { question: "invalid event는 form에서 bubble하나요?", answer: "일반적으로 bubble하지 않으므로 capture listener 또는 각 invalid control listener로 처리합니다." },
+  { question: "setCustomValidity 오류는 값이 바뀌면 자동 해제되나요?", answer: "아닙니다. 유효해진 순간 setCustomValidity('')와 연결된 UI/ARIA state를 명시적으로 해제합니다." },
+  { question: "formnovalidate submission도 server가 신뢰해도 되나요?", answer: "아닙니다. native validation을 건너뛰므로 server가 syntax·business rule·authorization을 항상 재검증합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "visible label·unique id·accessible name과 server name을 field contract로 연결했다.",
+  "fieldset/legend와 stable option values로 choice group의 질문·cardinality를 표현했다.",
+  "select·textarea·output·autocomplete의 value와 description lifecycle을 검증했다.",
+  "ValidityState 원인별 field message·summary fragment link·aria-invalid를 동기화했다.",
+  "첫 invalid focus와 모든 오류 목록을 제공하고 수정 뒤 error/ARIA state를 제거했다.",
+  "formnovalidate·noValidate·direct HTTP로 client constraint를 우회해 server validation을 확인했다.",
+  "server error code·field mapping·입력 보존·authorization과 privacy-safe logging을 E2E 검증했다.",
+);
+
 export default session;

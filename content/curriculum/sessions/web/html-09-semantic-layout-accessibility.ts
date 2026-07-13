@@ -302,4 +302,138 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "landmark-heading-ownership-aria-first",
+    title: "landmark와 heading은 component 수가 아니라 page 전체 정보 구조의 소유권 계약입니다",
+    lead: "각 component가 스스로 main·nav·h1을 만들면 개별 조각은 그럴듯해도 page에는 중복 landmark와 끊긴 outline이 생깁니다. shell과 content slot의 책임을 먼저 정합니다.",
+    explanations: [
+      "body-level header는 보통 banner, footer는 contentinfo가 되지만 article/section 안 header·footer는 그 content의 introduction/footer일 뿐 같은 page landmark를 무한히 늘리지 않습니다. main은 사용자에게 보이는 page 주 content 하나를 기본으로 하고 hidden route trees도 중복 노출되지 않게 합니다.",
+      "nav는 주요 link section에 사용하고 같은 page에 여러 nav가 있으면 `주요 탐색`, `현재 위치`, `이 글의 목차`처럼 목적을 accessible name으로 구분합니다. 모든 link 묶음이 landmark일 필요는 없으며 footer의 짧은 legal links는 문맥에 따라 nav 없이도 충분합니다.",
+      "page shell은 route별 h1 slot과 main을 소유하고 content component는 전달받은 heading level 또는 h2 이하의 local structure를 사용합니다. heading을 visual size prop으로 선택하지 않고 의미 level과 style variant를 분리합니다.",
+      "native HTML가 같은 의미와 behavior를 제공하면 그것을 먼저 사용합니다. nav/main/button/details/summary에 불필요한 동일 role을 중복하지 않고, ARIA는 semantic을 보완할 뿐 keyboard behavior·focus·validation을 자동 구현하지 않는다는 first rule을 지킵니다.",
+    ],
+    concepts: [
+      { term: "semantic ownership", definition: "page shell과 components 중 누가 main·h1·navigation name·focus lifecycle을 생성하고 유지하는지 정한 책임 경계입니다.", detail: ["중복 landmark·heading을 방지합니다.", "SSR·SPA·micro-frontend에서 contract로 공유합니다."] },
+      { term: "ARIA-first rule", definition: "필요한 의미와 behavior를 제공하는 native HTML를 우선하고 ARIA는 부족한 접근성 의미만 보완한다는 원칙입니다.", detail: ["중복 role을 피합니다.", "ARIA만으로 keyboard behavior가 생기지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "page-landmark-map-audit",
+        title: "header·named nav·main·article·aside·footer의 page landmark map 검사",
+        language: "html",
+        filename: "landmark-map.html",
+        purpose: "native semantic shell에서 landmark 수·name·heading과 article/aside labeling을 exact DOM output과 accessibility snapshot으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>DOM 학습 노트</title></head>\n<body>\n  <header><p>NOTE TESTER</p></header>\n  <nav aria-label=\"주요 탐색\"><a href=\"/\">홈</a><a href=\"/web/\">웹</a></nav>\n  <main id=\"main\">\n    <h1>DOM 학습 노트</h1>\n    <article aria-labelledby=\"lesson-title\">\n      <h2 id=\"lesson-title\">Node와 Element</h2><p>DOM tree 관계를 복습합니다.</p>\n    </article>\n    <aside aria-labelledby=\"related-title\"><h2 id=\"related-title\">관련 복습</h2><a href=\"/web/html/\">HTML 구조</a></aside>\n  </main>\n  <footer><p>학습자료 갱신: 2026-07-14</p></footer>\n  <pre id=\"result\"></pre>\n  <script>\n    const landmarkTags = [...document.querySelectorAll(\"body > header, body > nav, body > main, main > aside, body > footer\")].map((item) => item.tagName);\n    const headings = [...document.querySelectorAll(\"h1,h2\")].map((item) => `${item.tagName}:${item.textContent}`);\n    const lines = [\n      `landmarks=${landmarkTags.join(\",\")}`,\n      `mainCount=${document.querySelectorAll(\"main\").length}`,\n      `navName=${document.querySelector(\"nav\").getAttribute(\"aria-label\")}`,\n      `headings=${headings.join(\"|\")}`,\n      `articleLabel=${document.querySelector(\"article\").getAttribute(\"aria-labelledby\")}`,\n      `asideLabel=${document.querySelector(\"aside\").getAttribute(\"aria-labelledby\")}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "독립 title, site header와 이름 있는 primary nav를 작성합니다." },
+          { lines: "7-15", explanation: "유일한 main과 h1, labelled article/h2, labelled related aside/h2를 DOM reading order로 배치합니다." },
+          { lines: "16-20", explanation: "site footer와 result를 두고 page-level landmark candidates·headings를 수집합니다." },
+          { lines: "21-27", explanation: "landmark tags·main count·nav name·outline·label references를 exact string으로 기록합니다." },
+          { lines: "28-30", explanation: "문서를 닫습니다. 실제 role/name은 browser accessibility snapshot으로 확인합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "landmark-map.html을 열고 #result 및 Accessibility tree의 banner/navigation/main/complementary/contentinfo를 확인" },
+        output: { value: "landmarks=HEADER,NAV,MAIN,ASIDE,FOOTER\nmainCount=1\nnavName=주요 탐색\nheadings=H1:DOM 학습 노트|H2:Node와 Element|H2:관련 복습\narticleLabel=lesson-title\nasideLabel=related-title", explanation: ["native elements가 page-level landmark map을 구성합니다.", "article과 aside는 실제 heading id로 이름을 얻습니다.", "DOM output과 accessibility snapshot을 분리해 implicit role/name을 검증합니다."] },
+        experiments: [
+          { change: "article마다 main을 추가합니다.", prediction: "mainCount가 늘고 page 주 content landmark가 중복됩니다.", result: "main ownership은 page shell 한 곳에 둡니다." },
+          { change: "nav aria-label을 제거하고 같은 nav를 두 개 만듭니다.", prediction: "navigation landmark 목록에서 목적을 구분하기 어렵습니다.", result: "여러 navigation에는 unique purpose name을 제공합니다." },
+        ],
+        sourceRefs: ["web-layout-div-source", "web-layout-semantic-source", "whatwg-dom-semantics", "whatwg-sections", "wai-page-structure", "wai-landmark-regions"],
+      },
+      {
+        id: "heading-outline-component-contract",
+        title: "page h1→section h2→article h3의 component heading contract 검사",
+        language: "html",
+        filename: "heading-contract.html",
+        purpose: "두 thematic sections와 self-contained article에서 실제 tag rank·text·section labeling이 logical outline을 만드는지 DOM으로 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>HTML 과정</title></head>\n<body>\n  <main>\n    <h1>HTML 과정</h1>\n    <section aria-labelledby=\"basics\">\n      <h2 id=\"basics\">문서 기초</h2>\n      <article><h3>DOM tree 실습</h3><p>Node 관계를 관찰합니다.</p></article>\n      <article><h3>링크 실습</h3><p>URL을 계산합니다.</p></article>\n    </section>\n    <section aria-labelledby=\"forms\">\n      <h2 id=\"forms\">Form과 HTTP</h2><p>전송 entry를 검증합니다.</p>\n    </section>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const headings = [...document.querySelectorAll(\"h1,h2,h3,h4,h5,h6\")];\n    const ranks = headings.map((heading) => Number(heading.tagName.slice(1)));\n    const skipped = ranks.some((rank, index) => index > 0 && rank > ranks[index - 1] + 1);\n    const lines = [\n      `outline=${headings.map((heading) => `${heading.tagName}:${heading.textContent}`).join(\"|\")}`,\n      `ranks=${ranks.join(\",\")}`,\n      `skipped=${skipped}`,\n      `sections=${document.querySelectorAll(\"section\").length}`,\n      `articles=${document.querySelectorAll(\"article\").length}`,\n      `labels=${[...document.querySelectorAll(\"section\")].map((section) => section.getAttribute(\"aria-labelledby\")).join(\",\")}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "독립 title과 page h1을 작성합니다." },
+          { lines: "7-16", explanation: "문서 기초 section h2 아래 두 self-contained article h3와 형제 Form section h2를 배치합니다." },
+          { lines: "17-22", explanation: "모든 heading ranks를 DOM order로 추출하고 아래 방향 rank jump를 계산합니다." },
+          { lines: "23-29", explanation: "outline·ranks·skip·section/article 수와 label references를 기록합니다." },
+          { lines: "30-32", explanation: "문서를 닫습니다. visual font 크기와 semantic rank를 독립적으로 유지합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "heading-contract.html을 열고 #result와 accessibility heading list를 확인" },
+        output: { value: "outline=H1:HTML 과정|H2:문서 기초|H3:DOM tree 실습|H3:링크 실습|H2:Form과 HTTP\nranks=1,2,3,3,2\nskipped=false\nsections=2\narticles=2\nlabels=basics,forms", explanation: ["h3 뒤 형제 h2로 돌아가는 것은 정상적인 outline 종료입니다.", "아래 방향으로 한 level을 넘는 jump가 없습니다.", "각 section은 실제 h2 id로 식별됩니다."] },
+        experiments: [
+          { change: "DOM tree 실습을 디자인 크기 때문에 h5로 바꿉니다.", prediction: "ranks가 1,2,5...가 되어 skipped=true입니다.", result: "semantic level과 visual variant를 component API에서 분리합니다." },
+          { change: "article을 page 밖으로 별도 배포합니다.", prediction: "h3만 남으면 독립 page 대표 heading 문맥이 부족합니다.", result: "독립 route에서는 shell이 h1 ownership을 제공하도록 component contract를 바꿉니다." },
+        ],
+        sourceRefs: ["web-layout-section-source", "web-layout-aside-source", "whatwg-sections", "wai-content-structure"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "component마다 h1·main을 렌더해 한 page에 main 세 개와 같은 제목 다섯 개가 생긴다.", likelyCause: "semantic level과 landmark ownership을 component 내부에 고정하고 page composition contract가 없습니다.", checks: ["rendered DOM의 main count와 heading/landmark map을 추출합니다.", "component props와 page shell slots를 봅니다.", "hidden route·portal·micro-frontend tree도 accessibility exposure를 확인합니다."], fix: "page shell이 main·h1을 소유하고 components는 context-aware heading level과 labelled section/article를 받게 설계합니다.", prevention: "rendered page fixture에 unique visible main·single route h1·named landmark budget assertions를 둡니다." },
+    ],
+    expertNotes: ["heading rank 자동 검사에서 모든 h3→h2 transition을 오류로 보면 안 됩니다. 아래 방향 jump와 실제 section ownership을 구분하고 outline 문구 품질은 사람 review합니다.", "ARIA role을 추가해 native element의 잘못된 nesting을 덮지 않습니다. 먼저 HTML content model과 DOM tree를 고칩니다."],
+  },
+  {
+    id: "focus-lifecycle-keyboard-native-behavior",
+    title: "focus는 DOM order·native keyboard behavior·route/component lifecycle을 따라 예측 가능하게 이동해야 합니다",
+    lead: "시각 highlight만 있는 상태와 실제 keyboard focus는 다릅니다. skip, disclosure, dialog, SPA route transition과 제거되는 node마다 activeElement가 어디로 가는지 acceptance criterion을 둡니다.",
+    explanations: [
+      "Tab sequence는 기본적으로 DOM order의 native links·buttons·form controls를 따릅니다. positive tabindex로 시각 order를 따라가게 억지로 고치지 말고 source DOM과 responsive layout을 같은 logical order로 만듭니다. tabindex=-1은 programmatic focus target에 사용할 수 있습니다.",
+      "skip link는 첫 Tab에서 보이고 activation하면 main으로 scroll/focus가 이동해야 합니다. main의 tabindex=-1은 일반 Tab stop을 추가하지 않으면서 focus target이 되게 하며 outline을 무조건 제거하지 않습니다.",
+      "disclosure는 details/summary 또는 button aria-expanded 같은 native-first pattern을 사용합니다. custom div role=button을 선택하면 Enter·Space, focus style, disabled, name/state를 모두 직접 구현해야 하므로 정당화와 AT test가 필요합니다.",
+      "SPA route 변경은 full navigation처럼 focus·title을 자동 초기화하지 않습니다. 사용자가 link를 activation한 뒤 새 route title/h1이 준비되면 main 또는 heading으로 focus를 이동할지 결정하고 back/forward·loading·error에서 focus를 잃지 않습니다. modal을 닫으면 유효한 trigger 또는 다음 logical control로 복구합니다.",
+    ],
+    concepts: [
+      { term: "focus lifecycle", definition: "사용자 action과 DOM/route 변화 전후 activeElement를 어디에 두고 어떻게 보이게 할지 정한 sequence입니다.", detail: ["제거·숨김 node를 처리합니다.", "trigger return과 route announcement를 포함합니다."] },
+      { term: "programmatic focus target", definition: "Tab sequence에는 없지만 skip·error·route transition에서 script나 fragment 후 focus할 수 있는 element입니다.", detail: ["tabindex=-1을 사용할 수 있습니다.", "visible focus와 문맥을 제공합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "skip-native-disclosure-focus-audit",
+        title: "skip link로 main focus 이동 후 native details disclosure를 연 상태와 Tab 후보 검사",
+        language: "html",
+        filename: "focus-lifecycle.html",
+        purpose: "positive tabindex 없이 logical interactive order, main programmatic focus와 native details/summary open state를 exact DOM output으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>focus lifecycle</title></head>\n<body>\n  <a id=\"skip\" href=\"#main\">본문으로 건너뛰기</a>\n  <header><p>학습자료</p></header>\n  <nav aria-label=\"주요 탐색\"><a id=\"home\" href=\"/\">홈</a></nav>\n  <main id=\"main\" tabindex=\"-1\">\n    <h1>접근성 구조</h1>\n    <details id=\"more\"><summary id=\"summary\">추가 설명</summary><p>native disclosure 내용</p></details>\n    <button id=\"route\" type=\"button\">다음 주제로 이동</button>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const skip = document.querySelector(\"#skip\");\n    const main = document.querySelector(\"#main\");\n    const details = document.querySelector(\"#more\");\n    skip.addEventListener(\"click\", (event) => { event.preventDefault(); main.focus(); });\n    skip.click();\n    details.open = true;\n    const tabOrder = [...document.querySelectorAll(\"a[href],button,summary,[tabindex]\")]\n      .filter((item) => item.tabIndex >= 0).map((item) => item.id);\n    const lines = [\n      `active=${document.activeElement.id}`,\n      `mainTabIndex=${main.tabIndex}`,\n      `tabOrder=${tabOrder.join(\",\")}`,\n      `detailsOpen=${details.open}`,\n      `summaryTag=${document.querySelector(\"#summary\").tagName}`,\n      `explicitRoles=${document.querySelectorAll(\"[role]\").length}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "첫 focusable skip link와 site header/named navigation을 작성합니다." },
+          { lines: "8-14", explanation: "tabindex=-1 main, h1, native details/summary, route button과 result를 DOM task order로 둡니다." },
+          { lines: "15-22", explanation: "skip activation으로 main에 focus하고 native details를 열어 lifecycle state를 만듭니다." },
+          { lines: "23-32", explanation: "non-negative tabIndex candidates, active element, details와 explicit ARIA role 수를 기록합니다." },
+          { lines: "33-34", explanation: "문서를 닫습니다. 실제 browser keyboard test에서는 Tab→Enter와 visible focus를 수동 확인합니다." },
+        ],
+        run: { environment: ["현대 browser", "keyboard", "JavaScript 활성화"], command: "focus-lifecycle.html을 열고 #result 확인 후 새로고침하여 Tab·Enter로 skip과 summary를 실제 조작" },
+        output: { value: "active=main\nmainTabIndex=-1\ntabOrder=skip,home,summary,route\ndetailsOpen=true\nsummaryTag=SUMMARY\nexplicitRoles=0", explanation: ["skip activation 뒤 main이 programmatic focus를 받지만 일반 Tab order에는 포함되지 않습니다.", "native summary가 별도 ARIA role 없이 focusable disclosure control이 됩니다.", "logical Tab 후보는 source DOM 순서를 유지합니다."] },
+        experiments: [
+          { change: "main tabindex를 5로 바꿉니다.", prediction: "main이 positive tabindex로 앞선 Tab 순서를 왜곡합니다.", result: "programmatic target에는 -1을 사용하고 positive tabindex를 피합니다." },
+          { change: "details/summary를 div role=button으로 바꿉니다.", prediction: "role만으로 open state·Enter/Space·focus behavior가 생기지 않습니다.", result: "native behavior가 요구를 충족하면 native element를 우선합니다." },
+        ],
+        sourceRefs: ["web-layout-div-source", "whatwg-dom-semantics", "wai-skip-link", "wai-landmark-regions"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "skip activation·dialog close·route change 뒤 focus가 body로 사라지거나 hidden old route에 남는다.", likelyCause: "DOM visibility/removal만 갱신하고 activeElement lifecycle과 fallback target을 설계하지 않았습니다.", checks: ["action 전후 document.activeElement를 기록합니다.", "target이 hidden/inert/disconnected인지 봅니다.", "title·h1 준비 timing과 back/forward path를 확인합니다."], fix: "action별 trigger return 또는 새 main/heading focus policy를 정하고 valid connected target이 준비된 뒤 visible focus를 이동합니다.", prevention: "keyboard E2E에 activeElement sequence, removed trigger, loading/error/back-forward fixtures를 포함합니다." },
+    ],
+    expertNotes: ["자동 focus는 사용자의 virtual cursor나 typing을 예고 없이 빼앗을 수 있습니다. full route·modal·error summary처럼 명확한 context change에서만 최소한으로 적용합니다.", "CSS :focus-visible을 style하되 native outline을 제거한 뒤 대체하지 않는 실수를 피하고 forced-colors/high contrast에서도 indicator를 확인합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "article 안 header도 항상 banner landmark인가요?", answer: "아닙니다. body-level site header와 달리 article/section 내부 header는 해당 content의 introduction이며 보통 page banner가 아닙니다." },
+  { question: "page에 nav가 여러 개면 어떻게 구분하나요?", answer: "주요 탐색·현재 위치·이 글의 목차처럼 목적을 accessible name으로 구분하고 불필요한 nav landmark는 줄입니다." },
+  { question: "component가 재사용되려면 h1을 내부에 고정해야 하나요?", answer: "아닙니다. page shell이 route h1을 소유하고 component는 context에 맞는 heading level과 style variant를 분리합니다." },
+  { question: "role=button을 붙이면 div가 native button처럼 동작하나요?", answer: "아닙니다. focus·Enter/Space·disabled·state behavior를 직접 구현해야 하므로 native button을 우선합니다." },
+  { question: "tabindex=-1은 element를 영원히 focus할 수 없게 하나요?", answer: "아닙니다. 일반 Tab sequence에서는 빠지지만 script나 fragment handling으로 programmatic focus target이 될 수 있습니다." },
+  { question: "SPA route 변경 때 document.title만 바꾸면 충분한가요?", answer: "아닙니다. h1·main content와 focus/announcement, loading/error/back-forward lifecycle도 함께 관리합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "page shell이 unique visible main·route h1·site landmark와 focus lifecycle을 소유한다.",
+  "여러 nav·aside·region에 purpose-specific accessible name을 제공하고 landmark budget을 검토했다.",
+  "heading level과 visual style을 분리하고 rendered outline의 아래 방향 rank jump를 검사했다.",
+  "native HTML가 제공하는 semantics/behavior를 우선하고 중복·보상용 ARIA를 제거했다.",
+  "skip link·tabindex=-1 main·native disclosure를 실제 Tab/Enter/Escape와 activeElement로 검증했다.",
+  "DOM·visual·reading·focus order를 breakpoint·zoom·long content에서 일치시켰다.",
+  "SPA route·modal·removed trigger·loading/error/back-forward의 focus return/announcement를 E2E test했다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "wai-landmark-regions", repository: "W3C WAI ARIA Authoring Practices Guide", path: "practices/landmark-regions/", publicUrl: "https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/", usedFor: ["landmark purpose", "region naming", "duplicate landmark labels", "page region map", "native landmark preference"], evidence: "2026-07-14에 WAI APG landmark regions guidance를 확인해 landmark ownership·naming·과밀 방지 검증에 사용했습니다." },
+);
+
 export default session;

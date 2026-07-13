@@ -311,4 +311,139 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "successful-controls-submitter-entry-list",
+    title: "browser는 form의 모든 element가 아니라 successful controls와 실제 submitter로 entry list를 만듭니다",
+    lead: "화면에 값이 있다는 사실과 request에 name/value가 들어간다는 사실은 다릅니다. control state, name, disabled, checked, submit button을 한 번에 관찰해야 server parameter null의 원인을 찾을 수 있습니다.",
+    explanations: [
+      "submission 시 browser는 form owner가 같은 controls 중 전송 조건을 만족하는 항목으로 entry list를 만듭니다. name이 없는 control, disabled control, unchecked checkbox/radio는 제외되고 select multiple·같은 name checkbox는 repeated entries를 만듭니다. readonly는 disabled와 달리 보통 전송됩니다.",
+      "submit button의 name/value는 실제 activation된 submitter만 포함됩니다. `requestSubmit(button)`은 validation과 submitter semantics를 거치지만 `form.submit()`은 submit event·constraint validation을 우회하는 차이가 있으므로 application code에서는 requestSubmit 또는 사용자 activation을 사용합니다.",
+      "id는 label·DOM reference이고 name은 request key입니다. 두 값이 우연히 같아도 책임은 다르며 server DTO가 기대하는 exact key·cardinality와 맞아야 합니다. repeated name은 Map 한 값으로 덮지 말고 ordered multimap 또는 list로 처리합니다.",
+      "FormData로 entry list를 관찰할 수 있지만 실제 GET query encoding, multipart boundary, activated submitter override와 redirect는 Network에서 최종 확인합니다. password·token·file name 같은 값은 log와 screenshot에서 redaction합니다.",
+    ],
+    concepts: [
+      { term: "successful control", definition: "form submission entry list에 name/value를 제공할 조건을 만족한 control입니다.", detail: ["name·disabled·checked·submitter state가 영향을 줍니다.", "보이는 모든 control이 전송되는 것은 아닙니다."] },
+      { term: "submitter", definition: "특정 submission을 실제로 시작한 submit button 또는 image input입니다.", detail: ["자신의 name/value를 entry에 추가합니다.", "formaction·formmethod·formenctype로 form 기본값을 override할 수 있습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "successful-controls-formdata-matrix",
+        title: "name·disabled·checked·multiple·submitter가 FormData에 남기는 exact entries",
+        language: "html",
+        filename: "successful-controls.html",
+        purpose: "서로 다른 control state를 한 form에 두고 requestSubmit의 실제 submitter를 포함한 entry 순서와 repeated keys를 관찰합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>successful controls</title></head>\n<body>\n  <main>\n    <h1>전송 entry 점검</h1>\n    <form id=\"search\" action=\"https://learn.example/search\" method=\"get\">\n      <label>검색어 <input name=\"q\" value=\"표 구조\"></label>\n      <label>id만 있음 <input id=\"id-only\" value=\"제외\"></label>\n      <input name=\"disabledField\" value=\"제외\" disabled>\n      <label><input type=\"checkbox\" name=\"topic\" value=\"html\" checked> HTML</label>\n      <label><input type=\"checkbox\" name=\"topic\" value=\"css\"> CSS</label>\n      <label><input type=\"radio\" name=\"level\" value=\"beginner\" checked> 입문</label>\n      <select name=\"lang\" multiple aria-label=\"언어\">\n        <option value=\"ko\" selected>한국어</option><option value=\"en\" selected>English</option>\n      </select>\n      <button id=\"submit\" name=\"intent\" value=\"search\">검색</button>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector(\"#search\");\n    const submitter = document.querySelector(\"#submit\");\n    form.addEventListener(\"submit\", (event) => {\n      event.preventDefault();\n      const entries = [...new FormData(form, event.submitter)];\n      const pairs = entries.map(([name, value]) => `${name}=${value}`);\n      const lines = [\n        `submitter=${event.submitter.id}`,\n        `keys=${entries.map(([name]) => name).join(\",\")}`,\n        `entries=${pairs.join(\"|\")}`,\n        `topics=${entries.filter(([name]) => name === \"topic\").length}`,\n        `idOnlyIncluded=${entries.some(([name]) => name === \"id-only\")}`,\n        `disabledIncluded=${entries.some(([name]) => name === \"disabledField\")}`,\n      ];\n      document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n    });\n    form.requestSubmit(submitter);\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "GET form과 고정 action을 준비합니다." },
+          { lines: "8-19", explanation: "정상 text, name 없는 input, disabled input, checked/unchecked choice, multiple select와 name/value가 있는 submitter를 나란히 둡니다." },
+          { lines: "20-26", explanation: "submit event를 관찰하고 navigation을 막은 뒤 실제 event.submitter를 포함해 FormData entry list를 만듭니다." },
+          { lines: "27-37", explanation: "entry order·repeated key 수와 제외 대상 포함 여부를 exact string으로 기록합니다." },
+          { lines: "38-41", explanation: "requestSubmit으로 validation·submitter path를 실행하고 문서를 닫습니다." },
+        ],
+        run: { environment: ["현대 browser", "FormData(form, submitter) 지원", "network 불필요"], command: "successful-controls.html을 열고 #result와 form control accessibility names를 확인" },
+        output: { value: "submitter=submit\nkeys=q,topic,level,lang,lang,intent\nentries=q=표 구조|topic=html|level=beginner|lang=ko|lang=en|intent=search\ntopics=1\nidOnlyIncluded=false\ndisabledIncluded=false", explanation: ["unchecked CSS·disabledField·name 없는 id-only는 entry list에서 빠집니다.", "multiple select의 lang은 같은 key로 두 번 나타납니다.", "실제 submitter의 intent=search가 control tree 뒤 entry로 포함됩니다."] },
+        experiments: [
+          { change: "CSS checkbox도 checked로 바꿉니다.", prediction: "topic entry가 html과 css 두 개가 되고 topics=2입니다.", result: "server는 scalar가 아니라 list cardinality로 받아야 합니다." },
+          { change: "form.requestSubmit 대신 form.submit()을 호출합니다.", prediction: "submit listener와 constraint validation을 거치지 않아 결과가 작성되지 않고 실제 navigation이 시도됩니다.", result: "두 API의 lifecycle 차이를 알고 requestSubmit을 기본으로 사용합니다." },
+        ],
+        sourceRefs: ["web-form-basic-source", "whatwg-form-infrastructure", "whatwg-forms"],
+      },
+      {
+        id: "urlencoded-query-roundtrip",
+        title: "space·ampersand·한글·repeated key의 application/x-www-form-urlencoded round trip",
+        language: "html",
+        filename: "urlencoded-query.html",
+        purpose: "문자열 이어 붙이기 대신 URLSearchParams가 만드는 form-style percent encoding과 repeated key 복원을 exact output으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>query encoding</title></head>\n<body>\n  <main><h1>GET query 직렬화</h1><pre id=\"result\"></pre></main>\n  <script>\n    const params = new URLSearchParams([\n      [\"q\", \"HTML form\"],\n      [\"tag\", \"a&b\"],\n      [\"tag\", \"한글\"],\n    ]);\n    const url = new URL(\"https://learn.example/search\");\n    url.search = params.toString();\n    const restored = new URLSearchParams(url.search);\n    const lines = [\n      `encoded=${params}`,\n      `url=${url.href}`,\n      `query=${restored.get(\"q\")}`,\n      `tags=${restored.getAll(\"tag\").join(\"|\")}`,\n      `tagCount=${restored.getAll(\"tag\").length}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-5", explanation: "독립 document와 result 영역을 준비합니다." },
+          { lines: "6-11", explanation: "space, reserved ampersand, Unicode와 repeated tag를 tuple list로 URLSearchParams에 전달합니다." },
+          { lines: "12-14", explanation: "고정 HTTPS URL에 serializer 결과를 적용하고 다시 parser로 읽습니다." },
+          { lines: "15-22", explanation: "wire string·absolute URL·decoded scalar/list와 cardinality를 기록합니다." },
+          { lines: "23-25", explanation: "문서를 닫습니다. query string을 raw concatenation하지 않아 delimiter injection을 피합니다." },
+        ],
+        run: { environment: ["현대 browser", "network 불필요"], command: "urlencoded-query.html을 열고 #result의 encoding·round-trip 다섯 줄을 확인" },
+        output: { value: "encoded=q=HTML+form&tag=a%26b&tag=%ED%95%9C%EA%B8%80\nurl=https://learn.example/search?q=HTML+form&tag=a%26b&tag=%ED%95%9C%EA%B8%80\nquery=HTML form\ntags=a&b|한글\ntagCount=2", explanation: ["space는 plus, ampersand와 UTF-8 bytes는 percent-encoded됩니다.", "getAll은 repeated key 순서를 보존합니다.", "encoding은 escaping·authorization을 대신하지 않으며 sensitive GET data는 URL에 넣지 않습니다."] },
+        experiments: [
+          { change: "`'?q=' + value`로 직접 결합합니다.", prediction: "a&b의 ampersand가 새 parameter delimiter로 해석될 수 있습니다.", result: "URLSearchParams 같은 표준 serializer를 사용합니다." },
+          { change: "password parameter를 추가합니다.", prediction: "encoding되어도 address bar·history·logs·referrer에 민감 값이 남습니다.", result: "민감 mutation은 HTTPS POST와 server-side redaction·cache policy를 사용합니다." },
+        ],
+        sourceRefs: ["whatwg-form-infrastructure", "url-urlencoded-standard", "rfc9110-http-semantics"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "두 topic을 선택했지만 server에는 하나만 오고 query의 a&b가 별도 parameter로 갈라진다.", likelyCause: "repeated entry를 scalar로 덮거나 query를 표준 serializer 없이 문자열 결합했습니다.", checks: ["FormData entries와 Network query raw string을 비교합니다.", "server getParameterValues/list binding을 확인합니다.", "URLSearchParams round trip으로 delimiter·Unicode를 재현합니다."], fix: "cardinality를 schema에 선언하고 URLSearchParams/form serializer와 list binding을 사용합니다.", prevention: "missing·one·repeated·empty·Unicode·reserved-character contract fixture를 browser/server 모두에서 실행합니다." },
+    ],
+    expertNotes: ["URLSearchParams는 application/x-www-form-urlencoded 규칙을 사용하므로 generic percent-encoding API와 space 표현이 다를 수 있습니다. 실제 contract의 serializer를 고정합니다.", "GET URL은 CDN·proxy·analytics·browser history에 복제됩니다. 검색처럼 safe·shareable한 비민감 state만 넣고 retention과 referrer policy를 검토합니다."],
+  },
+  {
+    id: "method-enctype-submitter-http-response",
+    title: "method·enctype·submitter override와 server response를 하나의 HTTP transaction 계약으로 봅니다",
+    lead: "form markup은 request 생성의 시작일 뿐입니다. endpoint는 method semantics, Content-Type parser, size limit, CSRF·authorization, validation, status·redirect를 일관되게 처리해야 합니다.",
+    explanations: [
+      "GET은 safe retrieval과 bookmark 가능한 query에 사용하고, state-changing operation은 POST를 사용합니다. method 이름만 바꿔도 idempotency가 생기지 않으며 duplicate submit·retry는 unique constraint, idempotency key 또는 domain invariant로 server가 제어합니다.",
+      "application/x-www-form-urlencoded는 text-sized fields의 기본 encoding이고 multipart/form-data는 file·binary part와 text fields를 boundary로 나눕니다. fetch로 FormData를 보낼 때 Content-Type을 직접 쓰면 generated boundary가 빠질 수 있습니다. text/plain form enctype는 production parser contract로 대개 적합하지 않습니다.",
+      "여러 submit button은 formaction·formmethod·formenctype으로 같은 fields를 preview/save/upload 등 다른 endpoint에 보낼 수 있습니다. 실제 event.submitter를 포함해 validation·authorization을 결정하고 button label만 server action으로 신뢰하지 않습니다.",
+      "성공한 POST는 303 See Other와 Location으로 결과 GET에 연결하는 PRG가 refresh 재전송을 줄입니다. validation failure는 입력과 field errors를 보존하고, authentication redirect와 validation redirect를 섞지 않습니다. status·Content-Type·charset·cache·CSP headers는 body write 전에 정합니다.",
+    ],
+    concepts: [
+      { term: "enctype", definition: "form entry list를 HTTP request body로 표현할 media type을 선택하는 attribute입니다.", detail: ["POST에서 주로 의미가 있습니다.", "file upload에는 multipart/form-data를 사용합니다."] },
+      { term: "idempotency", definition: "동일한 의도 request가 중복 도착해도 domain 결과가 중복 생성되지 않도록 하는 server 계약입니다.", detail: ["HTTP method 이름만으로 보장되지 않습니다.", "unique constraint·key·transaction으로 구현합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "submitter-method-enctype-override",
+        title: "submit button이 override한 action·method·enctype와 entry list 검사",
+        language: "html",
+        filename: "submitter-override.html",
+        purpose: "form 기본 encoding과 upload submitter의 effective request metadata를 submit event에서 exact DOM properties로 관찰합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>submitter override</title></head>\n<body>\n  <main>\n    <h1>지원서 전송 계약</h1>\n    <form id=\"application\" action=\"https://learn.example/drafts\" method=\"post\" enctype=\"application/x-www-form-urlencoded\">\n      <label>표시 이름 <input name=\"displayName\" value=\"김하늘\"></label>\n      <button type=\"submit\" name=\"intent\" value=\"draft\">임시 저장</button>\n      <button id=\"upload\" type=\"submit\" name=\"intent\" value=\"upload\" formaction=\"https://learn.example/applications\" formmethod=\"post\" formenctype=\"multipart/form-data\">지원서 제출</button>\n    </form>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const form = document.querySelector(\"#application\");\n    const upload = document.querySelector(\"#upload\");\n    form.addEventListener(\"submit\", (event) => {\n      event.preventDefault();\n      const submitter = event.submitter;\n      const entries = [...new FormData(form, submitter)]\n        .map(([name, value]) => `${name}:${value}`).join(\"|\");\n      const lines = [\n        `defaultAction=${form.action}`,\n        `defaultEnctype=${form.enctype}`,\n        `submitter=${submitter.id}`,\n        `effectiveAction=${submitter.formAction}`,\n        `effectiveMethod=${submitter.formMethod}`,\n        `effectiveEnctype=${submitter.formEnctype}`,\n        `entries=${entries}`,\n        `expectedResponse=303 See Other`,\n      ];\n      document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n    });\n    form.requestSubmit(upload);\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-7", explanation: "default POST/urlencoded form과 독립 action을 선언합니다." },
+          { lines: "8-13", explanation: "text field, default draft submitter, action·method·multipart를 override하는 upload submitter를 둡니다." },
+          { lines: "14-22", explanation: "submit event를 막고 실제 event.submitter와 그 submitter를 포함한 FormData entries를 얻습니다." },
+          { lines: "23-34", explanation: "form 기본값과 effective submitter values, entries, server가 반환할 PRG status contract를 기록합니다." },
+          { lines: "35-37", explanation: "requestSubmit으로 upload path를 실행하고 문서를 닫습니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "submitter-override.html을 열고 #result와 submit button accessible names를 확인" },
+        output: { value: "defaultAction=https://learn.example/drafts\ndefaultEnctype=application/x-www-form-urlencoded\nsubmitter=upload\neffectiveAction=https://learn.example/applications\neffectiveMethod=post\neffectiveEnctype=multipart/form-data\nentries=displayName:김하늘|intent:upload\nexpectedResponse=303 See Other", explanation: ["form 기본 endpoint/encoding과 activated submitter의 effective metadata가 다릅니다.", "entry list에는 upload button의 intent만 포함됩니다.", "303은 client가 자동 생성하는 값이 아니라 성공한 server handler의 response contract입니다."] },
+        experiments: [
+          { change: "draft button으로 requestSubmit합니다.", prediction: "effective action/enctype가 form 기본값이고 intent=draft가 포함됩니다.", result: "실제 submitter별 endpoint·authorization·validation contract를 test합니다." },
+          { change: "multipart request Content-Type을 boundary 없이 수동 작성합니다.", prediction: "server parser가 parts를 분리하지 못합니다.", result: "native form 또는 browser FormData transport가 boundary를 생성하게 합니다." },
+        ],
+        sourceRefs: ["web-form-concepts-source", "jsp-servlet-parameter-source", "whatwg-forms", "rfc9110-http-semantics", "rfc7578-multipart", "jakarta-servlet-response"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "multipart handler에 모든 parameter가 null이고 refresh 때 신청이 두 번 생성된다.", likelyCause: "effective submitter enctype/boundary를 확인하지 않았고 POST 성공 page를 직접 반환해 history 재전송이 남았습니다.", checks: ["event.submitter의 formAction/formMethod/formEnctype를 확인합니다.", "Network Content-Type boundary·payload와 server multipart limits를 봅니다.", "response status·Location과 database uniqueness를 확인합니다."], fix: "browser가 생성한 multipart boundary를 사용하고 server 성공 뒤 transaction/unique invariant와 303 PRG를 적용합니다.", prevention: "각 submitter의 effective request, oversize/invalid multipart, double click/retry/refresh integration test를 둡니다." },
+    ],
+    expertNotes: ["multipart filename과 Content-Type은 client-controlled metadata입니다. path로 사용하지 말고 server-generated id, size/signature/decoder 검사, quarantine·safe serving을 적용합니다.", "CSP form-action은 unexpected destination을 제한하는 defense-in-depth이지만 server CSRF·authorization·open redirect validation을 대체하지 않습니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "화면에 있는 input은 모두 request에 포함되나요?", answer: "아닙니다. name, disabled, checked, form owner와 submitter 등 successful-control 조건을 만족한 entries만 포함됩니다." },
+  { question: "readonly와 disabled control은 전송 관점에서 같은가요?", answer: "아닙니다. readonly control은 보통 전송되지만 disabled control은 successful entry에서 제외됩니다." },
+  { question: "같은 name checkbox 여러 개를 server Map 한 값으로 받아도 되나요?", answer: "여러 entries가 올 수 있으므로 list/array cardinality로 받고 missing·duplicate·unknown policy를 정해야 합니다." },
+  { question: "GET query의 ampersand와 한글은 어떻게 안전하게 직렬화하나요?", answer: "문자열 결합 대신 form/URLSearchParams의 application/x-www-form-urlencoded serializer를 사용합니다." },
+  { question: "multipart/form-data의 boundary를 직접 Content-Type에 적어야 하나요?", answer: "native form이나 fetch FormData에서는 browser가 body와 일치하는 boundary parameter를 생성하게 해야 합니다." },
+  { question: "POST 성공 뒤 303 redirect를 쓰는 이유는 무엇인가요?", answer: "결과를 GET URL로 전환해 refresh에 원래 POST body가 재전송되는 위험을 줄이고 결과 URL을 공유 가능하게 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "name 없는·disabled·unchecked·multiple·repeated·submitter controls의 FormData entry 차이를 검증했다.",
+  "form.requestSubmit과 form.submit의 validation·event·submitter lifecycle 차이를 설명할 수 있다.",
+  "GET query를 URLSearchParams로 직렬화하고 space·reserved 문자·Unicode·repeated key를 round-trip했다.",
+  "safe/idempotent method 의미와 state-changing POST의 server invariant를 분리했다.",
+  "각 submitter의 effective action·method·enctype와 authorization contract를 검사했다.",
+  "multipart boundary·size·filename/type 신뢰 경계와 server parser limit을 검증했다.",
+  "POST 성공 303 PRG, validation failure 입력 보존, response header commitment를 integration test했다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "url-urlencoded-standard", repository: "WHATWG URL Living Standard", path: "#application/x-www-form-urlencoded", publicUrl: "https://url.spec.whatwg.org/#application/x-www-form-urlencoded", usedFor: ["form URL encoding", "percent-encode set", "space plus", "parser·serializer", "repeated parameters"], evidence: "2026-07-14에 application/x-www-form-urlencoded parser·serializer를 확인해 GET query의 space·reserved character·Unicode round-trip 기준으로 사용했습니다." },
+  { id: "rfc7578-multipart", repository: "IETF RFC Editor", path: "rfc7578", publicUrl: "https://www.rfc-editor.org/rfc/rfc7578.html", usedFor: ["multipart/form-data", "boundary parameter", "part name·filename", "multiple files", "charset considerations"], evidence: "2026-07-14에 RFC 7578의 multipart/form-data media type과 boundary·part disposition 요구를 확인했습니다." },
+);
+
 export default session;

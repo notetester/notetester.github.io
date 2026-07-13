@@ -301,4 +301,138 @@ const session = {
   },
 } satisfies DetailedSession;
 
+(session.chapters as DetailedSession["chapters"]).push(
+  {
+    id: "caption-scope-association-contract",
+    title: "caption과 scope는 표의 이름과 각 data cell이 속한 행·열 문맥을 함께 제공합니다",
+    lead: "시각적으로 위·왼쪽에 header가 있어도 programmatic association이 자동으로 명확하다고 가정하지 않습니다. simple table은 caption과 scope=col/row로 관계를 직접 표현하고 accessibility tree에서 확인합니다.",
+    explanations: [
+      "caption은 특정 table의 accessible name과 식별 문맥을 제공합니다. page heading은 section 전체를, caption은 바로 그 data matrix를 설명하므로 둘을 목적에 맞게 함께 사용할 수 있습니다. `2026년 2분기 과정별 수료자 수(명)`처럼 대상·기간·단위를 포함하되 주변 문단을 장황하게 반복하지 않습니다.",
+      "thead·tbody·tfoot은 row group을 명시하고 CSS·print·DOM query와 header algorithm에 안정된 경계를 줍니다. 첫 column의 category가 각 row를 식별하면 td가 아니라 th scope=row로 작성하고, column label은 th scope=col로 작성합니다.",
+      "scope는 simple regular grid에서 col·row, multi-level group에서는 colgroup·rowgroup을 사용할 수 있습니다. scope 값을 시각 위치에 맞춰 추측하지 말고 logical grid에서 해당 th가 실제로 어느 cells를 묶는지 확인합니다.",
+      "accessibility snapshot에 table name, row/column header roles가 보이는지 확인하고 대표 data cell을 screen reader table navigation으로 이동합니다. 자동 tree는 실제 announce 조합을 모두 증명하지 않으므로 keyboard와 target AT 수동 검증을 결합합니다.",
+    ],
+    concepts: [
+      { term: "table accessible name", definition: "보조기술이 여러 표를 식별할 때 사용하는 이름으로, caption이 가장 직접적인 HTML 연결을 제공합니다.", detail: ["주변 heading과 목적이 다릅니다.", "대상·기간·단위를 간결히 포함합니다."] },
+      { term: "scope", definition: "th가 적용되는 row·column 또는 rowgroup·colgroup 범위를 나타내는 attribute입니다.", detail: ["simple grid의 association을 명시합니다.", "병합이 복잡하면 headers/id 또는 단순화를 검토합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "simple-table-caption-scope-audit",
+        title: "caption·row group·scope를 DOM property와 representative cell로 검사",
+        language: "html",
+        filename: "simple-table-scope.html",
+        purpose: "과정별 수료자 표의 name·row/column header와 target cell 좌표를 browser가 만든 table DOM에서 exact output으로 확인합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>표 header 관계 점검</title>\n</head>\n<body>\n  <main>\n    <h1>2분기 학습 통계</h1>\n    <table id=\"completion\">\n      <caption>2026년 2분기 과정별 수료자 수(명)</caption>\n      <thead>\n        <tr><td></td><th scope=\"col\">수강자</th><th scope=\"col\">수료자</th></tr>\n      </thead>\n      <tbody>\n        <tr><th scope=\"row\">HTML</th><td>32</td><td id=\"target\">28</td></tr>\n        <tr><th scope=\"row\">CSS</th><td>30</td><td>24</td></tr>\n      </tbody>\n    </table>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const table = document.querySelector(\"#completion\");\n    const target = document.querySelector(\"#target\");\n    const columnHeaders = [...table.tHead.querySelectorAll(\"th\")];\n    const rowHeaders = [...table.tBodies[0].querySelectorAll(\"th\")];\n    const lines = [\n      `caption=${table.caption.textContent}`,\n      `groups=${table.tHead.tagName},${table.tBodies[0].tagName}`,\n      `rows=${table.rows.length}`,\n      `columns=${table.rows[0].cells.length}`,\n      `columnScopes=${columnHeaders.map((cell) => cell.scope).join(\",\")}`,\n      `rowScopes=${rowHeaders.map((cell) => cell.scope).join(\",\")}`,\n      `target=${target.parentElement.firstElementChild.textContent}/${table.tHead.rows[0].cells[target.cellIndex].textContent}/${target.textContent}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-8", explanation: "독립 문서와 page heading을 준비합니다." },
+          { lines: "9-20", explanation: "고유 caption, thead/tbody, 두 column header와 두 row header를 regular 3-column grid로 만듭니다." },
+          { lines: "21-27", explanation: "table과 대표 수료자 cell, column/row th 집합을 DOM API로 얻습니다." },
+          { lines: "28-36", explanation: "caption·row groups·grid 크기·scope 값과 대표 cell의 row/column/value 문맥을 고정 문자열로 기록합니다." },
+          { lines: "37-39", explanation: "문서를 닫습니다. accessibility snapshot에서는 별도로 table name과 header roles를 확인합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "simple-table-scope.html을 열고 #result와 Accessibility tree의 table name·rowheader·columnheader를 확인" },
+        output: { value: "caption=2026년 2분기 과정별 수료자 수(명)\ngroups=THEAD,TBODY\nrows=3\ncolumns=3\ncolumnScopes=col,col\nrowScopes=row,row\ntarget=HTML/수료자/28", explanation: ["table caption과 두 explicit row group이 DOM property로 노출됩니다.", "대표 값 28은 HTML row와 수료자 column이 교차하는 cell입니다.", "빈 corner cell은 data/header 관계가 없으므로 td로 유지합니다."] },
+        experiments: [
+          { change: "HTML row header를 td로 바꿉니다.", prediction: "화면 text는 같지만 rowheader role과 scope=row 관계가 사라집니다.", result: "style이 아닌 실제 th로 category header를 표현합니다." },
+          { change: "caption을 `표`로 바꿉니다.", prediction: "table name은 남아도 다른 표와 목적을 구분하기 어렵습니다.", result: "대상·기간·단위를 포함한 독립적인 caption을 작성합니다." },
+        ],
+        sourceRefs: ["web-table-basic-source", "whatwg-tables", "wai-tables", "wai-two-headers", "wai-caption-summary"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "screen reader table 목록에는 `표`만 보이고 28 cell에서 수료자만 또는 HTML만 들린다.", likelyCause: "caption이 generic하거나 row/column header를 td·CSS bold로 표현해 association이 불완전합니다.", checks: ["Accessibility tree의 table name·rowheader·columnheader를 확인합니다.", "th scope와 logical cellIndex를 봅니다.", "대표 cell을 target AT table mode로 이동합니다."], fix: "고유 caption과 실제 th scope=col/row를 추가하고 regular grid를 유지합니다.", prevention: "각 표마다 name uniqueness와 대표 cell row/column announce를 release checklist에 둡니다." },
+    ],
+    expertNotes: ["caption을 visually-hidden 처리할 수는 있지만 모든 사용자에게 table 목적·단위를 보여 주는 편이 대개 유용합니다. 숨김은 content owner와 접근성 검토 근거가 있을 때만 사용합니다.", "DOM에서 header text를 조합한 test helper는 표준 association algorithm을 완전히 재현하지 못합니다. browser accessibility tree와 실제 AT가 최종 검증 대상입니다."],
+  },
+  {
+    id: "irregular-grid-id-headers-colgroup",
+    title: "다단 header는 logical grid를 먼저 단순화하고 불규칙 관계가 남을 때 id/headers를 명시합니다",
+    lead: "colspan으로 묶인 분기·월·측정 종류가 여러 층이면 눈으로 가까운 header 하나만 읽어서는 cell 문맥이 부족합니다. 각 data cell이 참조해야 할 header id 목록을 schema처럼 관리합니다.",
+    explanations: [
+      "colgroup·col은 column 묶음과 presentation hook을 제공하지만 data cell의 accessible header 이름을 대신하지 않습니다. 원본의 column 배경색 grouping을 보존하더라도 th 관계를 별도로 작성해야 합니다.",
+      "headers attribute는 space-separated th id references입니다. row header, group header, leaf column header를 필요한 순서로 참조하고 id는 문서 전체에서 unique해야 합니다. header label 변경·column reorder 때 참조도 함께 갱신합니다.",
+      "scope=colgroup/rowgroup으로 충분한 regular multi-level table이면 그것을 우선할 수 있습니다. irregular spans, 빈 gaps, 여러 축이 섞여 algorithm이 모호할 때 headers/id가 유용하지만 모든 td에 긴 참조를 수동 복제하면 유지보수 위험이 큽니다.",
+      "두 표로 분리하거나 반복 header column을 두는 단순화가 사용자 task를 더 빠르게 만들 수 있습니다. 복잡성은 원본 spreadsheet 모양을 복제하기 위해서가 아니라 실제 교차 비교 요구가 있을 때만 정당화합니다.",
+    ],
+    concepts: [
+      { term: "headers/id association", definition: "td 또는 th의 headers attribute가 공백으로 구분된 header cell id를 직접 참조하는 명시적 관계입니다.", detail: ["불규칙 multi-level grid에 사용합니다.", "참조 무결성을 회귀 검사합니다."] },
+      { term: "logical grid", definition: "rowspan·colspan이 차지하는 slot을 모두 펼쳐 각 cell의 row/column 좌표와 header coverage를 나타낸 모델입니다.", detail: ["overlap·gap을 찾습니다.", "시각 border보다 먼저 설계합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "multi-level-table-explicit-headers",
+        title: "분기 group·측정 leaf·과정 row header를 headers/id로 명시",
+        language: "html",
+        filename: "multi-level-headers.html",
+        purpose: "다단 table에서 대표 data cell의 raw headers tokens와 참조된 header text를 browser DOM으로 exact 검증합니다.",
+        code: "<!doctype html>\n<html lang=\"ko\">\n<head><meta charset=\"utf-8\"><title>다단 표 관계</title></head>\n<body>\n  <main>\n    <h1>과정별 분기 성과</h1>\n    <table id=\"metrics\">\n      <caption>2026년 상반기 과정별 신청·수료 인원(명)</caption>\n      <colgroup><col><col span=\"2\"><col span=\"2\"></colgroup>\n      <thead>\n        <tr><td></td><th id=\"q1\" colspan=\"2\" scope=\"colgroup\">1분기</th><th id=\"q2\" colspan=\"2\" scope=\"colgroup\">2분기</th></tr>\n        <tr><th id=\"course\" scope=\"col\">과정</th><th id=\"q1-apply\" scope=\"col\">신청</th><th id=\"q1-done\" scope=\"col\">수료</th><th id=\"q2-apply\" scope=\"col\">신청</th><th id=\"q2-done\" scope=\"col\">수료</th></tr>\n      </thead>\n      <tbody>\n        <tr><th id=\"html-row\" scope=\"row\">HTML</th><td headers=\"html-row q1 q1-apply\">35</td><td headers=\"html-row q1 q1-done\">30</td><td headers=\"html-row q2 q2-apply\">32</td><td id=\"target\" headers=\"html-row q2 q2-done\">28</td></tr>\n      </tbody>\n    </table>\n    <pre id=\"result\"></pre>\n  </main>\n  <script>\n    const table = document.querySelector(\"#metrics\");\n    const target = document.querySelector(\"#target\");\n    const ids = target.headers.split(/\\s+/);\n    const labels = ids.map((id) => document.getElementById(id).textContent);\n    const lines = [\n      `caption=${table.caption.textContent}`,\n      `colgroups=${table.querySelectorAll(\"colgroup\").length}`,\n      `headerRows=${table.tHead.rows.length}`,\n      `headers=${target.headers}`,\n      `labels=${labels.join(\"/\")}`,\n      `value=${target.textContent}`,\n      `allRefsExist=${ids.every((id) => document.getElementById(id) !== null)}`,\n    ];\n    document.querySelector(\"#result\").textContent = lines.join(\"\\n\");\n  </script>\n</body>\n</html>",
+        walkthrough: [
+          { lines: "1-6", explanation: "표준 문서와 page heading을 준비합니다." },
+          { lines: "7-19", explanation: "caption, 세 column group, 2-level thead와 HTML row를 만들고 대표 28 cell이 row·2분기·수료 header ids를 참조하게 합니다." },
+          { lines: "20-25", explanation: "target.headers를 token화하고 실제 id element text를 DOM에서 찾습니다." },
+          { lines: "26-34", explanation: "caption·group·header row·raw references·labels·value·참조 존재 여부를 기록합니다." },
+          { lines: "35-37", explanation: "문서를 닫습니다. column style grouping과 accessible header association을 서로 다른 검사로 유지합니다." },
+        ],
+        run: { environment: ["현대 browser", "JavaScript 활성화", "network 불필요"], command: "multi-level-headers.html을 열고 #result와 target cell의 accessibility header 문맥을 확인" },
+        output: { value: "caption=2026년 상반기 과정별 신청·수료 인원(명)\ncolgroups=1\nheaderRows=2\nheaders=html-row q2 q2-done\nlabels=HTML/2분기/수료\nvalue=28\nallRefsExist=true", explanation: ["representative cell은 세 header id를 명시적으로 참조합니다.", "colgroup은 column styling/grouping hook이지만 labels는 headers/id가 제공합니다.", "참조 id가 모두 존재한다는 정적 검사와 실제 AT association 검사를 함께 수행합니다."] },
+        experiments: [
+          { change: "q2-done id를 바꾸고 target.headers는 그대로 둡니다.", prediction: "allRefsExist=false가 되어 header reference drift가 드러납니다.", result: "schema/DOM refactor에 id-reference contract test가 필요합니다." },
+          { change: "분기별로 표를 두 개로 분리합니다.", prediction: "caption은 두 개가 필요하지만 각 표는 한 단계 header만 가져 더 단순해집니다.", result: "task 시간과 small-screen 이해도를 비교해 단순 구조를 우선합니다." },
+        ],
+        sourceRefs: ["web-table-span-source", "web-table-colgroup-source", "whatwg-table-processing", "mdn-th-element", "wai-caption-summary", "wai-table-tips"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "column을 reorder한 뒤 cell이 이전 분기 header를 읽거나 headers에 존재하지 않는 id가 남는다.", likelyCause: "data schema와 headers/id reference를 서로 다른 source에서 수동 관리했습니다.", checks: ["모든 headers token의 document id 존재·uniqueness를 검사합니다.", "logical grid 좌표와 colspan coverage를 다시 계산합니다.", "대표 cell의 AT header announce를 확인합니다."], fix: "하나의 column schema에서 th ids·data headers를 생성하거나 표를 단순화하고 깨진 참조를 교정합니다.", prevention: "header id uniqueness·reference existence·representative association을 component test에 둡니다." },
+    ],
+    expertNotes: ["headers token 순서는 일부 assistive technology announce 순서와 완전히 같다고 보장하지 않습니다. 구조를 자연스럽게 만들고 target 조합에서 실제 사용성을 확인합니다.", "colgroup span과 cell colspan을 변경할 때 visual width만 고치지 말고 logical grid coverage와 export schema도 함께 versioning합니다."],
+  },
+  {
+    id: "interactive-sort-responsive-export",
+    title: "정렬·filter·responsive·export가 추가되어도 native table의 관계와 data integrity를 보존합니다",
+    lead: "읽기 전용 표를 application grid로 바꾸기 전에 native table 안 button과 aria-sort로 필요한 interaction만 점진적으로 추가합니다.",
+    explanations: [
+      "sortable header의 th는 header 관계를 유지하고 그 안 button이 activation target이 됩니다. 현재 sort column의 th에 aria-sort=ascending/descending을 두고 다른 th에서는 제거합니다. 화살표 icon만 바꾸지 않고 visible/accessible 상태를 제공합니다.",
+      "DOM row reorder 후 keyboard focus가 제거된 button이나 row에 갇히지 않는지 확인합니다. sort는 formatted string이 아니라 numeric/date canonical value로 수행하고 stable tie-breaker를 정의합니다. empty/null/NaN 위치도 product contract로 고정합니다.",
+      "mobile에서는 horizontal scroll wrapper가 전체 page overflow를 막고 caption·header가 함께 scroll되게 합니다. first column sticky는 overlap·zoom·high contrast를 test하고, 숨긴 column data가 task에 필요하다면 detail disclosure나 column chooser를 제공합니다.",
+      "CSV export와 화면 table은 같은 filtered/sorted schema version과 authorization을 사용해야 합니다. formula injection 가능 text, 개인정보 대량 export, locale separator와 encoding을 검토하며 화면에 없다고 server export 권한이 생기지 않습니다.",
+    ],
+    concepts: [
+      { term: "aria-sort", definition: "현재 정렬된 column header에 ascending·descending·other·none 상태를 나타내는 property입니다.", detail: ["th에 적용합니다.", "실제 row order와 항상 동기화합니다."] },
+      { term: "stable sort", definition: "비교 값이 같은 rows의 기존 상대 순서를 보존하는 정렬입니다.", detail: ["결과 flicker를 줄입니다.", "명시적 secondary key와 pagination contract를 둘 수 있습니다."] },
+    ],
+    codeExamples: [],
+    diagnostics: [
+      { symptom: "정렬 icon은 내림차순인데 DOM row와 aria-sort는 오름차순이고 CSV 순서는 또 다르다.", likelyCause: "visual state·DOM data·export query가 서로 다른 sort source를 사용합니다.", checks: ["현재 th aria-sort와 button name을 봅니다.", "raw comparator·tie-breaker와 DOM row key를 확인합니다.", "export request sort parameter와 server query를 대조합니다."], fix: "단일 typed sort model에서 DOM·ARIA·URL·server/export parameter를 생성하고 성공 뒤 상태를 갱신합니다.", prevention: "numeric/date/null/tie fixture로 화면·URL·export order contract test를 실행합니다." },
+    ],
+    expertNotes: ["수천 rows를 모두 DOM에 넣어 성능을 해결하려고 role=grid virtualization을 즉시 선택하지 않습니다. server pagination과 native table subset, 전체 count와 URL state를 먼저 검토합니다.", "sort/filter telemetry에 cell raw value·검색어를 남기면 개인정보가 유출될 수 있습니다. schema field id와 result count 같은 최소 정보만 수집합니다."],
+  },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "caption과 page heading은 서로 대체할 수 있나요?", answer: "아닙니다. heading은 문서 section을, caption은 특정 table을 식별합니다. 필요하면 둘 다 목적에 맞게 제공합니다." },
+  { question: "첫 column의 category text를 td에 굵게 표시하면 row header인가요?", answer: "아닙니다. th scope=row로 programmatic header 관계를 제공해야 합니다." },
+  { question: "colgroup이 있으면 data cell의 column header가 자동으로 이름 붙나요?", answer: "아닙니다. colgroup은 grouping·style hook이고 th scope 또는 headers/id association을 별도로 제공합니다." },
+  { question: "headers attribute에는 무엇을 넣나요?", answer: "해당 cell을 설명하는 header cell들의 unique id를 공백으로 구분해 넣고 모든 참조 존재와 관계를 검증합니다." },
+  { question: "복잡한 표는 항상 headers/id로 유지해야 하나요?", answer: "아닙니다. 여러 단순 표로 분리하거나 반복 label을 두는 편이 task 이해와 유지보수에 더 좋을 수 있습니다." },
+  { question: "정렬 button에 aria-sort를 넣나요?", answer: "aria-sort는 현재 정렬 column의 th에 두고 button은 동작과 다음/현재 상태를 이해할 이름을 가집니다." },
+  { question: "화면 표와 CSV가 같은 column이면 data integrity가 보장되나요?", answer: "아닙니다. filter·sort·unit·null·encoding·authorization과 raw/formatted value가 같은 contract인지 검증해야 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "각 table caption이 대상·기간·단위를 포함해 다른 표와 독립적으로 구분된다.",
+  "regular grid의 column·row header에 th scope=col/row를 적용하고 representative cell을 검증했다.",
+  "colgroup presentation과 th header association의 책임을 구분했다.",
+  "multi-level table의 logical grid와 headers/id 참조 존재·uniqueness를 자동 검사했다.",
+  "복잡한 table을 여러 simple tables로 분리할 수 있는지 사용자 task로 비교했다.",
+  "sort button·th aria-sort·DOM order·URL/export sort state를 단일 model로 동기화했다.",
+  "responsive scroll·zoom·sticky header와 CSV privacy/formula-injection/data integrity를 검증했다.",
+);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "whatwg-table-processing", repository: "WHATWG HTML Living Standard", path: "multipage/tables.html#processing-model", publicUrl: "https://html.spec.whatwg.org/multipage/tables.html#processing-model", usedFor: ["table logical grid", "forming table", "cell overlap", "header association algorithm", "row/column groups"], evidence: "2026-07-14에 table processing model의 grid 형성과 data cell-header 관계 algorithm을 확인해 multi-level reference 검증 기준으로 사용했습니다." },
+  { id: "mdn-th-element", repository: "MDN Web Docs", path: "en-US/docs/Web/HTML/Reference/Elements/th", publicUrl: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/th", usedFor: ["th element", "scope", "headers", "abbr", "row/column header authoring"], evidence: "2026-07-14에 MDN th reference의 scope·headers authoring 설명을 WHATWG normative processing model의 실습 보조 자료로 확인했습니다." },
+);
+
 export default session;
