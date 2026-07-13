@@ -149,11 +149,13 @@ export type DetailedSession = {
     answer: string;
   }>;
   completionChecklist: string[];
+  relatedGlossary?: string[];
   nextSessions: string[];
   sources: SessionSource[];
   sourceCoverage: {
     filesRead: number;
     filesUsed: number;
+    uncoveredFiles?: string[];
     uncoveredNotes: string[];
   };
 };

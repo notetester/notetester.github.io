@@ -1229,7 +1229,7 @@ public class StreamSourceShapes {
   ];
 }
 
-const chapterOrder = [
+const chapterOrder: readonly string[] = [
   "class12-stream-original-golden-audit",
   "stream-pipeline-lazy-single-use",
   "stream-sources-object-primitive-boxing",
@@ -1242,7 +1242,7 @@ const chapterOrder = [
   "parallel-stream-laws-cost-model",
   "resource-backed-stream-close-ownership",
   "verification-spliterator-benchmark-diagnostics",
-] as const;
+];
 
 session.chapters.sort(
   (left, right) => chapterOrder.indexOf(left.id) - chapterOrder.indexOf(right.id),
