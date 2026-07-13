@@ -873,7 +873,7 @@ public class SingleScannerPipelineLab {
     "input adapter·pure service·renderer를 분리했다.",
     "caller-owned resource와 callee close 책임을 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-03-encapsulation"],
   sources: [
     { id: "java-class02-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class02/Ex01_MethodDemo.java", usedFor: ["fields and method declarations", "void/return progression", "sum field mutation"], evidence: "active methods와 commented main, uncalled play02, sum writer play07을 읽었습니다." },
     { id: "java-class02-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class02/Ex02_MethodMain.java", usedFor: ["caller/callee order", "void and return calls", "14-line golden"], evidence: "clean run의 total260·86.6·B·sumField260을 개인 이름 없이 검증했습니다." },
