@@ -1262,7 +1262,7 @@ public class EncapsulationContractLab {
     "structural·behavior·alias·privacy·concurrency contract tests를 모두 작성했다.",
     "실제 개인정보·비밀값·로컬 절대 경로를 공개 세션에 넣지 않았다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-04-overload-constructor-this"],
   sources: [
     { id: "java-class03-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class03/Ex01_MethodDemo.java", usedFor: ["package-private/private contrast", "getter/setter", "getter logging side effect"], evidence: "네 package-private fields, 두 private fields, public accessors, getDogName console side effect와 age=176 naming mismatch를 읽었고 개인 literals는 공개하지 않았습니다." },
     { id: "java-class03-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class03/Ex02_MethodMain.java", usedFor: ["same-package direct access", "private compile comments", "accessor execution"], evidence: "clean run의 7행·getter log2회·age field를 키176으로 출력한 mismatch·degName 오타를 확인하되 이름 문자열은 presence evidence로만 보존했습니다." },
