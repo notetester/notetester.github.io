@@ -254,4 +254,250 @@ const session = {
   sourceCoverage: { filesRead: 3, filesUsed: 3, uncoveredNotes: ["HTTP framework별 exception handler 구현은 각 웹 framework 과정에서 다룹니다.", "error code versioning·ExceptionGroup·saga·PII tracing은 원본 raise/custom exception을 전문가 운영 contract로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "domain-taxonomy-cause-and-notes",
+    title: "custom domain taxonomy에 code·cause·note를 분리해 보존합니다",
+    lead: "custom exception은 class 이름만 늘리는 작업이 아니라 caller가 복구 결정을 내릴 안정된 taxonomy, 공개 가능한 정보와 내부 원인을 설계하는 일입니다.",
+    explanations: [
+      "raise는 현재 흐름을 중단하고 가장 가까운 matching handler로 control을 넘깁니다. assertion은 최적화로 제거될 수 있으므로 사용자 입력·업무 invariant 검증에 assert 대신 명시 예외를 사용합니다.",
+      "domain exception은 Exception을 상속하고 이름·code·필드를 복구 행동 기준에 맞게 최소화합니다. ValidationError, ConflictError, DependencyUnavailable처럼 의미가 겹치지 않는 taxonomy가 broad AppError 하나보다 유용합니다.",
+      "외부 parser의 ValueError를 domain ValidationError로 바꿀 때 raise ... from cause로 기술 원인을 보존합니다. caller는 domain type으로 분기하고 observability layer는 cause chain을 진단합니다.",
+      "BaseException.add_note는 traceback에 보조 context를 추가하되 exception identity와 args를 바꾸지 않습니다. note에는 secret·원문 payload 대신 field·record ID·operation 같은 안전한 metadata만 넣습니다.",
+      "custom exception 객체를 그대로 JSON serialize하거나 repr로 외부 응답에 노출하지 않습니다. public message/code와 내부 cause·traceback·notes를 서로 다른 channel로 보냅니다.",
+    ],
+    concepts: [
+      { term: "domain error taxonomy", definition: "업무 의미와 caller의 복구 행동을 기준으로 나눈 안정된 예외 type·code 체계입니다.", detail: ["transport status와 1:1로 고정하지 않습니다.", "내부 기술 예외를 감쌉니다."] },
+      { term: "exception note", definition: "예외를 다시 만들지 않고 traceback 표시에 안전한 보조 context를 추가하는 문자열입니다.", detail: ["add_note로 추가합니다.", "민감 원문을 넣지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "custom-domain-error-cause-add-note",
+      title: "안전한 domain error에 cause와 note를 보존합니다",
+      language: "python",
+      filename: "domain_error_taxonomy.py",
+      purpose: "외부 ValueError를 안정된 code의 custom exception으로 변환하고 원인·note metadata를 exact output으로 확인합니다.",
+      code: String.raw`class DomainError(Exception):
+    code = "domain_error"
+
+class ValidationError(DomainError):
+    code = "invalid_field"
+
+def parse_age(raw):
+    try:
+        age = int(raw)
+    except (TypeError, ValueError) as cause:
+        error = ValidationError("age must be an integer")
+        error.add_note("field=age")
+        raise error from cause
+    if not 0 <= age <= 130:
+        error = ValidationError("age is out of range")
+        error.add_note("field=age")
+        raise error
+    return age
+
+for raw in ["20", "old", "200"]:
+    try:
+        print("ok:", parse_age(raw))
+    except ValidationError as error:
+        cause = type(error.__cause__).__name__ if error.__cause__ else None
+        print("error:", error.code, str(error), "cause:", cause, "notes:", error.__notes__)`,
+      walkthrough: [
+        { lines: "1-5", explanation: "공통 DomainError와 복구 가능한 validation subtype에 안정된 code를 둡니다." },
+        { lines: "7-19", explanation: "변환 실패는 ValueError/TypeError를 cause로 연결하고 range 실패는 별도 cause 없이 같은 public taxonomy로 만듭니다." },
+        { lines: "21-25", explanation: "정상·문법·범위 입력에서 public code/message와 안전한 note, cause type만 출력합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "민감 원문·traceback 출력 없음"], command: "python -I -B -X utf8 domain_error_taxonomy.py" },
+      output: { value: "ok: 20\nerror: invalid_field age must be an integer cause: ValueError notes: ['field=age']\nerror: invalid_field age is out of range cause: None notes: ['field=age']", explanation: ["문법 오류와 범위 오류는 caller 관점에서 같은 validation taxonomy지만 cause 유무는 내부 진단에 남습니다.", "raw 값 자체는 note나 오류 message에 넣지 않았습니다."] },
+      experiments: [
+        { change: "raise error from None을 사용합니다.", prediction: "표시 context는 숨지만 원인을 진단에 보존할 별도 정책이 필요합니다.", result: "사용자 화면과 내부 관찰성을 분리합니다." },
+        { change: "add_note에 raw 전체를 넣습니다.", prediction: "traceback log를 통해 민감 입력이 노출될 수 있습니다.", result: "note도 log data classification 대상입니다." },
+        { change: "assert 0 <= age <= 130으로 바꿉니다.", prediction: "-O 실행에서 검증이 제거될 수 있습니다.", result: "외부 입력 validation에는 assert를 쓰지 않습니다." },
+      ],
+      sourceRefs: ["py-raise-source", "python-raising-exceptions", "python-baseexception-add-note", "python-domain-exception-context"],
+    }],
+    diagnostics: [
+      { symptom: "API caller가 오류 message 문자열을 검색해 분기한다.", likelyCause: "안정된 domain type/code 없이 자연어 message만 제공했습니다.", checks: ["handler의 substring 비교를 찾습니다.", "실패별 복구 행동을 표로 만듭니다.", "transport status와 domain code를 구분합니다."], fix: "custom exception taxonomy와 machine-readable code를 도입하고 message는 사람 설명으로 유지합니다.", prevention: "code compatibility test와 localization-independent client contract를 둡니다." },
+      { symptom: "custom error로 바꾼 뒤 실제 int 변환 실패 원인을 찾을 수 없다.", likelyCause: "raise ... from cause 없이 원래 예외를 버렸습니다.", checks: ["__cause__·__context__를 확인합니다.", "변환 layer를 추적합니다.", "내부 log에 chain이 있는지 봅니다."], fix: "기술 예외를 domain 예외의 명시 cause로 연결합니다.", prevention: "cause type 보존과 public redaction을 동시에 테스트합니다." },
+    ],
+    expertNotes: ["예외 taxonomy는 class hierarchy를 깊게 만드는 경쟁이 아닙니다. caller가 실제로 다른 행동을 하는 지점만 type/code로 분리합니다."],
+  },
+  {
+    id: "result-versus-exception-conversion-boundary",
+    title: "예상 가능한 변환 실패는 Result로, 계약 위반은 exception으로 구분합니다",
+    lead: "사용자 입력 여러 건을 계속 처리해야 하는 경로에서는 값과 오류를 명시한 Result가 유리하고, programmer misuse나 진행 불가능한 invariant는 exception이 더 선명합니다.",
+    explanations: [
+      "exception은 정상 흐름에서 멀리 떨어진 handler로 전달되고 stack을 보존합니다. 드물고 복구 경계가 분명한 실패에 적합하지만 대량 레코드의 예상 validation 결과를 모두 예외로 만들면 제어 흐름과 관찰성이 복잡해질 수 있습니다.",
+      "Result 객체는 success value와 stable error code를 data로 반환해 batch가 모든 행의 결과를 수집할 수 있습니다. value/error가 동시에 존재하거나 둘 다 없는 invalid state를 생성자가 막아야 합니다.",
+      "Result를 반환하는 함수라도 str이 아닌 객체를 넘긴 programmer misuse는 TypeError로 즉시 실패시킬 수 있습니다. 사용자 데이터 오류와 API 사용 오류를 같은 error code로 축약하지 않습니다.",
+      "safe conversion은 strip→grammar→type conversion→domain range 순서를 명시하고 bool·Unicode 숫자·NaN·locale 같은 입력 policy를 결정합니다.",
+      "경계에서 Result를 exception으로 승격하거나 exception을 Result로 낮출 수 있지만 한 layer 안에서 return None·sentinel·exception을 무작위로 섞지 않습니다.",
+    ],
+    concepts: [
+      { term: "Result type", definition: "성공 값 또는 예상 가능한 실패 정보를 명시적으로 담아 반환하는 tagged data 구조입니다.", detail: ["batch partial failure 수집에 유리합니다.", "유효하지 않은 상태를 생성하지 않게 설계합니다."] },
+      { term: "programmer misuse", definition: "함수 contract 자체를 잘못 호출해 정상 사용자 오류로 복구하면 안 되는 실패입니다.", detail: ["TypeError가 대표적입니다.", "입력 validation Result와 분리합니다."] },
+    ],
+    codeExamples: [{
+      id: "safe-conversion-result-versus-exception",
+      title: "Result 기반 batch 변환과 strict exception 승격을 비교합니다",
+      language: "python",
+      filename: "conversion_result.py",
+      purpose: "예상 가능한 사용자 입력 오류를 data로 수집하고 API misuse는 TypeError로 유지합니다.",
+      code: String.raw`from dataclasses import dataclass
+
+@dataclass(frozen=True, slots=True)
+class ParseResult:
+    value: int | None = None
+    error: str | None = None
+
+    @property
+    def ok(self):
+        return self.error is None
+
+def parse_score(raw):
+    if not isinstance(raw, str):
+        raise TypeError("raw must be str")
+    text = raw.strip()
+    if not text:
+        return ParseResult(error="required")
+    if not text.isascii() or not text.isdecimal():
+        return ParseResult(error="integer_syntax")
+    score = int(text)
+    if not 0 <= score <= 100:
+        return ParseResult(error="range")
+    return ParseResult(value=score)
+
+results = [parse_score(raw) for raw in [" 90 ", "", "９０", "101"]]
+print("results:", [(item.ok, item.value, item.error) for item in results])
+try:
+    parse_score(None)
+except TypeError as error:
+    print("misuse:", type(error).__name__)
+
+def require_score(raw):
+    result = parse_score(raw)
+    if not result.ok:
+        raise ValueError(result.error)
+    return result.value
+
+try:
+    require_score("101")
+except ValueError as error:
+    print("raised:", str(error))`,
+      walkthrough: [
+        { lines: "1-10", explanation: "frozen slots dataclass Result와 ok tag를 정의합니다." },
+        { lines: "12-24", explanation: "strict str·presence·ASCII grammar·range를 순서대로 검증하고 예상 실패를 stable error code로 반환합니다." },
+        { lines: "26-31", explanation: "네 사용자 입력 결과를 수집하고 None misuse는 TypeError로 분리합니다." },
+        { lines: "33-41", explanation: "exception을 요구하는 경계에서 Result error를 ValueError로 승격합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 conversion_result.py" },
+      output: { value: "results: [(True, 90, None), (False, None, 'required'), (False, None, 'integer_syntax'), (False, None, 'range')]\nmisuse: TypeError\nraised: range", explanation: ["사용자 입력 네 건은 batch를 중단하지 않고 모두 결과가 남습니다.", "None은 function contract 위반이므로 validation Result로 숨기지 않습니다."] },
+      experiments: [
+        { change: "isascii 검사를 제거합니다.", prediction: "전각 '９０'도 isdecimal을 통과해 int 변환 정책이 넓어집니다.", result: "문법 허용 범위가 domain 선택임을 확인합니다." },
+        { change: "Result의 value와 error를 모두 채웁니다.", prediction: "현재 단순 dataclass는 막지 못합니다.", result: "__post_init__ invariant 또는 tagged subclasses가 필요합니다." },
+        { change: "모든 오류를 exception으로 바꿉니다.", prediction: "batch가 각 행마다 try/except를 가져야 합니다.", result: "실패 빈도와 처리 방식에 맞춰 Result/exception을 선택합니다." },
+      ],
+      sourceRefs: ["python-dataclass-doc", "python-raising-exceptions"],
+    }],
+    diagnostics: [
+      { symptom: "함수 호출마다 None·False·문자열·예외 중 다른 실패 표시가 나온다.", likelyCause: "변환 API의 success/failure contract가 통일되지 않았습니다.", checks: ["모든 반환 path와 raise path를 표로 만듭니다.", "expected user failure와 misuse를 분류합니다.", "caller의 분기 코드를 확인합니다."], fix: "한 layer에서는 typed Result 또는 documented exception taxonomy 중 일관된 방식을 선택합니다.", prevention: "type checker와 exhaustive branch test, API 문서를 함께 유지합니다." },
+    ],
+    expertNotes: ["Python 표준 라이브러리에 보편 Result type은 없으므로 프로젝트가 직접 정의한다면 naming·generic type·serialization·composition 규칙을 작게 유지합니다."],
+  },
+  {
+    id: "safe-api-problem-details-boundary",
+    title: "domain exception을 안전한 API problem details로 투영합니다",
+    lead: "API 오류 응답은 client가 처리할 stable type·status·code와 사용자 안전 설명만 담고, traceback·SQL·경로·원문 payload는 내부 channel에 남깁니다.",
+    explanations: [
+      "HTTP status는 transport 의미이고 domain code는 제품 실패 의미입니다. 여러 domain 오류가 같은 400을 쓸 수 있고 같은 domain 오류가 protocol에 따라 다른 transport 표현을 가질 수 있습니다.",
+      "Problem Details 형식은 type URI, title, status, detail, instance와 extension member를 구조화합니다. type URI와 extension code의 versioning·문서화를 유지합니다.",
+      "exception message를 detail에 그대로 복사하면 library message·PII·path가 노출될 수 있습니다. allowlist된 public_message를 별도로 정의합니다.",
+      "내부 log에는 correlation ID, exception type/code, cause chain과 redacted metadata를 기록하고 API에는 같은 correlation ID만 노출해 지원 조사와 사용자 안전을 함께 만족합니다.",
+      "JSON 직렬화는 key 정렬과 Unicode 정책을 test에서 고정할 수 있지만 실제 HTTP content-type, charset, cache, localization과 schema validation은 integration test가 필요합니다.",
+    ],
+    concepts: [
+      { term: "problem details", definition: "HTTP API 오류를 machine-readable한 공통 member와 확장 member로 표현하는 표준 형식입니다.", detail: ["RFC 9457이 현재 표준입니다.", "내부 traceback을 담는 형식이 아닙니다."] },
+      { term: "error projection", definition: "내부 domain exception을 특정 외부 protocol의 안전한 오류 표현으로 변환하는 경계입니다.", detail: ["allowlist field만 내보냅니다.", "correlation ID로 내부 기록과 연결합니다."] },
+    ],
+    codeExamples: [{
+      id: "domain-error-to-problem-json",
+      title: "custom exception을 allowlist Problem Details JSON으로 변환합니다",
+      language: "python",
+      filename: "api_problem_details.py",
+      purpose: "민감한 내부 cause를 응답에서 제외하고 stable code·correlation ID만 직렬화합니다.",
+      code: String.raw`import json
+
+class ConflictError(Exception):
+    code = "email_already_registered"
+    status = 409
+    public_message = "The requested account cannot be created."
+
+def to_problem(error, instance, correlation_id):
+    return {
+        "code": error.code,
+        "detail": error.public_message,
+        "instance": instance,
+        "status": error.status,
+        "title": "Conflict",
+        "traceId": correlation_id,
+        "type": "https://example.invalid/problems/account-conflict",
+    }
+
+try:
+    try:
+        raise KeyError("private-user@example.com")
+    except KeyError as cause:
+        raise ConflictError("database unique constraint: users_email_key") from cause
+except ConflictError as error:
+    payload = to_problem(error, "/accounts/request-7", "trace-abc")
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    print("internal:", type(error).__name__, type(error.__cause__).__name__)
+    print("leaked_private_value:", "private-user" in json.dumps(payload))`,
+      walkthrough: [
+        { lines: "1-7", explanation: "내부 message와 분리된 stable code/status/public_message를 가진 conflict exception을 정의합니다." },
+        { lines: "9-18", explanation: "RFC Problem Details 공통 field와 code·traceId 확장만 allowlist projection합니다." },
+        { lines: "20-28", explanation: "private KeyError를 cause로 보존하되 JSON에는 포함하지 않고 leak 검사로 경계를 증명합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "실제 사용자 정보·network 없음"], command: "python -I -B -X utf8 api_problem_details.py" },
+      output: { value: "{\"code\":\"email_already_registered\",\"detail\":\"The requested account cannot be created.\",\"instance\":\"/accounts/request-7\",\"status\":409,\"title\":\"Conflict\",\"traceId\":\"trace-abc\",\"type\":\"https://example.invalid/problems/account-conflict\"}\ninternal: ConflictError KeyError\nleaked_private_value: False", explanation: ["sort_keys와 compact separators로 deterministic JSON을 만듭니다.", "내부 cause type은 진단 channel에만 있고 private key 값은 payload에서 검출되지 않습니다."] },
+      experiments: [
+        { change: "detail에 str(error.__cause__)를 넣습니다.", prediction: "private email이 응답으로 노출됩니다.", result: "cause와 public detail을 분리해야 합니다." },
+        { change: "status를 domain code 대신 유일 식별자로 사용합니다.", prediction: "여러 409 원인을 client가 구분하지 못합니다.", result: "transport와 domain taxonomy를 분리합니다." },
+        { change: "traceId를 무작위 secret token으로 사용합니다.", prediction: "관찰성 식별자가 credential 역할까지 떠안습니다.", result: "correlation ID는 비민감 opaque 식별자로 설계합니다." },
+      ],
+      sourceRefs: ["python-json-dumps", "rfc9457-problem-details", "python-domain-exception-context"],
+    }],
+    diagnostics: [
+      { symptom: "API 오류 응답에 SQL constraint·local path·email이 보인다.", likelyCause: "exception str/repr 또는 traceback을 public detail에 그대로 직렬화했습니다.", checks: ["응답 serializer의 allowlist 여부를 봅니다.", "cause·notes·args에 PII가 있는지 확인합니다.", "log와 response channel을 구분합니다."], fix: "public message/code projection으로 교체하고 유출 credential·token을 회전하며 과거 log를 조사합니다.", prevention: "negative leak fixture와 schema snapshot, 보안 review를 둡니다." },
+    ],
+    expertNotes: ["API problem type URI는 실제 문서 가능한 안정 URI를 사용합니다. 예제의 example.invalid는 네트워크 의존 없는 예약 domain입니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "사용자 validation에 assert를 쓰면 왜 안 되나요?", answer: "최적화 모드에서 assert가 제거될 수 있고 AssertionError는 외부 입력 계약보다 programmer invariant 용도이기 때문입니다." },
+  { question: "custom exception taxonomy는 무엇을 기준으로 나누나요?", answer: "caller가 실제로 다른 복구·응답 행동을 해야 하는 domain 의미를 기준으로 나눕니다." },
+  { question: "add_note에 어떤 정보를 넣어야 하나요?", answer: "field·operation·비민감 record ID 같은 진단 metadata만 넣고 secret·원문 payload·PII는 피합니다." },
+  { question: "Result가 exception보다 적합한 경우는 언제인가요?", answer: "대량 입력처럼 예상 가능한 실패를 모두 수집하고 caller가 즉시 분기해야 하는 경우입니다." },
+  { question: "Result를 써도 TypeError를 유지할 수 있나요?", answer: "예. 사용자 데이터 실패는 Result로, 함수 contract 자체의 programmer misuse는 TypeError로 분리할 수 있습니다." },
+  { question: "HTTP status와 domain error code가 왜 별도인가요?", answer: "status는 transport 범주이고 code는 제품별 실패 의미라서 서로 일대일 관계가 아니기 때문입니다." },
+  { question: "API 응답과 내부 log는 어떤 정보를 공유해야 하나요?", answer: "비민감 correlation ID와 stable code를 공유하고 traceback·cause·민감 metadata는 접근 통제된 내부 log에만 둡니다." },
+);
+session.completionChecklist.push(
+  "custom exception을 caller 복구 행동 중심의 type·code taxonomy로 설계한다.",
+  "외부 기술 예외를 raise ... from ...으로 domain cause에 연결한다.",
+  "add_note와 exception field에 민감 원문을 넣지 않는다.",
+  "예상 validation 실패와 programmer misuse를 Result·exception으로 구분한다.",
+  "safe conversion의 type·presence·grammar·range 순서를 명시한다.",
+  "API problem details에 allowlist public field와 correlation ID만 투영한다.",
+  "오류 응답의 PII·stack·경로 유출 negative test를 유지한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-raising-exceptions", repository: "Python documentation", path: "tutorial/errors.html#raising-exceptions", publicUrl: "https://docs.python.org/3/tutorial/errors.html#raising-exceptions", usedFor: ["raise", "custom exception", "re-raise"], evidence: "공식 tutorial의 raising exceptions 계약을 명시 오류 발생의 기준으로 사용했습니다." },
+  { id: "python-baseexception-add-note", repository: "Python documentation", path: "library/exceptions.html#BaseException.add_note", publicUrl: "https://docs.python.org/3/library/exceptions.html#BaseException.add_note", usedFor: ["add_note", "__notes__", "진단 metadata"], evidence: "공식 BaseException.add_note 문서의 note 저장·표시 계약을 확인했습니다." },
+  { id: "python-domain-exception-context", repository: "Python documentation", path: "library/exceptions.html#exception-context", publicUrl: "https://docs.python.org/3/library/exceptions.html#exception-context", usedFor: ["raise from", "cause/context", "domain 변환"], evidence: "공식 exception context 문서를 cause 보존과 public projection 경계에 사용했습니다." },
+  { id: "python-json-dumps", repository: "Python documentation", path: "library/json.html#json.dumps", publicUrl: "https://docs.python.org/3/library/json.html#json.dumps", usedFor: ["deterministic JSON", "sort_keys", "ensure_ascii"], evidence: "공식 json.dumps 옵션을 문제 응답 exact serialization 근거로 사용했습니다." },
+  { id: "rfc9457-problem-details", repository: "RFC Editor", path: "rfc9457.html", publicUrl: "https://www.rfc-editor.org/rfc/rfc9457.html", usedFor: ["Problem Details", "type/title/status/detail/instance", "extension member"], evidence: "RFC 9457의 HTTP API Problem Details 표준을 안전한 외부 error projection 기준으로 사용했습니다." },
+);
+
 export default session;

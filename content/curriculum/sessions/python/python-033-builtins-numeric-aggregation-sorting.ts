@@ -261,4 +261,218 @@ const session = {
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["NumPy vectorization과 ML metric library는 ML 과정에서 dtype·axis·mask와 함께 확장합니다.", "ID alignment·vacuous truth·stable tie-break·eval RCE·분산 집계 재현성은 원본 내장 함수 예제를 전문가 data pipeline 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "precision-empty-and-selection-contracts",
+    title: "집계의 빈 입력·정밀도·선택 반환 계약을 분리합니다",
+    lead: "sum·math.fsum·min·max는 모두 iterable을 소비하지만 빈 입력, 부동소수 누적, key와 반환값의 의미가 서로 다릅니다.",
+    explanations: [
+      "sum(iterable, start)는 iterable을 합하고 빈 iterable이면 start를 반환합니다. Python 3.12부터 float 합계 정확도 알고리즘이 개선됐지만 math.fsum과 계약은 다릅니다. start 기본값 0 때문에 빈 합계가 실제 합계 0과 구별되지 않으므로 데이터 존재가 업무 전제라면 집계 전에 개수를 검증합니다.",
+      "binary float의 덧셈은 결합법칙을 만족하지 않습니다. 큰 수와 작은 수가 섞인 합계는 순서에 따라 작은 항이 사라질 수 있고 math.fsum은 여러 부분합을 추적해 일반 sum보다 정확한 결과를 제공합니다.",
+      "min과 max는 빈 iterable에서 ValueError를 내지만 단일 iterable 형식에서는 default를 줄 수 있습니다. None을 default로 쓰면 실제 데이터에 None이 허용되는지까지 계약해야 합니다.",
+      "key 함수는 비교용 값을 계산할 뿐 min·max가 반환하는 것은 원본 요소입니다. key가 같은 여러 요소에서는 처음 만난 요소가 선택되므로 입력 순서가 불안정하다면 명시 tie-break key가 필요합니다.",
+      "집계의 시간 복잡도는 보통 요소 수 n에 선형이고 generator는 한 번 소비됩니다. 같은 데이터를 합계·최솟값·검증에 반복 사용하려면 한 번의 루프로 함께 집계하거나 의도적으로 materialize합니다.",
+    ],
+    concepts: [
+      { term: "compensated summation", definition: "반올림으로 잃을 수 있는 작은 항을 별도 부분합으로 추적해 부동소수 합계 오차를 줄이는 방식입니다.", detail: ["math.fsum이 이 목적의 표준 도구입니다.", "Decimal·정수 단위와 선택 기준은 domain에 따라 다릅니다."] },
+      { term: "selection key", definition: "원본 요소를 비교 가능한 값으로 투영하는 함수입니다.", detail: ["반환되는 값은 key 결과가 아니라 원본 요소입니다.", "동점 정책은 별도 tie-break로 표현합니다."] },
+    ],
+    codeExamples: [{
+      id: "sum-fsum-min-max-contracts",
+      title: "sum·fsum의 정밀도와 min·max의 빈 값·key 계약을 실행합니다",
+      language: "python",
+      filename: "aggregation_contracts.py",
+      purpose: "집계 함수의 정상 결과뿐 아니라 빈 입력과 원본 요소 반환을 exact output으로 고정합니다.",
+      code: String.raw`import math
+
+values = [1e16, 1.0, 1e-16]
+print("sum:", sum(values))
+print("fsum:", math.fsum(values))
+print("empty_sum_start:", sum([], 10))
+
+try:
+    min([])
+except ValueError as error:
+    print("empty_min_error:", type(error).__name__)
+print("empty_min_default:", min([], default=None))
+
+records = [
+    {"id": "a", "score": 90},
+    {"id": "b", "score": 95},
+    {"id": "c", "score": 95},
+]
+winner = max(records, key=lambda item: item["score"])
+print("winner:", winner)
+print("lowest_id:", min(records, key=lambda item: (item["score"], item["id"]))["id"])`,
+      walkthrough: [
+        { lines: "1-6", explanation: "큰 float와 작은 항이 섞인 입력에서 sum과 fsum의 한 ULP 차이, 빈 sum의 start 반환을 확인합니다." },
+        { lines: "8-12", explanation: "빈 min의 ValueError와 default=None 계약을 분리합니다." },
+        { lines: "14-21", explanation: "max key 동점에서 첫 record가 선택되고 반환값이 원본 dict임을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 aggregation_contracts.py" },
+      output: { value: "sum: 1e+16\nfsum: 1.0000000000000002e+16\nempty_sum_start: 10\nempty_min_error: ValueError\nempty_min_default: None\nwinner: {'id': 'b', 'score': 95}\nlowest_id: a", explanation: ["fsum은 부동소수 표현 자체를 decimal로 바꾸지는 않지만 작은 항 누적 손실을 줄여 이 입력에서 다른 representable float를 만듭니다.", "max는 score 95라는 key가 아니라 첫 원본 record b를 반환합니다."] },
+      experiments: [
+        { change: "values 순서를 [1e-16, 1.0, 1e16]으로 바꿉니다.", prediction: "구현별 sum의 마지막 bit가 달라질 수 있지만 fsum은 더 강한 정확도 계약을 제공합니다.", result: "순서가 외부에서 바뀌는 분산 집계는 재현성 정책이 필요합니다." },
+        { change: "min([], default=0)을 사용합니다.", prediction: "오류 없이 0을 반환합니다.", result: "실제 최솟값 0과 empty sentinel을 구분할 수 있는지 검토합니다." },
+        { change: "winner key에 (score, id)를 사용합니다.", prediction: "동점에서 id가 큰 c가 선택됩니다.", result: "tie-break가 업무 규칙으로 노출됩니다." },
+      ],
+      sourceRefs: ["python-math-fsum", "python-builtins-sum", "python-builtins-min", "python-builtins-max"],
+    }],
+    diagnostics: [
+      { symptom: "같은 float 데이터인데 worker 결합 순서에 따라 합계 마지막 자리가 달라진다.", likelyCause: "부동소수 덧셈을 결합법칙이 성립하는 연산처럼 취급했습니다.", checks: ["입력 순서와 partial aggregate 결합 순서를 기록합니다.", "sum과 math.fsum 결과를 비교합니다.", "NaN·Infinity와 단위 혼합을 먼저 검사합니다."], fix: "허용 오차와 reduction order를 계약하고 필요하면 math.fsum·Decimal·정수 최소 단위를 사용합니다.", prevention: "순서 permutation과 큰 값·작은 값 혼합 회귀 test를 유지합니다." },
+    ],
+    expertNotes: ["정확도 도구는 데이터 의미를 대신하지 않습니다. 금액은 decimal rounding, 과학 계산은 오차 허용, 대규모 array는 dtype과 reduction algorithm까지 함께 결정합니다."],
+  },
+  {
+    id: "stable-sorting-and-alignment-evidence",
+    title: "안정 정렬과 zip(strict=True)로 순위·정렬·정합성을 증명합니다",
+    lead: "sorted의 안정성은 동점 상대 순서를 보존하고 zip의 strict 모드는 위치 기반 결합에서 길이 손실을 오류로 바꿉니다.",
+    explanations: [
+      "sorted는 모든 iterable을 소비해 새 list를 만들고 원본 list는 바꾸지 않습니다. key는 요소마다 한 번 계산되므로 비싼 key를 반복 비교하는 직접 comparator보다 예측하기 쉽습니다.",
+      "안정 정렬은 같은 key인 요소의 원래 상대 순서를 유지합니다. 여러 기준을 tuple key 하나로 표현하거나 낮은 우선순위부터 여러 번 stable sort할 수 있지만 방향이 섞이면 각 항의 방향을 명시해야 합니다.",
+      "stable이라는 말은 결과 전체가 자동으로 결정적이라는 뜻이 아닙니다. set·병렬 수집처럼 입력 순서가 흔들리면 동점 결과도 흔들리므로 영속 ID 같은 최종 tie-break를 둡니다.",
+      "zip은 기본적으로 가장 짧은 iterable에서 조용히 종료합니다. 길이가 같아야 하는 열·label·예측값을 결합할 때 strict=True는 남은 요소를 ValueError로 드러냅니다.",
+      "길이 일치는 ID 정합성을 보장하지 않습니다. 위치 결합이 아니라 식별자 join이 필요한 데이터에는 dict key set 비교와 duplicate 검사를 먼저 수행합니다.",
+    ],
+    concepts: [
+      { term: "stable sorting", definition: "비교 key가 같은 요소들이 입력에서 갖던 상대 순서를 결과에서도 유지하는 성질입니다.", detail: ["다단계 정렬에 사용할 수 있습니다.", "입력 순서가 안정적이라는 보장은 별도입니다."] },
+      { term: "strict alignment", definition: "짝지을 iterable의 길이 불일치를 조용한 절단이 아니라 실패로 처리하는 계약입니다.", detail: ["zip(strict=True)가 길이를 검사합니다.", "ID 일치 검사는 별도로 필요합니다."] },
+    ],
+    codeExamples: [{
+      id: "stable-sorted-zip-enumerate-contracts",
+      title: "동점 안정성·명시 tie-break·strict zip·enumerate 시작값을 확인합니다",
+      language: "python",
+      filename: "sorting_alignment.py",
+      purpose: "순위 보고서에서 입력 보존, 동점 순서와 길이 오류를 exact output으로 검증합니다.",
+      code: String.raw`rows = [
+    {"id": "b", "score": 90},
+    {"id": "a", "score": 90},
+    {"id": "c", "score": 80},
+]
+stable = sorted(rows, key=lambda row: -row["score"])
+deterministic = sorted(rows, key=lambda row: (-row["score"], row["id"]))
+print("stable:", [row["id"] for row in stable])
+print("tie_break:", [row["id"] for row in deterministic])
+print("original:", [row["id"] for row in rows])
+print("ranked:", list(enumerate([row["id"] for row in deterministic], start=1)))
+
+print("paired:", list(zip(["a", "b"], [10, 20], strict=True)))
+try:
+    list(zip(["a", "b"], [10], strict=True))
+except ValueError as error:
+    print("strict_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-10", explanation: "score 동점의 입력 상대 순서와 id tie-break 결과, 원본 불변을 나란히 출력합니다." },
+        { lines: "11", explanation: "enumerate start=1이 표시용 순위를 만들며 원본 index와 다른 정책임을 드러냅니다." },
+        { lines: "13-17", explanation: "정상 strict zip과 길이 불일치 ValueError를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 sorting_alignment.py" },
+      output: { value: "stable: ['b', 'a', 'c']\ntie_break: ['a', 'b', 'c']\noriginal: ['b', 'a', 'c']\nranked: [(1, 'a'), (2, 'b'), (3, 'c')]\npaired: [('a', 10), ('b', 20)]\nstrict_error: ValueError", explanation: ["stable 결과 b,a는 입력 순서를 보존합니다.", "ID tie-break를 추가한 결과는 upstream 수집 순서와 독립적입니다."] },
+      experiments: [
+        { change: "zip에서 strict=True를 제거합니다.", prediction: "불일치 예제는 [('a', 10)]만 만들고 b를 조용히 버립니다.", result: "기본 편의 동작이 데이터 손실을 숨길 수 있습니다." },
+        { change: "rows를 set에서 만들었다고 가정합니다.", prediction: "score만 key로 한 동점 순서는 계약할 수 없습니다.", result: "stable sort와 deterministic input을 구분합니다." },
+        { change: "enumerate start를 0으로 바꿉니다.", prediction: "rank가 0,1,2가 됩니다.", result: "저장 index와 사용자 표시 순위를 분리합니다." },
+      ],
+      sourceRefs: ["python-zip-strict", "python-enumerate-contract", "python-sorted-doc"],
+    }],
+    diagnostics: [
+      { symptom: "두 열의 길이가 달라도 report가 만들어지고 마지막 레코드가 사라진다.", likelyCause: "기본 zip의 shortest-stop 계약을 정합성 검사로 오해했습니다.", checks: ["각 iterable 길이와 소비 여부를 기록합니다.", "zip(strict=True)로 재현합니다.", "ID 중복·집합 차이도 별도로 확인합니다."], fix: "길이 일치가 전제면 strict=True를 사용하고 식별자 데이터는 ID join으로 검증합니다.", prevention: "누락·추가·순서 교환 fixture를 포함합니다." },
+    ],
+    expertNotes: ["정렬 결과를 API pagination cursor로 사용한다면 모든 행을 유일하게 정렬하는 마지막 key가 필요합니다. 그렇지 않으면 페이지 사이에서 중복·누락이 생길 수 있습니다."],
+  },
+  {
+    id: "short-circuit-iterator-and-complexity",
+    title: "all·any의 short-circuit와 iterator 소비 비용을 관찰합니다",
+    lead: "all과 any는 truth protocol을 사용해 필요한 지점까지만 소비하므로 결과뿐 아니라 평가 횟수와 부작용도 계약에 포함됩니다.",
+    explanations: [
+      "all은 첫 falsy에서 False를 반환하고 any는 첫 truthy에서 True를 반환합니다. 뒤 항목은 평가하지 않으므로 generator의 validation·로그·network 호출을 모두 수행하는 도구로 쓰면 안 됩니다.",
+      "all([])은 보편 명제가 반례 없이 참이라는 vacuous truth로 True이고 any([])는 False입니다. 최소 하나가 필요하면 bool(items) 또는 별도 count 검사를 결합합니다.",
+      "generator expression은 lazy하고 한 번 소비됩니다. all을 통과한 같은 generator를 any나 sum에 재사용하면 이미 비어 있어 전혀 다른 결과가 나옵니다.",
+      "all·any·sum·min·max는 최악의 경우 O(n)이고 sorted는 일반적으로 O(n log n)이며 결과 list O(n) 공간을 사용합니다. zip과 enumerate 자체는 lazy iterator라 소비한 만큼 진행합니다.",
+      "short-circuit predicate에 외부 부작용을 넣기보다 pure predicate와 별도 오류 수집 단계를 사용하면 평가 순서 변경과 부분 실행을 피할 수 있습니다.",
+    ],
+    concepts: [
+      { term: "short-circuit", definition: "최종 결과가 결정되는 즉시 나머지 operand나 iterable 요소 평가를 생략하는 동작입니다.", detail: ["all은 첫 falsy, any는 첫 truthy에서 멈춥니다.", "부작용 실행 횟수에 영향을 줍니다."] },
+      { term: "single-pass iterator", definition: "소비한 항목으로 되돌아갈 수 없어 한 번의 순회 뒤 비는 iterator입니다.", detail: ["generator와 zip·enumerate 객체가 대표적입니다.", "반복 집계에는 재생성 또는 materialize가 필요합니다."] },
+    ],
+    codeExamples: [{
+      id: "all-any-short-circuit-evidence",
+      title: "평가 trace로 all·any의 중단 지점과 generator 소진을 확인합니다",
+      language: "python",
+      filename: "short_circuit_iterators.py",
+      purpose: "truth 결과만 보지 않고 실제로 평가된 값과 iterator 재사용 결과를 exact output으로 남깁니다.",
+      code: String.raw`def traced(values, events):
+    for value in values:
+        events.append(value)
+        yield value
+
+all_events = []
+print("all_result:", all(traced([1, 2, 0, 3], all_events)), all_events)
+
+any_events = []
+print("any_result:", any(traced([0, "", "ok", 9], any_events)), any_events)
+
+empty = []
+print("empty:", all(empty), any(empty))
+
+stream = (number for number in [1, 2, 3])
+print("first_all:", all(stream))
+print("after_exhaustion:", list(stream), any(stream))
+
+indexed = enumerate(["alpha", "beta"], start=10)
+print("lazy_type:", type(indexed).__name__)
+print("first:", next(indexed))
+print("remaining:", list(indexed))`,
+      walkthrough: [
+        { lines: "1-10", explanation: "trace list에 실제 평가된 항목만 기록해 all은 0, any는 'ok'에서 멈추는 것을 증명합니다." },
+        { lines: "12-13", explanation: "빈 all/any의 서로 다른 identity 결과를 확인합니다." },
+        { lines: "15-17", explanation: "all이 generator를 끝까지 소비한 뒤 같은 객체가 비어 있음을 확인합니다." },
+        { lines: "19-22", explanation: "enumerate가 lazy iterator이며 next 이후 나머지만 남는 것을 봅니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 short_circuit_iterators.py" },
+      output: { value: "all_result: False [1, 2, 0]\nany_result: True [0, '', 'ok']\nempty: True False\nfirst_all: True\nafter_exhaustion: [] False\nlazy_type: enumerate\nfirst: (10, 'alpha')\nremaining: [(11, 'beta')]", explanation: ["trace가 short-circuit로 생략된 3과 9를 보여 줍니다.", "소진된 generator에서 any는 빈 iterable 규칙으로 False입니다."] },
+      experiments: [
+        { change: "all 입력의 0을 제거합니다.", prediction: "3까지 모두 평가하고 True가 됩니다.", result: "최악 평가 횟수 O(n)을 확인합니다." },
+        { change: "stream을 list로 바꿉니다.", prediction: "all 뒤에도 list(stream)과 any(stream)을 반복 계산할 수 있습니다.", result: "재사용성과 O(n) 메모리의 tradeoff를 확인합니다." },
+        { change: "predicate 내부에 print를 넣습니다.", prediction: "short-circuit 이후 항목은 출력되지 않습니다.", result: "검증 부작용을 all/any에 숨기지 않아야 합니다." },
+      ],
+      sourceRefs: ["python-builtins-all", "python-builtins-any", "python-enumerate-contract"],
+    }],
+    diagnostics: [
+      { symptom: "all 검증 뒤 같은 generator의 합계가 0이 된다.", likelyCause: "single-pass generator가 all에서 이미 소비됐습니다.", checks: ["type과 iter(obj) is obj 여부를 확인합니다.", "각 단계의 소비 횟수를 trace합니다.", "generator를 생성하는 factory인지 객체 하나인지 봅니다."], fix: "한 pass에서 필요한 결과를 함께 계산하거나 재생성 가능한 factory/list를 사용합니다.", prevention: "pipeline API에 ownership·single-use를 문서화하고 재소비 test를 둡니다." },
+    ],
+    expertNotes: ["성능 표기는 계약의 시작점입니다. key 함수 비용, Python 호출 overhead, I/O latency와 데이터 materialization이 실제 병목을 바꿀 수 있으므로 대표 크기에서 측정합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "sum과 math.fsum을 어떤 기준으로 선택하나요?", answer: "일반 합계와 정수에는 sum이 간단하고, 크기가 크게 다른 float가 섞여 누적 오차가 중요하면 math.fsum을 검토합니다. 금액처럼 decimal 계약이면 Decimal이나 정수 최소 단위를 선택합니다." },
+  { question: "min([], default=None)의 위험은 무엇인가요?", answer: "None이 실제 데이터로도 허용되면 빈 입력과 실제 최솟값 None을 구분하지 못하므로 별도 sentinel이나 사전 empty 검사가 필요합니다." },
+  { question: "max(items, key=key_fn)은 동점에서 무엇을 반환하나요?", answer: "입력에서 처음 만난 최대 key의 원본 요소를 반환합니다." },
+  { question: "stable sort만으로 API 결과가 항상 결정적인가요?", answer: "아닙니다. 동점의 입력 순서 자체가 불안정하면 결과도 흔들리므로 유일한 ID 같은 tie-break를 추가해야 합니다." },
+  { question: "zip(strict=True)가 ID 순서 오류도 잡나요?", answer: "아닙니다. 길이 불일치만 잡으므로 ID 집합·중복·순서 계약은 별도로 검증해야 합니다." },
+  { question: "all과 any 안의 predicate에 부작용을 넣으면 왜 위험한가요?", answer: "short-circuit 이후 항목은 평가되지 않아 일부 부작용만 실행되고, 순서 변경에 따라 결과 외 동작도 달라집니다." },
+  { question: "sorted와 zip·enumerate의 공간 특성은 어떻게 다른가요?", answer: "sorted는 입력을 소비해 O(n) 결과 list를 만들고, zip과 enumerate는 소비 시점에 항목을 만드는 lazy iterator입니다." },
+);
+session.completionChecklist.push(
+  "sum의 empty start와 실제 합계 0을 업무 계약에서 구분한다.",
+  "부동소수 누적 오차가 중요한 경로에서 math.fsum·Decimal·정수 단위를 비교한다.",
+  "min·max의 default와 key가 원본 요소 반환에 미치는 영향을 설명한다.",
+  "stable sort의 보장과 결정적 tie-break 요구를 구분한다.",
+  "zip(strict=True) 길이 검사와 ID alignment 검사를 함께 설계한다.",
+  "all·any의 빈 iterable 결과와 short-circuit 평가 횟수를 테스트한다.",
+  "single-pass iterator를 반복 소비하지 않고 시간·공간 복잡도를 기록한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-math-fsum", repository: "Python documentation", path: "library/math.html#math.fsum", publicUrl: "https://docs.python.org/3/library/math.html#math.fsum", usedFor: ["정밀 float 집계", "순서 민감도"], evidence: "공식 math 문서의 fsum 정확한 부동소수 합계 계약을 기준으로 사용했습니다." },
+  { id: "python-builtins-sum", repository: "Python documentation", path: "library/functions.html#sum", publicUrl: "https://docs.python.org/3/library/functions.html#sum", usedFor: ["start", "빈 iterable", "선형 집계"], evidence: "공식 sum 문서의 start와 iterable 합계 계약을 확인했습니다." },
+  { id: "python-builtins-min", repository: "Python documentation", path: "library/functions.html#min", publicUrl: "https://docs.python.org/3/library/functions.html#min", usedFor: ["default", "key", "빈 입력"], evidence: "공식 min 문서의 iterable·default·key와 동점 첫 항목 계약을 사용했습니다." },
+  { id: "python-builtins-max", repository: "Python documentation", path: "library/functions.html#max", publicUrl: "https://docs.python.org/3/library/functions.html#max", usedFor: ["key", "원본 요소 반환", "동점"], evidence: "공식 max 문서의 key와 첫 최대 항목 반환 계약을 사용했습니다." },
+  { id: "python-zip-strict", repository: "Python documentation", path: "library/functions.html#zip", publicUrl: "https://docs.python.org/3/library/functions.html#zip", usedFor: ["lazy zip", "strict 길이 검증"], evidence: "공식 zip 문서의 shortest-stop과 strict=True ValueError 계약을 확인했습니다." },
+  { id: "python-enumerate-contract", repository: "Python documentation", path: "library/functions.html#enumerate", publicUrl: "https://docs.python.org/3/library/functions.html#enumerate", usedFor: ["lazy iterator", "start index"], evidence: "공식 enumerate 문서의 start와 iterator 반환 계약을 확인했습니다." },
+  { id: "python-builtins-all", repository: "Python documentation", path: "library/functions.html#all", publicUrl: "https://docs.python.org/3/library/functions.html#all", usedFor: ["short-circuit", "빈 iterable"], evidence: "공식 all 문서의 첫 falsy 중단과 empty True 계약을 확인했습니다." },
+  { id: "python-builtins-any", repository: "Python documentation", path: "library/functions.html#any", publicUrl: "https://docs.python.org/3/library/functions.html#any", usedFor: ["short-circuit", "빈 iterable"], evidence: "공식 any 문서의 첫 truthy 중단과 empty False 계약을 확인했습니다." },
+);
+
 export default session;

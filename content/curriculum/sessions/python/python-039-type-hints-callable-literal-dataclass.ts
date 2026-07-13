@@ -264,4 +264,238 @@ const session = {
   sourceCoverage: { filesRead: 4, filesUsed: 4, uncoveredNotes: ["각 checker의 모든 strict option과 typing spec proposal은 project support matrix에 맞춰 별도 추적합니다.", "variance·ParamSpec·overload·NewType·stub·typed boundary는 원본 typing 예제를 전문가 library/서비스 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "runtime-static-callable-literal-narrowing",
+    title: "annotation의 runtime 한계와 Callable·Literal·Union narrowing을 함께 설계합니다",
+    lead: "type hint는 기본적으로 실행 시 값을 강제하지 않으므로 static checker가 증명할 branch를 작성하고 외부 경계에서는 별도 runtime validation을 수행합니다.",
+    explanations: [
+      "함수 annotation은 __annotations__ metadata로 저장될 뿐 CPython이 argument·return을 자동 검사하지 않습니다. str을 int parameter에 넣어도 함수 body가 허용하면 실행될 수 있습니다.",
+      "Union은 가능한 여러 type을 표현하고 Optional[T]는 T | None과 같은 의미입니다. None 여부를 확인하거나 isinstance·사용자 TypeGuard로 branch를 좁혀야 checker가 안전한 operation을 허용합니다.",
+      "Literal은 특정 문자열·정수 값 집합을 API mode로 제한합니다. 외부 JSON은 여전히 임의 str이므로 runtime allowlist validation 후 Literal 변수로 전달합니다.",
+      "Callable[[A, B], R]은 호출 signature를 표현하지만 parameter 이름·overload·속성까지 풍부하게 기술하기 어렵습니다. 복잡 callable 객체에는 __call__을 가진 Protocol을 사용합니다.",
+      "Any는 type checking을 우회해 오류가 전파되므로 unknown external data에는 object를 사용하고 validation/narrowing으로 안전한 type을 얻는 편이 낫습니다.",
+    ],
+    concepts: [
+      { term: "type narrowing", definition: "조건문·isinstance·TypeGuard 뒤 branch에서 Union/object를 더 구체적인 type으로 좁히는 static 분석입니다.", detail: ["runtime 검사와 연결됩니다.", "checker별 지원 차이를 확인합니다."] },
+      { term: "Literal type", definition: "값의 type뿐 아니라 허용되는 특정 literal 값 집합을 표현하는 typing construct입니다.", detail: ["mode·status API에 적합합니다.", "runtime validation을 대신하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "typing-runtime-callable-literal-narrowing",
+      title: "annotation 비강제와 Literal mode·TypeGuard·Callable 실행을 비교합니다",
+      language: "python",
+      filename: "typing_boundaries.py",
+      purpose: "static type 의도와 실제 runtime behavior를 한 deterministic 예제로 분리합니다.",
+      code: String.raw`from collections.abc import Callable
+from typing import Literal, TypeGuard
+
+Mode = Literal["keep", "double"]
+
+def annotated_double(value: int) -> int:
+    return value * 2
+
+def is_int_list(values: list[object]) -> TypeGuard[list[int]]:
+    return all(type(value) is int for value in values)
+
+def transform(
+    values: list[int],
+    operation: Callable[[int], int],
+    mode: Mode,
+) -> list[int]:
+    if mode == "keep":
+        return values.copy()
+    return [operation(value) for value in values]
+
+print("annotation_not_enforced:", annotated_double("ha"))
+for candidate in [[1, 2, 3], [1, True, 3], [1, "2"]]:
+    if is_int_list(candidate):
+        print("narrowed:", transform(candidate, lambda value: value * 2, "double"))
+    else:
+        print("rejected:", candidate)
+
+raw_mode = "triple"
+print("runtime_literal_check:", raw_mode in {"keep", "double"})`,
+      walkthrough: [
+        { lines: "1-10", explanation: "Literal mode와 strict bool 제외 TypeGuard를 정의하고 annotation이 runtime validator가 아님을 준비합니다." },
+        { lines: "12-19", explanation: "Callable operation과 Literal mode를 받는 transform의 두 branch를 정의합니다." },
+        { lines: "21-27", explanation: "잘못된 str argument도 실행되는 예와 세 object list의 narrowing 결과를 비교합니다." },
+        { lines: "28-29", explanation: "외부 raw string에는 별도 allowlist runtime 검사가 필요함을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "type checker 실행과 별도의 runtime 예제"], command: "python -I -B -X utf8 typing_boundaries.py" },
+      output: { value: "annotation_not_enforced: haha\nnarrowed: [2, 4, 6]\nrejected: [1, True, 3]\nrejected: [1, '2']\nruntime_literal_check: False", explanation: ["bool은 int subclass지만 type(value) is int 정책으로 거부합니다.", "Literal annotation 자체는 raw_mode triple을 runtime에서 막지 않습니다."] },
+      experiments: [
+        { change: "TypeGuard에서 isinstance(value, int)를 사용합니다.", prediction: "True도 int로 허용됩니다.", result: "type model과 domain policy를 구분합니다." },
+        { change: "mode runtime 검사를 제거합니다.", prediction: "동적 caller가 triple을 넘겨도 else branch가 실행될 수 있습니다.", result: "static hint는 untyped boundary를 보호하지 않습니다." },
+        { change: "Callable을 Any로 바꿉니다.", prediction: "checker가 operation argument·return 오류를 놓칩니다.", result: "Any 확산을 최소화합니다." },
+      ],
+      sourceRefs: ["python-typing-callable", "python-typing-doc"],
+    }],
+    diagnostics: [
+      { symptom: "annotation이 있는데 production에서 잘못된 JSON type이 함수 안까지 들어온다.", likelyCause: "type hint를 runtime validation으로 오해했습니다.", checks: ["요청 parsing 경계의 schema validator를 확인합니다.", "untyped/Any caller를 추적합니다.", "static checker가 CI에서 실제 실행되는지 봅니다."], fix: "외부 경계에서 runtime schema를 검증하고 내부에는 좁혀진 typed object만 전달합니다.", prevention: "negative payload integration test와 strict static checker 설정을 유지합니다." },
+    ],
+    expertNotes: ["annotation introspection은 postponed evaluation·forward reference와 import side effect가 얽힐 수 있으므로 get_type_hints 사용 시 신뢰 경계를 확인합니다."],
+  },
+  {
+    id: "generic-protocol-structural-contracts",
+    title: "generic과 Protocol로 구체 class가 아닌 행동 계약에 의존합니다",
+    lead: "TypeVar는 입력과 출력 type 관계를 보존하고 Protocol은 명시 상속 없이 필요한 method shape를 만족하는 structural typing을 제공합니다.",
+    explanations: [
+      "list[Any]를 반환하면 요소 type 관계를 잃지만 TypeVar T를 사용한 first(Sequence[T]) -> T는 입력 요소 type이 반환에 이어짐을 checker가 추론합니다.",
+      "Protocol은 특정 base class를 상속하라는 요구 대신 method·property signature를 정의합니다. adapter·test fake·third-party class가 같은 행동을 제공하면 structural하게 호환됩니다.",
+      "@runtime_checkable Protocol은 isinstance에서 attribute 존재를 검사할 수 있지만 signature·return type까지 runtime 검증하지 않습니다. 주 목적은 static typing입니다.",
+      "Callable 하나로 충분하지 않은 callback—여러 method, configuration property, generic call—에는 Protocol이 더 읽기 쉽습니다. 반대로 단순 함수 하나에는 Callable이 간결합니다.",
+      "variance와 mutable collection은 고급 함정입니다. list[Dog]를 list[Animal]로 취급하면 Cat 추가가 가능해지므로 mutable generic은 대개 invariant입니다.",
+    ],
+    concepts: [
+      { term: "generic relationship", definition: "TypeVar를 통해 여러 위치의 type이 서로 같은/연관된 type이라는 제약을 표현하는 모델입니다.", detail: ["입력과 반환 관계를 보존합니다.", "Any보다 정보가 많습니다."] },
+      { term: "structural typing", definition: "명시 상속 대신 필요한 attribute·method shape를 제공하는지로 호환성을 판단하는 방식입니다.", detail: ["Protocol이 지원합니다.", "duck typing을 static하게 기술합니다."] },
+    ],
+    codeExamples: [{
+      id: "generic-protocol-runtime-evidence",
+      title: "TypeVar first 함수와 runtime_checkable formatter Protocol을 실행합니다",
+      language: "python",
+      filename: "generic_protocol.py",
+      purpose: "generic 반환 관계와 명시 상속 없는 protocol 호환, runtime 검사 한계를 exact output으로 확인합니다.",
+      code: String.raw`from collections.abc import Sequence
+from typing import Protocol, TypeVar, runtime_checkable
+
+T = TypeVar("T")
+
+def first(items: Sequence[T]) -> T:
+    if not items:
+        raise ValueError("items required")
+    return items[0]
+
+@runtime_checkable
+class Formatter(Protocol):
+    def format(self, value: int) -> str:
+        ...
+
+class HexFormatter:
+    def format(self, value: int) -> str:
+        return f"0x{value:x}"
+
+class MissingFormatter:
+    pass
+
+def render(values: Sequence[int], formatter: Formatter) -> list[str]:
+    return [formatter.format(value) for value in values]
+
+formatter = HexFormatter()
+print("firsts:", first(["a", "b"]), first([10, 20]))
+print("protocol:", isinstance(formatter, Formatter), isinstance(MissingFormatter(), Formatter))
+print("rendered:", render([10, 15, 255], formatter))`,
+      walkthrough: [
+        { lines: "1-9", explanation: "TypeVar T가 Sequence 요소와 first 반환 type 관계를 보존하도록 정의합니다." },
+        { lines: "11-20", explanation: "format method 하나를 요구하는 runtime_checkable Protocol과 상속하지 않은 구현·미구현 class를 만듭니다." },
+        { lines: "22-28", explanation: "generic first, runtime structural check와 formatter 주입 결과를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 generic_protocol.py" },
+      output: { value: "firsts: a 10\nprotocol: True False\nrendered: ['0xa', '0xf', '0xff']", explanation: ["HexFormatter는 Formatter를 상속하지 않았어도 필요한 method가 있어 runtime check를 통과합니다.", "static checker는 format parameter·return signature까지 검사하지만 runtime isinstance는 존재 중심입니다."] },
+      experiments: [
+        { change: "HexFormatter.format이 int를 반환하게 합니다.", prediction: "runtime isinstance는 여전히 True일 수 있지만 static checker는 Protocol 불일치를 보고합니다.", result: "runtime_checkable의 한계를 확인합니다." },
+        { change: "first([])를 호출합니다.", prediction: "반환 type과 무관하게 ValueError입니다.", result: "generic typing은 empty runtime invariant를 대신하지 않습니다." },
+        { change: "render formatter type을 object로 바꿉니다.", prediction: "checker가 format 호출을 허용하지 않습니다.", result: "Protocol이 필요한 행동을 최소 계약으로 표현합니다." },
+      ],
+      sourceRefs: ["py-typing-collections-source", "python-protocol-doc", "python-typing-callable"],
+    }],
+    diagnostics: [
+      { symptom: "isinstance(obj, Protocol)가 True인데 method 호출에서 잘못된 return type이 나온다.", likelyCause: "runtime_checkable이 full signature/type validation을 한다고 오해했습니다.", checks: ["static checker 결과를 확인합니다.", "실제 method signature와 return fixture를 봅니다.", "Protocol에 runtime validation을 과도하게 의존하는지 검토합니다."], fix: "Protocol은 static contract로 사용하고 외부 plugin에는 별도 capability/schema integration test를 둡니다.", prevention: "fake와 실제 adapter를 같은 contract test suite로 검증합니다." },
+    ],
+    expertNotes: ["Protocol을 거대하게 만들면 structural adoption이 어려워집니다. caller가 실제 사용하는 작은 capability별 Protocol을 선호합니다."],
+  },
+  {
+    id: "typeddict-dataclass-frozen-slots-defaults",
+    title: "TypedDict 입력 shape와 dataclass runtime model을 분리합니다",
+    lead: "TypedDict는 dict key schema를 static하게 표현하고 dataclass는 실제 class 생성·기본값·equality·immutability·slots 동작을 제공하므로 경계와 내부 model에 다르게 사용합니다.",
+    explanations: [
+      "TypedDict instance는 runtime에 일반 dict이며 생성자 validation을 자동 수행하지 않습니다. Required·NotRequired·total 옵션은 checker가 key 존재를 분석하지만 JSON boundary에는 runtime schema가 필요합니다.",
+      "dataclass는 annotation field로 __init__·repr·eq 등을 생성합니다. mutable 기본값은 field(default_factory=list)처럼 instance마다 새 객체를 만들도록 해야 공유 상태를 피합니다.",
+      "frozen=True는 field 재할당을 막지만 field 안에 mutable list가 있으면 그 list 내용은 바뀔 수 있는 shallow immutability입니다. 깊은 불변이 필요하면 tuple·frozenset과 immutable element를 사용합니다.",
+      "slots=True는 __dict__ 없이 정해진 field storage를 만들 수 있어 memory와 accidental attribute를 줄이지만 weakref·상속·serialization·mocking 호환성을 검토합니다.",
+      "dataclass를 ORM/API schema/value object에 무조건 재사용하지 않습니다. persistence·transport·domain validation 책임을 분리하고 변환 함수를 둡니다.",
+    ],
+    concepts: [
+      { term: "TypedDict", definition: "특정 key와 value type을 가진 dict shape를 static checker에 기술하는 typing construct입니다.", detail: ["runtime에는 일반 dict입니다.", "Required/NotRequired로 key 존재를 표현합니다."] },
+      { term: "default_factory", definition: "각 dataclass instance 생성 때 호출되어 mutable 기본값을 새로 만드는 factory입니다.", detail: ["shared mutable default를 피합니다.", "인자를 받지 않는 callable입니다."] },
+    ],
+    codeExamples: [{
+      id: "typeddict-dataclass-runtime-contracts",
+      title: "TypedDict runtime 비강제와 frozen·slots·default_factory의 실제 동작을 비교합니다",
+      language: "python",
+      filename: "typed_models.py",
+      purpose: "static input shape와 runtime value object 기능·shallow immutability를 exact output으로 확인합니다.",
+      code: String.raw`from dataclasses import FrozenInstanceError, dataclass, field
+from typing import NotRequired, TypedDict
+
+class UserPayload(TypedDict):
+    id: str
+    active: bool
+    nickname: NotRequired[str]
+
+@dataclass(frozen=True, slots=True)
+class Course:
+    title: str
+    tags: list[str] = field(default_factory=list)
+
+payload: UserPayload = {"id": "u1", "active": True}
+print("payload_runtime:", type(payload).__name__, payload)
+
+first = Course("Python")
+second = Course("Java")
+first.tags.append("typing")
+print("independent_defaults:", first.tags, second.tags)
+print("has_dict:", hasattr(first, "__dict__"))
+try:
+    first.title = "Changed"
+except FrozenInstanceError as error:
+    print("frozen_error:", type(error).__name__)
+print("shallow_mutable:", first)`,
+      walkthrough: [
+        { lines: "1-7", explanation: "Required id/active와 optional nickname을 가진 TypedDict shape를 정의합니다." },
+        { lines: "9-13", explanation: "frozen slots dataclass와 instance별 list default_factory를 정의합니다." },
+        { lines: "15-16", explanation: "TypedDict 값이 runtime에는 일반 dict임을 확인합니다." },
+        { lines: "18-26", explanation: "두 독립 default list, __dict__ 부재, field 재할당 오류와 내부 list mutation을 비교합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 typed_models.py" },
+      output: { value: "payload_runtime: dict {'id': 'u1', 'active': True}\nindependent_defaults: ['typing'] []\nhas_dict: False\nfrozen_error: FrozenInstanceError\nshallow_mutable: Course(title='Python', tags=['typing'])", explanation: ["default_factory로 first와 second의 tags identity가 분리됩니다.", "frozen은 title 재할당을 막지만 list 내부 append는 막지 않습니다."] },
+      experiments: [
+        { change: "tags를 tuple[str, ...] = ()로 바꿉니다.", prediction: "append가 없어 깊은 불변 model에 더 가까워집니다.", result: "field element까지 불변이어야 합니다." },
+        { change: "payload active에 'yes'를 넣습니다.", prediction: "runtime dict 생성은 성공하지만 static checker와 runtime schema validator가 잡아야 합니다.", result: "TypedDict는 runtime parser가 아닙니다." },
+        { change: "slots=False로 바꿉니다.", prediction: "__dict__가 생기고 dynamic storage·memory 특성이 달라집니다.", result: "호환성 요구와 slots tradeoff를 평가합니다." },
+      ],
+      sourceRefs: ["python-typing-typeddict", "python-dataclass-field", "python-dataclass-doc"],
+    }],
+    diagnostics: [
+      { symptom: "frozen dataclass인데 내부 list가 변경되어 hash·cache invariant가 깨진다.", likelyCause: "frozen을 deep immutability로 오해하고 mutable field를 사용했습니다.", checks: ["모든 field의 중첩 mutability를 확인합니다.", "unsafe_hash·dict key 사용을 봅니다.", "default_factory type을 검토합니다."], fix: "tuple·frozenset·immutable child model을 사용하거나 mutation을 허용한 명시 model로 바꿉니다.", prevention: "nested mutation negative test와 hash/equality contract review를 둡니다." },
+    ],
+    expertNotes: ["slots dataclass의 field를 상속 class가 다시 선언하거나 serialization framework가 __dict__를 가정하는 경우가 있으므로 framework integration test가 필요합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "type hint가 runtime에서 argument type을 자동 검사하나요?", answer: "아닙니다. annotation은 metadata이며 static checker·IDE가 사용하고 외부 값은 별도 runtime validation이 필요합니다." },
+  { question: "Literal을 사용해도 외부 문자열 allowlist 검사가 필요한가요?", answer: "예. untyped JSON·CLI 값은 runtime에 임의 str이므로 허용 값 검사를 거쳐야 합니다." },
+  { question: "TypeGuard는 무엇을 제공하나요?", answer: "사용자 predicate가 True인 branch에서 checker가 argument를 지정한 더 구체 type으로 좁히도록 알려 줍니다." },
+  { question: "Callable과 __call__ Protocol은 언제 나누어 쓰나요?", answer: "단순 함수 signature는 Callable, 여러 method·property나 복잡한 callable 객체 계약은 Protocol이 적합합니다." },
+  { question: "runtime_checkable Protocol이 method signature까지 검사하나요?", answer: "아닙니다. 주로 attribute 존재를 확인하며 정확한 parameter·return type 검사는 static checker 역할입니다." },
+  { question: "TypedDict는 JSON을 runtime 검증하나요?", answer: "아닙니다. runtime에는 일반 dict이므로 별도 schema parser/validator가 필요합니다." },
+  { question: "frozen=True와 default_factory의 역할은 각각 무엇인가요?", answer: "frozen은 field 재할당을 막고 default_factory는 instance마다 새 mutable 기본값을 만들지만 둘 다 중첩 객체의 deep immutability를 자동 보장하지 않습니다." },
+);
+session.completionChecklist.push(
+  "annotation과 runtime validation의 책임을 분리하고 strict static checker를 CI에서 실행한다.",
+  "Union·Optional을 branch에서 좁히고 Literal 외부 값은 allowlist 검증한다.",
+  "Callable과 작은 capability Protocol을 caller 요구에 맞게 선택한다.",
+  "TypeVar로 입력·출력 generic 관계를 보존하고 Any 확산을 제한한다.",
+  "runtime_checkable Protocol의 signature 검사 한계를 integration test로 보완한다.",
+  "TypedDict를 static dict shape로 사용하고 JSON boundary에는 runtime schema를 둔다.",
+  "dataclass default_factory·frozen·slots와 중첩 mutability tradeoff를 검증한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-typing-callable", repository: "Python documentation", path: "library/typing.html#annotating-callable-objects", publicUrl: "https://docs.python.org/3/library/typing.html#annotating-callable-objects", usedFor: ["Callable", "Protocol __call__", "signature typing"], evidence: "공식 typing 문서의 callable annotation 지침을 함수·객체 callback 계약에 사용했습니다." },
+  { id: "python-typing-typeddict", repository: "Python documentation", path: "library/typing.html#typing.TypedDict", publicUrl: "https://docs.python.org/3/library/typing.html#typing.TypedDict", usedFor: ["TypedDict", "Required/NotRequired", "runtime dict"], evidence: "공식 TypedDict 문서의 static shape와 runtime identity 계약을 확인했습니다." },
+  { id: "python-dataclass-field", repository: "Python documentation", path: "library/dataclasses.html#dataclasses.field", publicUrl: "https://docs.python.org/3/library/dataclasses.html#dataclasses.field", usedFor: ["field", "default_factory", "frozen", "slots"], evidence: "공식 dataclasses.field 문서를 mutable default와 generated model 옵션 설명에 사용했습니다." },
+);
+
 export default session;

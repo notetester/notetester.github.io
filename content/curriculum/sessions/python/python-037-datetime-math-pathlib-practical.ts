@@ -110,7 +110,7 @@ const session = {
             { lines: "6-9", explanation: "미래 출생을 거부하고 생일 월일이 아직 오지 않았으면 bool 1을 뺍니다." },
             { lines: "11-14", explanation: "원본의 기준일·시험일로 171일을 재현합니다." },
             { lines: "15-16", explanation: "생일이 지난 2000-03-01, 아직인 12-25, 당일인 1990-06-01을 비교합니다." },
-            { lines: "17", explanation: "이미 지난 target은 음수 day를 반환합니다." },
+            { lines: "16", explanation: "이미 지난 target은 음수 day를 반환합니다." },
           ],
           run: { environment: ["Python 3.8 이상", "calendar_rules.py로 저장"], command: "python calendar_rules.py" },
           output: { value: "exam-days=171\n2000-03-01: age=26\n2000-12-25: age=25\n1990-06-01: age=36\npast-days=-2", explanation: ["원본 D-171이 고정 기준일에서 재현됩니다.", "같은 출생연도라도 생일 전이면 한 살 적고 생일 당일은 차감하지 않습니다.", "음수 차이를 숨기지 않아 caller가 이미 지난 일정 문구를 결정합니다."] },
@@ -255,5 +255,213 @@ const session = {
   ],
   sourceCoverage: { filesRead: 4, filesUsed: 4, uncoveredNotes: ["pandas Timestamp·NumPy dtype·business calendar 외부 library는 데이터 분석 과정에서 다룹니다.", "zoneinfo·DST·monotonic clock·calendar policy·package resource는 원본 표준 library 예제를 전문가 운영 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "aware-time-zoneinfo-dst-evidence",
+    title: "aware datetime·ZoneInfo·DST fold로 실제 instant와 wall time을 분리합니다",
+    lead: "지역 시각은 timezone rule에 따라 존재하지 않거나 두 번 나타날 수 있으므로 저장 instant, 표시 zone과 ambiguous time 정책을 명시해야 합니다.",
+    explanations: [
+      "naive datetime은 tzinfo가 없어 UTC인지 지역 시간인지 자체로 알 수 없습니다. aware datetime은 utcoffset을 계산할 수 있는 tzinfo를 가져 instant 변환을 표현합니다.",
+      "zoneinfo.ZoneInfo는 IANA time zone database 규칙을 사용합니다. Windows 등 system database가 없는 환경에는 tzdata package가 필요할 수 있으므로 deployment dependency와 database version을 기록합니다.",
+      "DST가 끝날 때 같은 wall time이 두 번 나타나는 fold가 생깁니다. datetime의 fold=0/1로 앞·뒤 offset을 구분하고 입력 UI에는 사용자에게 offset 또는 disambiguation을 요구합니다.",
+      "서로 다른 instant의 elapsed time은 UTC로 변환한 뒤 계산합니다. 같은 tzinfo 객체를 가진 local datetime끼리 뺄 때 wall-time semantics가 적용될 수 있으므로 업무가 elapsed인지 calendar recurrence인지 먼저 정합니다.",
+      "DB에는 보통 UTC instant와 원래 zone ID를 별도 저장하고 표시 시 최신/고정 rule 정책을 정합니다. 단순 offset만 저장하면 미래 DST rule과 지역 identity를 잃습니다.",
+    ],
+    concepts: [
+      { term: "aware datetime", definition: "UTC offset을 계산할 수 있는 tzinfo를 포함해 시간선의 instant와 연결할 수 있는 datetime입니다.", detail: ["naive와 직접 비교·연산이 제한됩니다.", "zone rule과 fold가 필요할 수 있습니다."] },
+      { term: "fold", definition: "DST 종료처럼 같은 local wall time이 두 번 나타날 때 앞 occurrence와 뒤 occurrence를 구분하는 0/1 속성입니다.", detail: ["PEP 495에서 도입되었습니다.", "ZoneInfo가 offset 선택에 사용합니다."] },
+    ],
+    codeExamples: [{
+      id: "zoneinfo-dst-fold-instant-evidence",
+      title: "뉴욕 DST fold 두 시각의 offset·UTC instant·elapsed를 비교합니다",
+      language: "python",
+      filename: "dst_fold_contract.py",
+      purpose: "같은 wall clock 표기가 서로 다른 instant가 될 수 있음을 고정 timezone data 예제로 확인합니다.",
+      code: String.raw`from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+new_york = ZoneInfo("America/New_York")
+first = datetime(2024, 11, 3, 1, 30, tzinfo=new_york, fold=0)
+second = datetime(2024, 11, 3, 1, 30, tzinfo=new_york, fold=1)
+
+print("offsets:", first.utcoffset(), second.utcoffset())
+print("utc_first:", first.astimezone(timezone.utc).isoformat())
+print("utc_second:", second.astimezone(timezone.utc).isoformat())
+print("elapsed:", second.astimezone(timezone.utc) - first.astimezone(timezone.utc))
+print("timestamps:", int(first.timestamp()), int(second.timestamp()))
+print("same_wall_fields:", first.replace(tzinfo=None) == second.replace(tzinfo=None))
+
+naive = datetime(2024, 11, 3, 1, 30)
+try:
+    naive < first
+except TypeError as error:
+    print("naive_aware_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-6", explanation: "같은 2024-11-03 01:30을 fold 0/1로 만들어 EDT와 EST occurrence를 구분합니다." },
+        { lines: "8-13", explanation: "서로 다른 offset·UTC instant·timestamp와 1시간 elapsed를 출력하면서 wall field는 같음을 확인합니다." },
+        { lines: "15-19", explanation: "naive와 aware ordering 비교가 TypeError로 거부되는 경계를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "IANA tzdata의 America/New_York zone 필요", "network/filesystem 직접 접근 없음"], command: "python -I -B -X utf8 dst_fold_contract.py" },
+      output: { value: "offsets: -1 day, 20:00:00 -1 day, 19:00:00\nutc_first: 2024-11-03T05:30:00+00:00\nutc_second: 2024-11-03T06:30:00+00:00\nelapsed: 1:00:00\ntimestamps: 1730611800 1730615400\nsame_wall_fields: True\nnaive_aware_error: TypeError", explanation: ["fold가 바꾼 offset 때문에 timestamp가 3600초 다릅니다.", "wall field equality는 instant equality를 의미하지 않습니다."] },
+      experiments: [
+        { change: "fold를 둘 다 0으로 둡니다.", prediction: "같은 occurrence가 되어 timestamp도 같습니다.", result: "ambiguous input에서 fold 정책이 필수입니다." },
+        { change: "UTC 변환 없이 local datetime을 직접 뺍니다.", prediction: "same tzinfo wall-time 규칙 때문에 elapsed 기대와 다를 수 있습니다.", result: "instant duration은 UTC에서 계산합니다." },
+        { change: "고정 -04:00 offset만 저장합니다.", prediction: "America/New_York라는 지역 rule identity와 이후 전환 정보를 잃습니다.", result: "instant와 zone ID를 함께 보존합니다." },
+      ],
+      sourceRefs: ["python-zoneinfo-doc", "python-datetime-aware-naive"],
+    }],
+    diagnostics: [
+      { symptom: "DST 종료일 예약이 한 시간 빠르거나 두 번 실행된다.", likelyCause: "ambiguous local time을 fold/offset 없이 naive datetime으로 저장했습니다.", checks: ["원본 zone ID·offset·fold를 확인합니다.", "UTC instant로 두 occurrence를 비교합니다.", "tzdata version과 scheduler semantics를 봅니다."], fix: "입력에서 ambiguity를 해소하고 UTC instant+zone ID를 저장하며 elapsed/calendar recurrence를 분리합니다.", prevention: "각 지원 zone의 gap·fold 경계 fixture와 tzdata update test를 둡니다." },
+    ],
+    expertNotes: ["정치적 time-zone rule은 바뀔 수 있습니다. 미래 예약을 instant로 고정할지 local recurrence로 재계산할지 제품 정책이 필요합니다."],
+  },
+  {
+    id: "numeric-duration-and-calendar-semantics",
+    title: "math.fsum·isclose와 timedelta·calendar 의미를 수치 계약으로 연결합니다",
+    lead: "부동소수 근사와 시간 duration은 모두 표현과 비교 정책이 필요하며, 30일을 한 달로 간주하는 식의 단위 혼동을 피해야 합니다.",
+    explanations: [
+      "math.fsum은 크기가 다른 float 누적에서 일반 sum보다 정확하고 math.isclose는 상대·절대 tolerance로 근사 equality를 표현합니다. rel_tol만 쓰면 0 근처 비교가 지나치게 엄격해질 수 있어 abs_tol을 함께 검토합니다.",
+      "isclose는 업무 허용 오차를 정하는 함수이지 잘못된 계산을 무조건 같다고 만드는 도구가 아닙니다. 단위와 scale을 확인하고 NaN은 어떤 값과도 close하지 않음을 테스트합니다.",
+      "timedelta.seconds는 하루를 제외한 0..86399 나머지 component이고 전체 duration은 total_seconds()로 얻습니다. 음수 duration에서 둘의 차이가 특히 큽니다.",
+      "timedelta(days=30)는 정확히 30*24시간의 duration이지 calendar month가 아닙니다. 1월 31일의 다음 달 같은 업무 규칙은 month 길이·말일·leap year 정책을 별도로 구현합니다.",
+      "datetime arithmetic은 duration과 calendar recurrence를 구분합니다. 청구일·월간 예약에는 calendar rule, timeout·latency에는 monotonic clock과 duration이 적합합니다.",
+    ],
+    concepts: [
+      { term: "relative tolerance", definition: "비교 값의 크기에 비례해 허용하는 오차입니다.", detail: ["math.isclose의 rel_tol입니다.", "0 근처에는 abs_tol이 필요할 수 있습니다."] },
+      { term: "calendar arithmetic", definition: "달 길이·윤년·지역 시간 규칙을 따르는 날짜 단위 연산입니다.", detail: ["고정 초 duration과 다릅니다.", "말일 정책을 명시해야 합니다."] },
+    ],
+    codeExamples: [{
+      id: "fsum-isclose-timedelta-calendar-contracts",
+      title: "정밀 합계·근사 비교·음수 timedelta와 30일 calendar 함정을 확인합니다",
+      language: "python",
+      filename: "numeric_time_contracts.py",
+      purpose: "수치와 시간 API의 이름이 숨기는 tolerance·component·calendar 의미를 exact output으로 드러냅니다.",
+      code: String.raw`from datetime import date, timedelta
+import math
+
+values = [1e16, 1.0, 1e-16]
+print("sums:", sum(values), math.fsum(values))
+print("close_decimal:", math.isclose(0.1 + 0.2, 0.3, rel_tol=1e-12, abs_tol=0.0))
+print("near_zero:", math.isclose(1e-12, 0.0, rel_tol=1e-9, abs_tol=1e-11))
+print("nan_close:", math.isclose(float("nan"), float("nan")))
+
+negative = timedelta(days=-1, seconds=1)
+print("negative:", negative)
+print("seconds_component:", negative.seconds)
+print("total_seconds:", negative.total_seconds())
+
+start = date(2024, 1, 31)
+print("plus_30_days:", start + timedelta(days=30))
+print("leap_day:", date(2024, 2, 29) + timedelta(days=1))`,
+      walkthrough: [
+        { lines: "1-8", explanation: "sum/fsum 차이, scale 기반 isclose와 near-zero abs_tol, NaN comparison을 확인합니다." },
+        { lines: "10-13", explanation: "음수 timedelta의 seconds component 1과 전체 -86399초를 구분합니다." },
+        { lines: "15-17", explanation: "1월 31일에 30일을 더하면 다음 달 29일이 아니라 3월 1일임을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "고정 날짜", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 numeric_time_contracts.py" },
+      output: { value: "sums: 1e+16 1.0000000000000002e+16\nclose_decimal: True\nnear_zero: True\nnan_close: False\nnegative: -1 day, 0:00:01\nseconds_component: 1\ntotal_seconds: -86399.0\nplus_30_days: 2024-03-01\nleap_day: 2024-03-01", explanation: ["fsum은 큰 값과 작은 항이 섞인 입력에서 더 정확한 representable 결과를 만들고 abs_tol은 0 근처 1e-12를 허용합니다.", "timedelta.seconds와 total_seconds는 전혀 다른 질문에 답합니다."] },
+      experiments: [
+        { change: "near_zero의 abs_tol을 0으로 바꿉니다.", prediction: "False가 됩니다.", result: "0 근처 비교에 절대 허용 오차가 필요한 이유입니다." },
+        { change: "negative.seconds로 timeout을 계산합니다.", prediction: "-86399초를 1초로 잘못 해석합니다.", result: "전체 duration에는 total_seconds를 사용합니다." },
+        { change: "start를 2023-01-31로 바꿉니다.", prediction: "30일 뒤는 2023-03-02입니다.", result: "고정 일수와 달 이동이 다릅니다." },
+      ],
+      sourceRefs: ["python-math-fsum-isclose", "python-datetime-aware-naive"],
+    }],
+    diagnostics: [
+      { symptom: "음수 timeout이 작은 양수로 기록된다.", likelyCause: "timedelta.total_seconds() 대신 seconds component를 사용했습니다.", checks: ["days·seconds·microseconds를 함께 출력합니다.", "음수와 24시간 초과 fixture를 실행합니다.", "업무 단위가 duration인지 확인합니다."], fix: "전체 duration은 total_seconds로 계산하고 허용 범위를 검증합니다.", prevention: "negative·multi-day duration 회귀 test를 둡니다." },
+    ],
+    expertNotes: ["timeout 측정에는 wall clock datetime.now보다 time.monotonic 계열이 안전합니다. 시스템 시각 조정과 DST가 elapsed를 바꾸지 않게 합니다."],
+  },
+  {
+    id: "pathlib-pure-path-and-containment-boundary",
+    title: "pathlib의 lexical path 모델과 실제 filesystem 보안 경계를 구분합니다",
+    lead: "PurePath는 문자열 path 구조를 플랫폼 독립적으로 다루고 Path는 실제 filesystem 작업을 수행하지만, '..' 제거만으로 symlink·race까지 해결되지는 않습니다.",
+    explanations: [
+      "PurePosixPath와 PureWindowsPath는 filesystem을 조회하지 않고 parts·name·suffix·parent 같은 lexical 연산을 제공합니다. 외부 형식의 path를 현재 OS Path로 해석하기 전에 format을 정합니다.",
+      "Path는 현재 platform filesystem semantics를 사용하며 exists·resolve·read_text 같은 I/O를 수행합니다. library 코드에서 cwd 의존 상대 경로보다 주입된 base path를 사용합니다.",
+      "사용자 입력 path는 absolute 여부, '..' traversal, 빈 이름과 허용 확장자를 먼저 검증할 수 있습니다. 그러나 문자열 정규화만으로 symlink가 base 밖을 가리키는 문제를 막지 못합니다.",
+      "실제 저장 경계에서는 trusted base와 candidate를 resolve한 뒤 containment를 검사하고, 검사와 open 사이 race를 줄이는 OS 안전 API·권한·별도 storage namespace를 검토합니다.",
+      "path 전체를 오류·로그에 그대로 남기면 사용자명·directory 구조가 노출될 수 있습니다. 공개 응답에는 logical object ID나 basename처럼 필요한 최소 정보만 사용합니다.",
+    ],
+    concepts: [
+      { term: "pure path", definition: "실제 filesystem 접근 없이 path 문자열의 platform별 구조와 연산만 표현하는 객체입니다.", detail: ["PurePosixPath·PureWindowsPath가 있습니다.", "I/O method가 없습니다."] },
+      { term: "path containment", definition: "candidate가 trusted base directory 아래의 실제 허용 대상인지 검증하는 보안 조건입니다.", detail: ["lexical '..' 검사만으로 충분하지 않습니다.", "symlink·race·권한을 함께 고려합니다."] },
+    ],
+    codeExamples: [{
+      id: "pure-path-validation-boundary",
+      title: "PurePosixPath로 suffix·parts와 lexical traversal policy를 확인합니다",
+      language: "python",
+      filename: "pure_path_boundary.py",
+      purpose: "실제 filesystem을 건드리지 않고 path parsing과 1차 입력 policy를 deterministic하게 검증합니다.",
+      code: String.raw`from pathlib import PurePosixPath
+
+base = PurePosixPath("/srv/uploads")
+
+def lexical_target(raw):
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute():
+        return False, "absolute"
+    if ".." in candidate.parts:
+        return False, "traversal"
+    if candidate.suffix.casefold() not in {".txt", ".csv"}:
+        return False, "extension"
+    return True, str(base / candidate)
+
+report = PurePosixPath("reports/2026.summary.csv")
+print("parts:", report.parts)
+print("name:", report.name)
+print("stem:", report.stem)
+print("suffixes:", report.suffixes)
+print("parent:", report.parent)
+
+for raw in ["team/data.csv", "../secret.txt", "/etc/passwd", "image.exe"]:
+    print(raw, "->", lexical_target(raw))`,
+      walkthrough: [
+        { lines: "1-12", explanation: "trusted base와 absolute·'..'·extension을 검사하는 lexical policy를 정의합니다." },
+        { lines: "14-19", explanation: "복합 suffix path의 parts·name·stem·suffixes·parent를 확인합니다." },
+        { lines: "21-22", explanation: "허용 상대 path와 traversal·absolute·extension 거부 결과를 table로 실행합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "PurePath만 사용해 filesystem 접근 없음"], command: "python -I -B -X utf8 pure_path_boundary.py" },
+      output: { value: "parts: ('reports', '2026.summary.csv')\nname: 2026.summary.csv\nstem: 2026.summary\nsuffixes: ['.summary', '.csv']\nparent: reports\nteam/data.csv -> (True, '/srv/uploads/team/data.csv')\n../secret.txt -> (False, 'traversal')\n/etc/passwd -> (False, 'absolute')\nimage.exe -> (False, 'extension')", explanation: ["PurePosixPath라 Windows에서도 slash 기반 외부 format 결과가 같습니다.", "이 검사는 lexical 1차 경계이며 symlink containment를 증명하지 않습니다."] },
+      experiments: [
+        { change: "raw를 'team/../secret.txt'로 넣습니다.", prediction: "parts에 '..'가 있어 traversal로 거부됩니다.", result: "단순 prefix 문자열 비교보다 component 검사가 낫습니다." },
+        { change: "suffix 검사를 endswith('.txt')로 바꿉니다.", prediction: "대소문자·복합 확장자 policy가 달라집니다.", result: "허용 확장자를 parsed suffix로 명시합니다." },
+        { change: "lexical 통과만으로 실제 open을 허용합니다.", prediction: "base 안 symlink가 외부를 가리키는 위험은 남습니다.", result: "실제 filesystem containment와 권한이 별도입니다." },
+      ],
+      sourceRefs: ["py-pathlib-source", "python-pathlib-purepath"],
+    }],
+    diagnostics: [
+      { symptom: "prefix 검사상 uploads 아래인데 실제 파일은 base 밖에 생성된다.", likelyCause: "문자열 startswith 또는 lexical '..' 검사만 하고 symlink·resolve containment를 확인하지 않았습니다.", checks: ["base/candidate의 resolved path와 symlink를 조사합니다.", "검사와 open 사이 race를 확인합니다.", "process filesystem 권한을 봅니다."], fix: "trusted base의 실제 containment, 안전한 open API와 최소 권한 storage를 적용합니다.", prevention: "traversal·absolute·symlink·case·race threat model과 integration test를 유지합니다." },
+    ],
+    expertNotes: ["업로드는 사용자가 준 filename을 storage path로 직접 쓰기보다 server-generated object ID와 metadata로 분리하는 설계가 더 강합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "naive datetime과 aware datetime의 차이는 무엇인가요?", answer: "aware는 UTC offset을 계산할 수 있는 tzinfo가 있어 instant와 연결되고 naive는 timezone 의미를 자체로 갖지 않습니다." },
+  { question: "DST fold는 무엇을 구분하나요?", answer: "시계가 뒤로 갈 때 같은 local wall time이 두 번 나타나는 앞 occurrence(fold=0)와 뒤 occurrence(fold=1)를 구분합니다." },
+  { question: "지역 datetime의 실제 elapsed를 왜 UTC에서 계산하나요?", answer: "DST gap/fold와 local wall-time arithmetic이 실제 시간선 차이를 왜곡하지 않도록 서로의 UTC instant를 비교하기 위해서입니다." },
+  { question: "math.isclose에서 abs_tol이 특히 필요한 경우는 언제인가요?", answer: "비교 대상이 0에 가깝거나 정확히 0일 때 relative tolerance만으로 허용 범위를 만들기 어려운 경우입니다." },
+  { question: "timedelta.seconds와 total_seconds()는 어떻게 다른가요?", answer: "seconds는 day를 제외한 나머지 component이고 total_seconds는 days·seconds·microseconds를 합친 전체 duration입니다." },
+  { question: "timedelta(days=30)가 한 달 이동이 아닌 이유는 무엇인가요?", answer: "30*24시간의 고정 duration일 뿐 달마다 다른 날짜 수와 말일·윤년 규칙을 적용하지 않기 때문입니다." },
+  { question: "PurePath의 '..' 검사만으로 안전한 파일 저장이 되나요?", answer: "아닙니다. symlink·resolve containment·race·OS 권한과 storage namespace를 실제 filesystem 경계에서 처리해야 합니다." },
+);
+session.completionChecklist.push(
+  "naive·aware datetime을 혼합하지 않고 저장 instant와 표시 zone을 분리한다.",
+  "ZoneInfo deployment의 tzdata와 DST gap/fold 정책을 테스트한다.",
+  "elapsed duration은 UTC instant 또는 monotonic clock 기준으로 계산한다.",
+  "float 합계·비교에 math.fsum과 rel_tol·abs_tol의 domain 근거를 둔다.",
+  "timedelta component와 total_seconds, duration과 calendar arithmetic을 구분한다.",
+  "PurePath lexical 검증과 실제 Path filesystem containment를 분리한다.",
+  "path·timezone·수치 오류에 민감 정보가 노출되지 않는 negative test를 둔다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-zoneinfo-doc", repository: "Python documentation", path: "library/zoneinfo.html", publicUrl: "https://docs.python.org/3/library/zoneinfo.html", usedFor: ["ZoneInfo", "IANA time zone", "fold", "tzdata"], evidence: "공식 zoneinfo 문서를 DST rule과 data source deployment 기준으로 사용했습니다." },
+  { id: "python-datetime-aware-naive", repository: "Python documentation", path: "library/datetime.html#aware-and-naive-objects", publicUrl: "https://docs.python.org/3/library/datetime.html#aware-and-naive-objects", usedFor: ["aware/naive", "timedelta", "calendar boundary"], evidence: "공식 datetime aware/naive 정의와 timedelta API를 시간 model 설명의 기준으로 사용했습니다." },
+  { id: "python-math-fsum-isclose", repository: "Python documentation", path: "library/math.html", publicUrl: "https://docs.python.org/3/library/math.html", usedFor: ["fsum", "isclose", "tolerance"], evidence: "공식 math 문서의 fsum·isclose 계약을 수치 정확도와 근사 비교에 사용했습니다." },
+  { id: "python-pathlib-purepath", repository: "Python documentation", path: "library/pathlib.html#pure-paths", publicUrl: "https://docs.python.org/3/library/pathlib.html#pure-paths", usedFor: ["PurePath", "parts", "suffix", "lexical path"], evidence: "공식 pathlib pure paths 문서를 platform-independent path parsing 근거로 사용했습니다." },
+);
 
 export default session;

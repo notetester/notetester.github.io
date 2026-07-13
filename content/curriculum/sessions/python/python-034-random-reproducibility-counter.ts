@@ -258,4 +258,212 @@ const session = {
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["NumPy·PyTorch·GPU RNG와 stratified/group split library API는 ML 과정에서 실제 tensor·dataframe과 함께 확장합니다.", "독립 RNG·leakage audit·Unicode tokenization·CSPRNG·provenance manifest는 원본 random/Counter 예제를 전문가 실험 운영 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "rng-object-state-and-replay",
+    title: "Random 인스턴스와 state snapshot으로 재현 범위를 격리합니다",
+    lead: "seed 하나를 전역에 뿌리는 대신 작업별 Random 객체를 만들고 상태의 생성·소비·복원을 명시하면 테스트와 데이터 생성의 재현 경계가 선명해집니다.",
+    explanations: [
+      "random 모듈의 최상위 함수는 숨은 전역 Random 인스턴스를 공유합니다. 라이브러리 여러 곳이 같은 state를 소비하면 호출 순서 하나가 이후 전체 난수열을 바꿉니다.",
+      "random.Random(seed)는 독립 state를 가진 pseudo-random generator입니다. 같은 Python 구현과 같은 호출 순서에서는 같은 sequence를 재현할 수 있지만 암호학적 예측 불가능성을 제공하지 않습니다.",
+      "getstate와 setstate는 정확한 소비 지점의 generator 상태를 snapshot·복원합니다. state 객체를 장기 영속 format으로 가정하기보다 실험 checkpoint와 같은 interpreter/runtime metadata를 함께 기록합니다.",
+      "재현성은 seed만의 성질이 아닙니다. population 순서, 알고리즘 버전, 호출 횟수, parallel scheduling, Python·library 버전과 데이터 전처리까지 실험 manifest에 포함합니다.",
+      "의존성 주입으로 함수가 RNG 객체를 받게 하면 production에서는 적절한 generator를, test에서는 고정 seed generator를 전달해 전역 state 오염 없이 exact test를 만들 수 있습니다.",
+    ],
+    concepts: [
+      { term: "PRNG state", definition: "다음 pseudo-random 값을 결정하는 generator 내부 상태입니다.", detail: ["seed는 초기 state를 만드는 입력입니다.", "호출마다 state가 전진합니다."] },
+      { term: "replay boundary", definition: "같은 입력·상태·알고리즘·호출 순서를 고정해 결과 재생을 약속하는 범위입니다.", detail: ["프로세스 전체보다 작업 단위가 관리하기 쉽습니다.", "version metadata를 함께 기록합니다."] },
+    ],
+    codeExamples: [{
+      id: "random-state-replay-choice-sample-shuffle",
+      title: "독립 RNG의 state 복원과 choice·sample·shuffle 소비를 재현합니다",
+      language: "python",
+      filename: "random_state_replay.py",
+      purpose: "같은 state에서 시작한 난수열이 exact하게 반복되고 각 API의 반환·변경 계약이 다름을 확인합니다.",
+      code: String.raw`import random
+
+rng = random.Random(2026)
+checkpoint = rng.getstate()
+first = [rng.randrange(10) for _ in range(5)]
+rng.setstate(checkpoint)
+replayed = [rng.randrange(10) for _ in range(5)]
+print("sequence:", first)
+print("replayed:", replayed, first == replayed)
+
+population = ["a", "b", "c", "d", "e"]
+print("choice:", rng.choice(population))
+print("sample:", rng.sample(population, k=3))
+cards = population.copy()
+shuffle_result = random.Random(17).shuffle(cards)
+print("shuffle:", cards, "return:", shuffle_result)
+print("population_unchanged:", population)`,
+      walkthrough: [
+        { lines: "1-9", explanation: "고정 seed state를 저장하고 다섯 호출 뒤 복원해 같은 sequence를 exact하게 재생합니다." },
+        { lines: "11-13", explanation: "choice는 한 항목, sample은 비복원 고유 표본 list를 반환합니다." },
+        { lines: "14-17", explanation: "shuffle은 복사 list를 in-place 변경하고 None을 반환하며 원본 population은 유지합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "고정 seed", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 random_state_replay.py" },
+      output: { value: "sequence: [1, 5, 8, 8, 1]\nreplayed: [1, 5, 8, 8, 1] True\nchoice: b\nsample: ['e', 'd', 'c']\nshuffle: ['a', 'c', 'b', 'd', 'e'] return: None\npopulation_unchanged: ['a', 'b', 'c', 'd', 'e']", explanation: ["state 복원은 seed를 다시 호출하는 것보다 임의 checkpoint를 재생할 수 있습니다.", "shuffle은 별도 고정 seed RNG와 복사본에 적용해 변경·None 반환을 결정적으로 확인했습니다."] },
+      experiments: [
+        { change: "rng.setstate(checkpoint)를 제거합니다.", prediction: "replayed는 first 다음 state에서 생성되어 다른 값이 됩니다.", result: "호출 횟수가 재현성 일부임을 확인합니다." },
+        { change: "sample k를 6으로 바꿉니다.", prediction: "population보다 큰 비복원 표본이라 ValueError입니다.", result: "입력 크기 경계를 사전에 검증합니다." },
+        { change: "전역 random.choice를 중간에 호출합니다.", prediction: "독립 rng sequence에는 영향이 없습니다.", result: "local generator가 state coupling을 차단합니다." },
+      ],
+      sourceRefs: ["python-random-class", "python-random-state", "python-random-choice", "python-random-sample", "python-random-shuffle"],
+    }],
+    diagnostics: [
+      { symptom: "같은 seed인데 test 전체 실행과 단독 실행의 결과가 다르다.", likelyCause: "전역 random state를 다른 test가 먼저 소비하거나 population 순서·호출 횟수가 달라졌습니다.", checks: ["random 모듈 최상위 호출을 검색합니다.", "독립 Random 객체와 호출 trace를 비교합니다.", "입력 collection 순서와 runtime version을 기록합니다."], fix: "작업별 Random을 주입하고 seed·입력·버전·호출 단계를 fixture로 고정합니다.", prevention: "test 순서 무작위화와 단독/전체 실행을 모두 CI에서 확인합니다." },
+    ],
+    expertNotes: ["getstate 결과를 공개 API token이나 장기 호환 serialization으로 사용하지 않습니다. 목적은 동일 runtime 안의 명시적 checkpoint입니다."],
+  },
+  {
+    id: "sampling-distributions-and-statistical-tests",
+    title: "표본 API와 분포 검증을 단일 exact sequence가 아닌 통계 계약으로 나눕니다",
+    lead: "choice·choices·sample·shuffle과 연속 분포 함수는 복원 여부와 가중치, 반환 shape가 다르며 분포 품질은 여러 표본의 허용 구간으로 검사합니다.",
+    explanations: [
+      "choice는 population에서 한 항목, choices는 복원 추출 list, sample은 비복원 추출 list를 만듭니다. 같은 seed여도 서로 다른 API 호출은 state 소비 알고리즘이 달라 같은 항목열을 약속하지 않습니다.",
+      "choices의 weights는 상대 가중치이며 합이 1일 필요는 없지만 음수·모두 0·비유한 값은 허용 정책을 검증해야 합니다. 업무 확률은 입력 schema와 normalization을 분리합니다.",
+      "uniform·normalvariate 같은 분포 함수의 한 결과를 golden 값 하나로만 검사하면 implementation detail에 과도하게 결합됩니다. 범위·유한성·표본 평균·빈도 허용 구간을 고정 seed 반복 표본으로 검사합니다.",
+      "Counter는 범주별 관측 빈도를 보존하고 most_common은 고빈도부터 반환합니다. 동점의 첫 등장 순서가 입력에 의존하므로 report에는 범주 tie-break를 별도로 적용합니다.",
+      "통계 test는 확률적으로 실패할 수 있습니다. CI에서는 고정 seed와 넉넉한 deterministic threshold를 사용하되 실제 generator 품질을 한 작은 표본 test가 증명한다고 과장하지 않습니다.",
+    ],
+    concepts: [
+      { term: "sampling with replacement", definition: "한 번 뽑힌 항목도 다음 추출에서 다시 선택될 수 있는 표본 방식입니다.", detail: ["random.choices가 대표적입니다.", "sample은 기본적으로 비복원입니다."] },
+      { term: "statistical assertion", definition: "개별 난수값이 아니라 반복 표본의 범위·빈도·평균 같은 특성이 허용 구간에 있는지 확인하는 검증입니다.", detail: ["seed로 test를 재현합니다.", "false failure 확률과 표본 크기를 고려합니다."] },
+    ],
+    codeExamples: [{
+      id: "counter-distribution-sanity-check",
+      title: "고정 seed 범주 표본을 Counter와 간단한 chi-square 통계로 점검합니다",
+      language: "python",
+      filename: "distribution_counter.py",
+      purpose: "표본 sequence, 빈도표와 deterministic 통계 값의 역할을 구분합니다.",
+      code: String.raw`from collections import Counter
+import random
+
+rng = random.Random(7)
+draws = rng.choices(["A", "B", "C"], weights=[1, 2, 1], k=24)
+counts = Counter(draws)
+ordered = {label: counts[label] for label in ["A", "B", "C"]}
+print("draws:", "".join(draws))
+print("counts:", ordered)
+print("most_common:", counts.most_common())
+
+expected = {"A": 6, "B": 12, "C": 6}
+chi_square = sum(
+    (counts[label] - expected[label]) ** 2 / expected[label]
+    for label in expected
+)
+print("chi_square:", f"{chi_square:.3f}")
+print("range_ok:", all(0 <= counts[label] <= 24 for label in expected))
+
+sample = rng.sample(range(10), k=5)
+print("sample:", sample, "unique:", len(set(sample)) == len(sample))`,
+      walkthrough: [
+        { lines: "1-9", explanation: "가중 복원 추출 24개를 생성하고 Counter를 고정 label 순서 dict로 투영합니다." },
+        { lines: "11-18", explanation: "기대 빈도와 관측 빈도의 차이를 단순 chi-square 값과 범위 invariant로 계산합니다." },
+        { lines: "20-21", explanation: "sample의 비복원 고유성은 set 길이 invariant로 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "고정 seed", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 distribution_counter.py" },
+      output: { value: "draws: BABABBABABAABCAABCBBCACB\ncounts: {'A': 9, 'B': 11, 'C': 4}\nmost_common: [('B', 11), ('A', 9), ('C', 4)]\nchi_square: 2.250\nrange_ok: True\nsample: [2, 8, 1, 4, 9] unique: True", explanation: ["exact sequence는 교육 재현을 위한 것이며 통계 품질 결론은 빈도와 충분한 표본 설계로 내립니다.", "Counter를 ordered dict로 투영해 raw encounter-order 의존성을 줄였습니다."] },
+      experiments: [
+        { change: "weights를 [0, 1, 0]으로 바꿉니다.", prediction: "모든 draw가 B가 됩니다.", result: "상대 가중치 계약을 확인합니다." },
+        { change: "k를 24000으로 늘립니다.", prediction: "비율이 대체로 1:2:1에 가까워지지만 exact count는 보장하지 않습니다.", result: "표본 크기와 변동성을 비교합니다." },
+        { change: "most_common 대신 sorted(counts.items(), key=...)를 씁니다.", prediction: "빈도 동점의 label tie-break를 명시할 수 있습니다.", result: "통계 결과 표시 결정성을 분리합니다." },
+      ],
+      sourceRefs: ["python-random-choice", "python-random-sample", "python-random-distributions", "python-counter-most-common"],
+    }],
+    diagnostics: [
+      { symptom: "난수 test가 가끔 CI에서만 실패한다.", likelyCause: "seed 없이 좁은 통계 threshold나 단일 표본 exact 값을 검증했습니다.", checks: ["실패 seed와 표본 크기를 출력합니다.", "허용 구간의 false failure 확률을 검토합니다.", "range invariant와 distribution assertion을 분리합니다."], fix: "CI에는 실패 seed 재생과 적절한 표본·허용 구간을 사용하고 실제 품질 평가는 전문 test suite로 분리합니다.", prevention: "flaky 재실행으로 숨기지 말고 seed artifact와 통계 설계 근거를 남깁니다." },
+    ],
+    expertNotes: ["작은 chi-square 예제는 계산 구조를 학습하기 위한 것이며 자유도·유의수준·기대 빈도 조건을 포함한 정식 가설검정을 대신하지 않습니다."],
+  },
+  {
+    id: "security-randomness-and-reproducibility-boundary",
+    title: "재현 가능한 simulation과 예측 불가능한 보안 난수를 분리합니다",
+    lead: "random은 model simulation과 test data에 적합하지만 token·비밀번호·복구 code처럼 공격자가 예측하면 안 되는 값에는 secrets를 사용합니다.",
+    explanations: [
+      "Mersenne Twister 기반 random은 빠르고 재현 가능하지만 관측값과 state 노출에 대한 암호학적 안전성을 목표로 하지 않습니다. seed를 숨기는 것만으로 보안 generator가 되지 않습니다.",
+      "secrets는 운영체제가 제공하는 보안 난수원을 사용하고 choice·token_bytes·token_hex·token_urlsafe 같은 API를 제공합니다. 값 자체는 매 실행 달라야 하므로 exact golden output으로 검사하지 않습니다.",
+      "secrets.SystemRandom은 시스템 난수원을 감싸며 재현 가능한 getstate/setstate를 지원하지 않습니다. 이 비재현성은 결함이 아니라 보안 목적의 경계입니다.",
+      "함수에 picker protocol을 주입하면 test에는 random.Random 고정 seed를, production token 경로에는 secrets.SystemRandom을 사용할 수 있습니다. 단, production에서 test seed fallback을 허용하지 않습니다.",
+      "민감 token을 로그·fixture·URL query에 남기지 않고 길이·alphabet·충돌 처리·만료·hash 저장을 별도 보안 계약으로 설계합니다.",
+    ],
+    concepts: [
+      { term: "CSPRNG", definition: "출력 일부를 알아도 과거·미래 값을 실용적으로 예측하기 어렵도록 설계된 암호학적 안전 난수 생성기입니다.", detail: ["secrets가 운영체제 난수원을 사용합니다.", "simulation 재현성과 목표가 반대입니다."] },
+      { term: "dependency-injected RNG", definition: "난수원을 함수 내부 전역으로 고정하지 않고 명시 인자로 전달하는 설계입니다.", detail: ["test replay가 쉬워집니다.", "보안 경로의 구현 선택을 강제할 수 있습니다."] },
+    ],
+    codeExamples: [{
+      id: "secrets-system-random-boundary",
+      title: "SystemRandom의 비재현 state와 주입된 test RNG를 구분합니다",
+      language: "python",
+      filename: "secure_random_boundary.py",
+      purpose: "실제 보안 token 값을 출력하지 않고 generator capability 차이를 exact output으로 검증합니다.",
+      code: String.raw`import random
+import secrets
+
+secure_rng = secrets.SystemRandom()
+print("secure_type:", type(secure_rng).__name__)
+try:
+    secure_rng.getstate()
+except NotImplementedError as error:
+    print("state_error:", type(error).__name__)
+
+def pick_codes(rng, alphabet, count):
+    return "".join(rng.choice(alphabet) for _ in range(count))
+
+test_rng = random.Random(99)
+print("test_codes:", pick_codes(test_rng, "ABC123", 8))
+print("replay:", pick_codes(random.Random(99), "ABC123", 8))
+print("module_choice_distinct:", secrets.choice is random.choice)`,
+      walkthrough: [
+        { lines: "1-8", explanation: "SystemRandom type과 state snapshot 비지원 NotImplementedError를 확인하되 실제 난수값은 출력하지 않습니다." },
+        { lines: "10-15", explanation: "picker를 주입받는 함수에 고정 seed Random을 전달해 test sequence를 재생합니다." },
+        { lines: "16", explanation: "secrets.choice와 random.choice가 같은 함수가 아님을 identity로 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "운영체제 난수값은 출력하지 않음", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 secure_random_boundary.py" },
+      output: { value: "secure_type: SystemRandom\nstate_error: NotImplementedError\ntest_codes: 11B2BBBB\nreplay: 11B2BBBB\nmodule_choice_distinct: False", explanation: ["마지막 False는 두 choice callable이 동일하지 않다는 identity 비교 결과입니다.", "보안 RNG를 실제 호출한 출력은 golden fixture에 기록하지 않습니다."] },
+      experiments: [
+        { change: "production에서도 random.Random(99)를 사용합니다.", prediction: "누구나 같은 token sequence를 재생할 수 있습니다.", result: "재현성이 보안 token에서는 취약점임을 확인합니다." },
+        { change: "secure_rng.getstate를 정상 기능처럼 의존합니다.", prediction: "NotImplementedError로 실패합니다.", result: "보안 generator와 simulation generator capability가 다릅니다." },
+        { change: "token 자체를 로그에 출력합니다.", prediction: "난수 품질과 무관하게 credential이 노출됩니다.", result: "생성·전달·저장·로그 전체 lifecycle을 보호해야 합니다." },
+      ],
+      sourceRefs: ["python-secrets-doc", "python-random-class", "python-random-state"],
+    }],
+    diagnostics: [
+      { symptom: "비밀번호 재설정 token이 test seed나 시간 seed로 반복된다.", likelyCause: "재현 가능한 random을 보안 credential 생성에 사용했습니다.", checks: ["random.seed와 Random 생성 지점을 추적합니다.", "token 로그·DB 저장 방식을 확인합니다.", "secrets 사용과 충분한 entropy를 검증합니다."], fix: "secrets token API로 교체하고 기존 token을 폐기·회전하며 저장 시 hash·만료·단회 사용을 적용합니다.", prevention: "보안 난수 정책과 static scan, token collision·redaction test를 둡니다." },
+    ],
+    expertNotes: ["난수 API 선택은 ‘더 무작위처럼 보이는 값’ 문제가 아니라 공격 모델과 replay 요구의 선택입니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "random.seed만 기록하면 실험이 완전히 재현되나요?", answer: "아닙니다. generator·호출 순서·population 순서·runtime/library version·병렬 scheduling과 입력 데이터도 함께 고정해야 합니다." },
+  { question: "getstate와 setstate는 언제 유용한가요?", answer: "동일 runtime 안에서 임의 소비 지점의 PRNG sequence를 checkpoint하고 재생할 때 유용합니다." },
+  { question: "choice·choices·sample의 핵심 차이는 무엇인가요?", answer: "choice는 한 항목, choices는 기본 복원 반복 추출 list, sample은 비복원 고유 표본 list를 반환합니다." },
+  { question: "Counter.most_common의 동점 순서를 API report에 그대로 써도 되나요?", answer: "입력 첫 등장 순서에 의존할 수 있으므로 외부 계약에는 label·ID tie-break를 명시하는 편이 안전합니다." },
+  { question: "난수 분포 test를 exact 값 하나로 판단하면 왜 부족한가요?", answer: "한 값은 분포 특성을 증명하지 못하므로 충분한 반복 표본의 빈도·평균·범위와 허용 구간을 검증해야 합니다." },
+  { question: "random을 token 생성에 사용하면 왜 안 되나요?", answer: "random은 예측 불가능성을 보장하는 CSPRNG가 아니므로 secrets와 운영체제 난수원을 사용해야 합니다." },
+  { question: "보안 token test에서 무엇을 exact하게 검증하나요?", answer: "실제 token 값보다 길이·alphabet·형식·충돌 처리·만료·단회 사용·로그 redaction 같은 invariant를 검증합니다." },
+);
+session.completionChecklist.push(
+  "작업별 random.Random 인스턴스를 주입해 전역 state coupling을 제거한다.",
+  "seed뿐 아니라 입력·호출 순서·runtime version을 재현 manifest에 기록한다.",
+  "choice·choices·sample·shuffle의 복원·변경·반환 계약을 구분한다.",
+  "Counter 빈도와 동점 표시 순서를 결정적으로 투영한다.",
+  "분포 test에 고정 seed·표본 크기·허용 구간과 실패 seed 보고를 포함한다.",
+  "simulation 난수와 secrets 기반 보안 난수를 공격 모델에 따라 분리한다.",
+  "민감 token 값은 exact fixture·로그에 남기지 않고 lifecycle invariant를 검증한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-random-class", repository: "Python documentation", path: "library/random.html#random.Random", publicUrl: "https://docs.python.org/3/library/random.html#random.Random", usedFor: ["독립 generator", "seed", "state isolation"], evidence: "공식 Random class 문서를 독립 PRNG와 재현 범위의 근거로 사용했습니다." },
+  { id: "python-random-state", repository: "Python documentation", path: "library/random.html#random.getstate", publicUrl: "https://docs.python.org/3/library/random.html#random.getstate", usedFor: ["getstate", "setstate", "checkpoint"], evidence: "공식 random state 문서의 snapshot·복원 계약을 확인했습니다." },
+  { id: "python-random-choice", repository: "Python documentation", path: "library/random.html#random.choice", publicUrl: "https://docs.python.org/3/library/random.html#random.choice", usedFor: ["choice", "choices", "가중 복원 추출"], evidence: "공식 sequence 함수 문서의 choice·choices 반환과 가중치 계약을 확인했습니다." },
+  { id: "python-random-sample", repository: "Python documentation", path: "library/random.html#random.sample", publicUrl: "https://docs.python.org/3/library/random.html#random.sample", usedFor: ["비복원 표본", "k 경계"], evidence: "공식 sample 문서의 고유 표본과 population 크기 경계를 사용했습니다." },
+  { id: "python-random-shuffle", repository: "Python documentation", path: "library/random.html#random.shuffle", publicUrl: "https://docs.python.org/3/library/random.html#random.shuffle", usedFor: ["in-place shuffle", "None 반환"], evidence: "공식 shuffle 문서의 mutable sequence 제자리 변경 계약을 확인했습니다." },
+  { id: "python-random-distributions", repository: "Python documentation", path: "library/random.html#real-valued-distributions", publicUrl: "https://docs.python.org/3/library/random.html#real-valued-distributions", usedFor: ["분포 함수", "통계 검증 경계"], evidence: "공식 real-valued distributions 절을 분포 API와 단일 값 test 한계 설명에 사용했습니다." },
+  { id: "python-secrets-doc", repository: "Python documentation", path: "library/secrets.html", publicUrl: "https://docs.python.org/3/library/secrets.html", usedFor: ["CSPRNG", "SystemRandom", "token 보안"], evidence: "공식 secrets 문서의 보안 난수 사용 권고와 token API를 기준으로 사용했습니다." },
+  { id: "python-counter-most-common", repository: "Python documentation", path: "library/collections.html#collections.Counter.most_common", publicUrl: "https://docs.python.org/3/library/collections.html#collections.Counter.most_common", usedFor: ["빈도 순위", "동점 encounter order"], evidence: "공식 Counter.most_common 계약을 통계 결과 표시 설명에 사용했습니다." },
+);
+
 export default session;

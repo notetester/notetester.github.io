@@ -253,4 +253,246 @@ const session = {
   sourceCoverage: { filesRead: 3, filesUsed: 3, uncoveredNotes: ["raise·custom exception·re-raise 구조화 속성은 py-036에서 이어서 깊게 다룹니다.", "ExceptionGroup·async cancellation·retry/idempotency·민감 로그는 원본 try 예제를 전문가 운영 경계로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "hierarchy-catch-scope-and-else-evidence",
+    title: "예외 hierarchy와 최소 catch scope로 실패 원인을 보존합니다",
+    lead: "except는 type hierarchy를 따라 matching하므로 좁은 예외를 먼저 잡고, try에는 실제로 분류하려는 연산만 두며 성공 후 처리는 else로 옮깁니다.",
+    explanations: [
+      "BaseException 아래에는 일반 application 실패의 Exception과 종료 신호 성격의 KeyboardInterrupt·SystemExit 등이 있습니다. 무차별 except BaseException은 사용자의 취소와 process 종료까지 삼킬 수 있습니다.",
+      "except 절은 위에서부터 검사되므로 Exception을 먼저 두면 ValueError·OSError 같은 하위 분기가 도달 불가능해집니다. 복구 행동이 같은 인접 예외만 tuple로 묶습니다.",
+      "try 범위가 넓으면 내부 후처리 코드의 ValueError까지 사용자 입력 오류로 오분류할 수 있습니다. 파싱·I/O처럼 실제 실패 경계만 try에 두고 성공 경로의 계산·commit은 else에 둡니다.",
+      "else는 어떤 except도 실행되지 않았을 때만 수행됩니다. 오류가 없었다는 상태와 반환값의 truthiness를 혼동하지 않고 성공 후 side effect를 분리할 수 있습니다.",
+      "예외 message는 Python 버전·운영체제에 따라 달라질 수 있습니다. 외부 계약에는 안정된 domain code를 사용하고 내부 log에는 exception type·cause·traceback을 구조화합니다.",
+    ],
+    concepts: [
+      { term: "exception hierarchy", definition: "상위 예외 handler가 모든 하위 예외 인스턴스와 일치하는 상속 구조입니다.", detail: ["좁은 handler를 먼저 배치합니다.", "종료 계열 BaseException은 일반 복구 대상이 아닙니다."] },
+      { term: "catch scope", definition: "한 try가 예외를 특정 의미로 분류하려고 감싸는 코드 범위입니다.", detail: ["최소화해야 오분류가 줄어듭니다.", "성공 후 처리는 else로 이동합니다."] },
+    ],
+    codeExamples: [{
+      id: "exception-hierarchy-scope-else-finally",
+      title: "파싱·0 나눗셈·성공과 finally 실행 순서를 분류합니다",
+      language: "python",
+      filename: "exception_flow_contract.py",
+      purpose: "각 입력이 어느 handler로 가고 finally가 모든 return 전에 실행되는지 exact output으로 증명합니다.",
+      code: String.raw`events = []
+
+def parse_ratio(text):
+    events.append(f"start:{text}")
+    try:
+        left, right = text.split("/", maxsplit=1)
+        numerator = int(left)
+        denominator = int(right)
+        value = numerator / denominator
+    except ValueError:
+        result = "invalid-number"
+    except ZeroDivisionError:
+        result = "zero-denominator"
+    else:
+        result = f"ok:{value:.2f}"
+    finally:
+        events.append(f"finish:{text}")
+    return result
+
+for raw in ["6/3", "x/3", "1/0"]:
+    print(raw, "->", parse_ratio(raw))
+print("events:", events)
+print("hierarchy:", issubclass(ValueError, Exception), issubclass(KeyboardInterrupt, Exception))`,
+      walkthrough: [
+        { lines: "1-18", explanation: "파싱·나눗셈만 try에 두고 ValueError와 ZeroDivisionError를 별도 결과로 분류하며 성공은 else에서 만듭니다." },
+        { lines: "15-18", explanation: "finally가 정상·두 예외 모두에서 finish event를 남긴 뒤 함수가 반환됩니다." },
+        { lines: "20-23", explanation: "세 입력 결과와 ValueError/KeyboardInterrupt의 Exception 계층 관계를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 exception_flow_contract.py" },
+      output: { value: "6/3 -> ok:2.00\nx/3 -> invalid-number\n1/0 -> zero-denominator\nevents: ['start:6/3', 'finish:6/3', 'start:x/3', 'finish:x/3', 'start:1/0', 'finish:1/0']\nhierarchy: True False", explanation: ["KeyboardInterrupt는 Exception의 하위가 아니므로 일반 except Exception에서 잡히지 않습니다.", "finally event는 모든 입력에 정확히 한 번 기록됩니다."] },
+      experiments: [
+        { change: "except Exception을 첫 절로 올립니다.", prediction: "두 구체 handler는 실행되지 않고 실패 원인 구분이 사라집니다.", result: "handler 순서가 hierarchy 의미를 바꿉니다." },
+        { change: "result formatting을 try 안으로 옮기고 의도적으로 ValueError를 냅니다.", prediction: "입력 파싱 오류처럼 잘못 분류될 수 있습니다.", result: "최소 catch scope가 필요한 이유입니다." },
+        { change: "finally에서 return을 실행합니다.", prediction: "기존 예외·return을 덮어쓸 수 있습니다.", result: "finally는 cleanup에 집중해야 합니다." },
+      ],
+      sourceRefs: ["python-exception-hierarchy", "python-try-statement", "python-handling-exceptions"],
+    }],
+    diagnostics: [
+      { symptom: "KeyboardInterrupt를 눌러도 프로그램이 종료되지 않는다.", likelyCause: "except BaseException 또는 bare except가 취소 신호를 삼켰습니다.", checks: ["handler type을 확인합니다.", "SystemExit·KeyboardInterrupt 재발생 여부를 봅니다.", "loop retry 경계를 추적합니다."], fix: "복구 가능한 Exception 하위의 좁은 type만 잡고 취소·종료 신호는 전파합니다.", prevention: "bare except lint와 취소 integration test를 둡니다." },
+      { symptom: "입력 파싱 오류 handler가 성공 후 저장 코드의 ValueError까지 처리한다.", likelyCause: "try 범위가 너무 넓어 서로 다른 실패 경계를 같은 의미로 분류했습니다.", checks: ["traceback의 실제 발생 줄을 확인합니다.", "try와 else 경계를 표시합니다.", "handler가 복구 가능한 실패만 잡는지 검토합니다."], fix: "파싱만 try에 두고 후처리는 else 또는 다음 domain layer로 이동합니다.", prevention: "한 try에 한 recovery intent 원칙을 review checklist에 둡니다." },
+    ],
+    expertNotes: ["예외 type은 control-flow protocol입니다. message substring으로 분기하지 말고 domain exception·error code·cause를 사용합니다."],
+  },
+  {
+    id: "context-manager-cleanup-boundary",
+    title: "context manager로 acquire·use·release를 한 구조에 묶습니다",
+    lead: "with는 __enter__ 성공 뒤 suite가 정상 종료되거나 예외가 나도 __exit__를 호출해 자원 lifetime을 lexical scope에 고정합니다.",
+    explanations: [
+      "파일·lock·transaction 같은 자원은 acquire 성공 여부와 release 호출을 함께 다뤄야 합니다. 수동 try/finally는 가능하지만 context manager가 이 protocol을 재사용 가능한 객체로 캡슐화합니다.",
+      "__enter__ 자체가 실패하면 자원을 획득하지 못했으므로 해당 객체의 __exit__는 호출되지 않습니다. 여러 자원을 안전하게 조합할 때 ExitStack을 사용할 수 있습니다.",
+      "__exit__가 truthy를 반환하면 전달된 예외를 suppress합니다. 광범위한 suppress는 장애를 숨기므로 예상한 좁은 예외와 명시 fallback에만 사용합니다.",
+      "contextlib.contextmanager는 generator의 yield 앞을 acquire, yield 뒤 finally를 release로 표현합니다. 정확히 한 번 yield해야 하며 cleanup 예외가 원래 예외를 가릴 수 있음을 고려합니다.",
+      "cleanup의 성공을 business operation 성공과 혼동하지 않습니다. commit/rollback, close 실패와 원래 실패를 cause·log policy로 보존합니다.",
+    ],
+    concepts: [
+      { term: "context management protocol", definition: "__enter__와 __exit__로 자원 scope 시작·종료를 정의하는 protocol입니다.", detail: ["with 문이 호출 순서를 보장합니다.", "예외 suppress 여부도 __exit__ 반환 계약입니다."] },
+      { term: "lexical lifetime", definition: "코드 block의 시작과 끝이 자원의 유효 범위를 명확히 결정하는 설계입니다.", detail: ["early return과 예외에서도 cleanup됩니다.", "자원 reference를 scope 밖에 누출하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "context-manager-cleanup-evidence",
+      title: "정상·예외 경로에서 context cleanup이 정확히 한 번 실행됨을 확인합니다",
+      language: "python",
+      filename: "context_cleanup.py",
+      purpose: "실제 파일 없이 contextmanager event trace로 acquire/use/release와 예외 전파 순서를 검증합니다.",
+      code: String.raw`from contextlib import contextmanager
+
+events = []
+
+@contextmanager
+def managed(name):
+    events.append(f"acquire:{name}")
+    try:
+        yield name.upper()
+    finally:
+        events.append(f"release:{name}")
+
+with managed("ok") as resource:
+    events.append(f"use:{resource}")
+
+try:
+    with managed("fail") as resource:
+        events.append(f"use:{resource}")
+        raise LookupError("missing")
+except LookupError as error:
+    events.append(f"caught:{type(error).__name__}")
+
+print("events:", events)`,
+      walkthrough: [
+        { lines: "1-11", explanation: "generator context manager의 acquire·yield·finally release 구조를 정의합니다." },
+        { lines: "13-14", explanation: "정상 suite에서 use 뒤 release가 실행됩니다." },
+        { lines: "16-21", explanation: "LookupError 경로에서도 release가 먼저 실행되고 바깥 handler가 예외를 잡습니다." },
+        { lines: "23", explanation: "전체 ordering을 한 deterministic trace로 검증합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "실제 filesystem/network 불필요"], command: "python -I -B -X utf8 context_cleanup.py" },
+      output: { value: "events: ['acquire:ok', 'use:OK', 'release:ok', 'acquire:fail', 'use:FAIL', 'release:fail', 'caught:LookupError']", explanation: ["context manager는 예외를 suppress하지 않아 바깥 handler까지 전파됩니다.", "두 자원 모두 release event가 정확히 한 번 존재합니다."] },
+      experiments: [
+        { change: "finally를 제거합니다.", prediction: "fail 경로에서 release event가 누락됩니다.", result: "yield 이후 cleanup은 finally에 있어야 합니다." },
+        { change: "LookupError를 context manager 내부에서 잡고 반환합니다.", prediction: "바깥 caught event가 사라집니다.", result: "suppress 정책은 명시적이어야 합니다." },
+        { change: "acquire event 뒤 yield 전에 예외를 냅니다.", prediction: "yield 뒤 finally 구조에 도달하는 방식과 획득 상태를 재검토해야 합니다.", result: "부분 획득 cleanup을 acquire 구현 자체가 책임져야 합니다." },
+      ],
+      sourceRefs: ["python-with-statement", "python-contextlib-manager"],
+    }],
+    diagnostics: [
+      { symptom: "early return·예외 때 connection이나 lock이 남는다.", likelyCause: "release를 정상 경로 마지막 줄에만 두고 자원 lifetime을 구조화하지 않았습니다.", checks: ["모든 return·raise 경로를 나열합니다.", "context manager 지원 여부를 확인합니다.", "acquire 실패와 use 실패를 분리합니다."], fix: "with/context manager 또는 최소 try/finally로 cleanup을 보장합니다.", prevention: "failure injection으로 정상·예외·취소 경로의 release 횟수를 검증합니다." },
+    ],
+    expertNotes: ["비동기 자원에는 async with protocol이 대응합니다. cancellation 중 cleanup shield·timeout 정책은 별도의 async 과정에서 다룹니다."],
+  },
+  {
+    id: "traceback-chaining-groups-and-retry",
+    title: "traceback·원인 chaining·ExceptionGroup과 retry 경계를 구조화합니다",
+    lead: "원인을 보존한 domain 변환, 병렬 실패 묶음과 bounded retry는 서로 다른 실패 정보를 버리지 않고 적절한 layer에 전달하는 기술입니다.",
+    explanations: [
+      "raise NewError(...) from original은 __cause__를 명시하고 traceback에 직접 원인 관계를 표시합니다. from None은 사용자 화면에서 context를 숨길 수 있지만 내부 관찰성까지 삭제하지 않도록 원인을 기록합니다.",
+      "traceback.TracebackException은 exception과 traceback을 저장·format하는 표준 표현입니다. 외부 응답에는 stack·path·secret을 노출하지 않고 내부 secure log에 correlation ID와 함께 남깁니다.",
+      "ExceptionGroup은 독립 작업 여러 개가 동시에 실패했을 때 하나만 버리지 않고 묶습니다. except*는 matching 하위 예외 subgroup을 처리하고 나머지는 계속 전파합니다.",
+      "retry는 timeout·일시 network 오류처럼 같은 operation을 다시 하면 성공할 가능성이 있는 실패만 대상으로 합니다. parse·permission·invariant 오류를 retry하면 latency와 부하만 키웁니다.",
+      "retry에는 최대 시도, deadline, backoff+jitter, idempotency, 취소 전파와 마지막 cause가 필요합니다. broad Exception retry는 programmer bug까지 반복합니다.",
+    ],
+    concepts: [
+      { term: "exception chaining", definition: "한 layer의 예외를 다른 의미의 예외로 변환하면서 원래 예외를 cause/context로 보존하는 기능입니다.", detail: ["raise ... from ...으로 명시합니다.", "debug와 domain abstraction을 함께 유지합니다."] },
+      { term: "ExceptionGroup", definition: "여러 독립 예외를 tree 형태의 한 예외로 운반하는 container입니다.", detail: ["except*가 type별 subgroup을 처리합니다.", "parallel task 실패 보존에 적합합니다."] },
+    ],
+    codeExamples: [{
+      id: "chaining-group-and-bounded-retry",
+      title: "cause metadata·ExceptionGroup 분기·일시 오류 retry를 확인합니다",
+      language: "python",
+      filename: "advanced_exception_flow.py",
+      purpose: "비결정 stack 문자열 대신 안정된 exception type·cause·attempt trace를 exact output으로 검증합니다.",
+      code: String.raw`import traceback
+
+class ConfigError(Exception):
+    pass
+
+try:
+    try:
+        int("not-a-number")
+    except ValueError as error:
+        raise ConfigError("invalid port") from error
+except ConfigError as error:
+    summary = traceback.TracebackException.from_exception(error)
+    print("chain:", type(error).__name__, type(error.__cause__).__name__)
+    print("traceback_type:", summary.exc_type_str)
+    print("suppress_context:", error.__suppress_context__)
+
+try:
+    raise ExceptionGroup(
+        "batch",
+        [ValueError("bad"), TypeError("wrong"), OSError("offline")],
+    )
+except* ValueError as group:
+    print("value_group:", len(group.exceptions))
+except* (TypeError, OSError) as group:
+    print("other_group:", [type(item).__name__ for item in group.exceptions])
+
+outcomes = [TimeoutError("slow"), TimeoutError("slow"), "ok"]
+attempts = []
+for attempt in range(1, 4):
+    attempts.append(attempt)
+    outcome = outcomes[attempt - 1]
+    try:
+        if isinstance(outcome, Exception):
+            raise outcome
+    except TimeoutError:
+        if attempt == 3:
+            raise
+    else:
+        print("retry_result:", outcome)
+        break
+print("attempts:", attempts)`,
+      walkthrough: [
+        { lines: "1-15", explanation: "ValueError를 ConfigError로 명시 chaining하고 TracebackException에서 안정된 type metadata만 추출합니다." },
+        { lines: "17-25", explanation: "세 하위 예외의 ExceptionGroup을 ValueError와 나머지 subgroup으로 나눠 모두 처리합니다." },
+        { lines: "27-41", explanation: "TimeoutError만 최대 세 번 경계에서 재시도하고 세 번째 outcome 성공 시 else에서 종료합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 advanced_exception_flow.py" },
+      output: { value: "chain: ConfigError ValueError\ntraceback_type: ConfigError\nsuppress_context: True\nvalue_group: 1\nother_group: ['TypeError', 'OSError']\nretry_result: ok\nattempts: [1, 2, 3]", explanation: ["raise ... from ...은 명시 cause 때문에 suppress_context가 True입니다.", "ExceptionGroup 하위 순서는 생성 순서를 보존합니다."] },
+      experiments: [
+        { change: "raise ConfigError만 사용해 from을 제거합니다.", prediction: "__cause__는 None이고 implicit __context__만 남습니다.", result: "명시 cause와 암시 context 차이를 확인합니다." },
+        { change: "except* ValueError만 남깁니다.", prediction: "처리되지 않은 TypeError·OSError subgroup이 다시 발생합니다.", result: "except*가 matching 일부만 소비합니다." },
+        { change: "ValueError도 retry 대상에 넣습니다.", prediction: "같은 invalid input을 반복해도 성공하지 않습니다.", result: "transient classification이 retry 전제입니다." },
+      ],
+      sourceRefs: ["python-traceback-doc", "python-exception-context", "python-exception-groups", "python-try-statement"],
+    }],
+    diagnostics: [
+      { symptom: "domain error로 변환한 뒤 원래 stack과 실패 type을 알 수 없다.", likelyCause: "새 예외만 raise하고 cause chaining·내부 traceback 기록을 버렸습니다.", checks: ["__cause__와 __context__를 확인합니다.", "raise ... from ... 사용 여부를 봅니다.", "외부 응답과 내부 log를 분리합니다."], fix: "명시 exception chaining과 secure structured traceback logging을 사용합니다.", prevention: "cause 보존 test와 민감 정보 redaction test를 함께 둡니다." },
+    ],
+    expertNotes: ["ExceptionGroup handler에서 subgroup을 처리한 뒤 새 예외를 올릴 때 tree 형태가 달라질 수 있으므로 실제 async framework의 aggregation 규칙을 integration test로 고정합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "except Exception과 except BaseException의 중요한 차이는 무엇인가요?", answer: "Exception은 일반 application 오류 대부분을 잡지만 KeyboardInterrupt·SystemExit 같은 종료 신호는 제외하고, BaseException은 그것들까지 잡습니다." },
+  { question: "try 범위를 왜 최소화해야 하나요?", answer: "같은 예외 type이라도 다른 코드에서 난 실패를 잘못된 의미로 분류·복구하는 일을 줄이기 위해서입니다." },
+  { question: "else 절은 언제 실행되나요?", answer: "try suite가 예외 없이 끝나 어떤 except도 실행되지 않았을 때 실행됩니다." },
+  { question: "context manager의 __exit__가 True를 반환하면 어떻게 되나요?", answer: "suite에서 전달된 예외를 처리한 것으로 간주해 suppress합니다." },
+  { question: "raise NewError from original의 효과는 무엇인가요?", answer: "original을 명시적 __cause__로 보존하고 traceback에 직접 원인 관계를 표시합니다." },
+  { question: "except*는 일반 except와 어떻게 다른가요?", answer: "ExceptionGroup tree에서 matching 하위 예외 subgroup만 선택해 처리하고 나머지는 계속 전파할 수 있습니다." },
+  { question: "안전한 retry에 반드시 필요한 요소는 무엇인가요?", answer: "transient 분류, 최대 시도/deadline, backoff·jitter, idempotency, 취소 전파와 마지막 cause 보존이 필요합니다." },
+);
+session.completionChecklist.push(
+  "BaseException·Exception과 주요 하위 예외 hierarchy를 구분한다.",
+  "구체 handler를 상위 handler보다 먼저 두고 try 범위를 최소화한다.",
+  "성공 후 처리를 else로 옮겨 예외 오분류를 막는다.",
+  "cleanup을 with/context manager 또는 try/finally로 정확히 한 번 보장한다.",
+  "domain 변환에서 raise ... from ...으로 원래 cause를 보존한다.",
+  "ExceptionGroup을 except*로 type별 처리하고 미처리 subgroup 전파를 테스트한다.",
+  "retry를 일시 오류에만 적용하고 deadline·idempotency·취소를 계약한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-exception-hierarchy", repository: "Python documentation", path: "library/exceptions.html#exception-hierarchy", publicUrl: "https://docs.python.org/3/library/exceptions.html#exception-hierarchy", usedFor: ["BaseException", "Exception", "종료 신호"], evidence: "공식 exception hierarchy를 handler 범위와 분류 기준으로 사용했습니다." },
+  { id: "python-handling-exceptions", repository: "Python documentation", path: "tutorial/errors.html#handling-exceptions", publicUrl: "https://docs.python.org/3/tutorial/errors.html#handling-exceptions", usedFor: ["except matching", "else", "handler 순서"], evidence: "공식 tutorial의 exception handling 흐름을 catch scope 설명에 사용했습니다." },
+  { id: "python-try-statement", repository: "Python documentation", path: "reference/compound_stmts.html#the-try-statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-try-statement", usedFor: ["try/except/else/finally", "except*"], evidence: "공식 language reference의 try statement 실행 순서를 기준으로 사용했습니다." },
+  { id: "python-with-statement", repository: "Python documentation", path: "reference/compound_stmts.html#the-with-statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-with-statement", usedFor: ["context protocol", "cleanup"], evidence: "공식 with statement 변환 규칙을 lexical resource lifetime 설명에 사용했습니다." },
+  { id: "python-contextlib-manager", repository: "Python documentation", path: "library/contextlib.html#contextlib.contextmanager", publicUrl: "https://docs.python.org/3/library/contextlib.html#contextlib.contextmanager", usedFor: ["generator context manager", "yield/finally"], evidence: "공식 contextmanager 문서의 generator 기반 acquire/release 계약을 확인했습니다." },
+  { id: "python-traceback-doc", repository: "Python documentation", path: "library/traceback.html#traceback.TracebackException", publicUrl: "https://docs.python.org/3/library/traceback.html#traceback.TracebackException", usedFor: ["traceback 구조화", "exception type metadata"], evidence: "공식 TracebackException API를 안전한 metadata 추출 근거로 사용했습니다." },
+  { id: "python-exception-context", repository: "Python documentation", path: "library/exceptions.html#exception-context", publicUrl: "https://docs.python.org/3/library/exceptions.html#exception-context", usedFor: ["__cause__", "__context__", "raise from"], evidence: "공식 exception context 문서의 명시·암시 chaining 계약을 확인했습니다." },
+  { id: "python-exception-groups", repository: "Python documentation", path: "library/exceptions.html#exception-groups", publicUrl: "https://docs.python.org/3/library/exceptions.html#exception-groups", usedFor: ["ExceptionGroup", "subgroup 처리"], evidence: "공식 exception group 문서를 병렬 실패 보존과 except* 설명에 사용했습니다." },
+);
+
 export default session;

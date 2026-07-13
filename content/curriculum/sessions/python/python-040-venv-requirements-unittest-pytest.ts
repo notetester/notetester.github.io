@@ -209,10 +209,10 @@ const session = {
           language: "python",
           filename: "test_calc_contract.py",
           purpose: "plain assert·raises·approx·4개 parametrize·fixture가 discovery에서 독립 node로 집계되는 구조를 보여 줍니다.",
-          code: "import pytest\n\ndef add(a, b): return a + b\ndef subtract(a, b): return a - b\ndef divide(a, b):\n    if b == 0: raise ValueError('0으로 나눌 수 없습니다.')\n    return a / b\ndef is_even(n): return n % 2 == 0\n\ndef test_add(): assert add(2, 3) == 5\ndef test_subtract(): assert subtract(10, 4) == 6\ndef test_divide_by_zero():\n    with pytest.raises(ValueError, match='0으로'):\n        divide(10, 0)\ndef test_float(): assert divide(1, 3) == pytest.approx(0.3333, abs=1e-4)\n\n@pytest.mark.parametrize('n,expected', [(2, True), (3, False), (0, True), (-4, True)])\ndef test_is_even(n, expected): assert is_even(n) is expected\n\n@pytest.fixture\ndef sample_numbers(): return [10, 20, 30]\ndef test_with_fixture(sample_numbers): assert sum(sample_numbers) == 60",
+          code: "import pytest\n\ndef add(a, b): return a + b\ndef subtract(a, b): return a - b\ndef divide(a, b):\n    if b == 0:\n        raise ValueError('0으로 나눌 수 없습니다.')\n    return a / b\ndef is_even(n): return n % 2 == 0\n\ndef test_add(): assert add(2, 3) == 5\ndef test_subtract(): assert subtract(10, 4) == 6\ndef test_divide_by_zero():\n    with pytest.raises(ValueError, match='0으로'):\n        divide(10, 0)\ndef test_float(): assert divide(1, 3) == pytest.approx(0.3333, abs=1e-4)\n\n@pytest.mark.parametrize('n,expected', [(2, True), (3, False), (0, True), (-4, True)])\ndef test_is_even(n, expected): assert is_even(n) is expected\n\n@pytest.fixture\ndef sample_numbers(): return [10, 20, 30]\ndef test_with_fixture(sample_numbers): assert sum(sample_numbers) == 60",
           walkthrough: [
-            { lines: "1-8", explanation: "pytest와 네 production function을 한 학습 파일에 두었지만 실제 project에서는 calc module로 분리합니다." },
-            { lines: "10-16", explanation: "두 일반 결과, 구체 exception message, float tolerance 네 node를 만듭니다." },
+            { lines: "1-9", explanation: "pytest와 네 production function을 한 학습 파일에 두었지만 실제 project에서는 calc module로 분리합니다." },
+            { lines: "11-16", explanation: "두 일반 결과, 구체 exception message, float tolerance 네 node를 만듭니다." },
             { lines: "18-19", explanation: "한 function에 네 parameter set이 있어 네 독립 node가 됩니다." },
             { lines: "21-23", explanation: "fixture를 주입받는 합계 test 한 node를 더해 총 9개입니다." },
           ],
@@ -306,5 +306,176 @@ const session = {
   ],
   sourceCoverage: { filesRead: 7, filesUsed: 7, uncoveredNotes: ["특정 lock tool·build backend·CI vendor 문법은 project 선택 뒤 공식 문서로 별도 적용합니다.", "hash/SBOM·hermetic CI·flaky governance·supply-chain permission은 원본 venv/test 예제를 전문가 delivery 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "pyproject-lock-hash-reproducibility",
+    title: "pyproject·lock·artifact hash로 설치 입력을 재현 가능한 단위로 고정합니다",
+    lead: "venv는 격리 공간만 만들 뿐 같은 package graph를 보장하지 않으므로 project metadata, 모든 transitive version과 실제 artifact hash를 함께 고정해야 합니다.",
+    explanations: [
+      "pyproject.toml은 build-system과 project metadata, tool 설정의 표준 진입점입니다. requires-python과 dependency marker·extra가 어떤 interpreter/platform에서 다른 graph를 만드는지 review합니다.",
+      "requirements의 pkg>=1 같은 범위는 시간이 지나 다른 version을 선택하므로 배포 재현용 lock은 직접·transitive dependency의 exact version과 source artifact를 고정합니다.",
+      "pip --require-hashes는 모든 requirement가 hash를 갖도록 요구해 예상하지 않은 artifact를 거부합니다. 한 version에 여러 wheel을 허용한다면 지원 platform의 각 artifact hash를 명시합니다.",
+      "hash는 artifact integrity를 확인하지만 package가 신뢰할 수 있거나 악성 code가 없음을 증명하지 않습니다. index provenance, signing/attestation, dependency review와 취약점 대응을 별도로 수행합니다.",
+      "lock 생성 환경과 install 환경의 Python·OS·architecture·index URL·resolver version을 기록하고 offline wheelhouse 또는 immutable artifact repository를 사용하면 외부 drift를 줄일 수 있습니다.",
+    ],
+    concepts: [
+      { term: "lock file", definition: "선택된 직접·transitive dependency version과 환경 조건을 재현 가능하게 기록한 설치 입력입니다.", detail: ["version range와 목적이 다릅니다.", "platform별 graph를 표현해야 할 수 있습니다."] },
+      { term: "hash-checking mode", definition: "pip가 내려받은 distribution artifact의 digest가 requirement에 허용된 hash와 일치하는지 강제하는 모드입니다.", detail: ["--require-hashes로 활성화할 수 있습니다.", "신뢰성 검토를 대신하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "pyproject-lock-hash-manifest",
+      title: "pyproject metadata와 고정 version·artifact hash manifest를 생성합니다",
+      language: "python",
+      filename: "reproducible_manifest.py",
+      purpose: "실제 package 설치 없이 표준 tomllib·hashlib로 reproducibility 입력의 구조를 exact output으로 확인합니다.",
+      code: String.raw`import hashlib
+import tomllib
+
+pyproject_text = """
+[project]
+name = "study-demo"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["requests==2.32.5", "rich==14.1.0"]
+
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+project = tomllib.loads(pyproject_text)["project"]
+print("project:", project["name"], project["version"])
+print("python:", project["requires-python"])
+print("dependencies:", sorted(project["dependencies"]))
+
+artifact = b"study-demo-wheel-bytes-v1"
+digest = hashlib.sha256(artifact).hexdigest()
+lock_line = f"study-demo==1.0.0 --hash=sha256:{digest}"
+print("lock_line:", lock_line)
+print("pinned:", "==" in lock_line, "--hash=sha256:" in lock_line)
+print("digest_length:", len(digest))`,
+      walkthrough: [
+        { lines: "1-14", explanation: "고정 version의 project·build metadata를 TOML 문자열로 준비합니다." },
+        { lines: "16-19", explanation: "tomllib로 project metadata를 읽고 dependency 출력 순서를 결정적으로 정렬합니다." },
+        { lines: "21-26", explanation: "합성 artifact bytes의 SHA-256을 계산해 exact pin과 hash가 있는 lock line을 만듭니다." },
+      ],
+      run: { environment: ["Python 3.13+", "실제 pip/network/filesystem 불필요", "합성 artifact"], command: "python -I -B -X utf8 reproducible_manifest.py" },
+      output: { value: "project: study-demo 1.0.0\npython: >=3.11\ndependencies: ['requests==2.32.5', 'rich==14.1.0']\nlock_line: study-demo==1.0.0 --hash=sha256:741a0193f96dfc8b03788ba4aca96202e129a35f2cefc70eca38cd736dc877dd\npinned: True True\ndigest_length: 64", explanation: ["예제 hash는 합성 bytes에 대한 것으로 실제 wheel lock에는 실제 distribution hash를 사용해야 합니다.", "pyproject dependencies와 deploy lock은 목적이 달라 별도 관리될 수 있습니다."] },
+      experiments: [
+        { change: "requests pin을 >=2로 바꿉니다.", prediction: "미래 resolver 시점에 선택 version이 달라질 수 있습니다.", result: "개발 범위와 배포 lock을 구분합니다." },
+        { change: "artifact bytes 한 글자를 바꿉니다.", prediction: "SHA-256 전체가 달라집니다.", result: "hash가 artifact integrity를 고정합니다." },
+        { change: "top-level dependency만 lock합니다.", prediction: "transitive dependency version drift가 남습니다.", result: "완전한 graph lock이 필요합니다." },
+      ],
+      sourceRefs: ["py-installed-packages-source", "py-requirements-source", "packaging-pyproject-spec", "pip-repeatable-installs", "pip-hash-checking"],
+    }],
+    diagnostics: [
+      { symptom: "새 venv인데 어제와 다른 dependency version이 설치된다.", likelyCause: "version range·transitive dependency·index artifact를 lock하지 않았습니다.", checks: ["pip report/freeze와 lock graph를 비교합니다.", "Python·platform marker와 index URL을 확인합니다.", "hash-checking mode 사용 여부를 봅니다."], fix: "검토된 환경별 lock과 artifact hash를 생성해 immutable source에서 설치합니다.", prevention: "scheduled lock update PR, clean-room install과 dependency diff를 CI에 둡니다." },
+    ],
+    expertNotes: ["예제 version은 교육 snapshot입니다. 실제 프로젝트에서는 자동 update가 제안한 최신 호환 version을 test·review하고 lock을 갱신합니다."],
+  },
+  {
+    id: "test-layers-mock-property-coverage-ci-matrix",
+    title: "fixture·mock·parametrization·property·coverage와 CI matrix를 위험 기반으로 조합합니다",
+    lead: "테스트 도구의 개수보다 어떤 계약을 어느 격리 수준에서 검증하고 실패를 재현할 정보가 남는지가 중요합니다.",
+    explanations: [
+      "unittest fixture setUp/tearDown과 pytest fixture는 준비·정리를 재사용하지만 scope가 넓을수록 상태 누출 위험이 커집니다. mutable fixture를 test별 새로 만들고 cleanup을 실패 경로에서도 보장합니다.",
+      "mock은 느리거나 비결정적인 경계의 interaction을 제어하지만 구현 세부 호출을 과도하게 고정하면 refactor에 취약합니다. protocol adapter 경계에서 call count·argument·retry 같은 observable contract만 검증합니다.",
+      "pytest.mark.parametrize는 같은 assertion을 경계값 table에 적용하고 unittest.subTest는 loop case를 개별 failure context로 남깁니다. case ID에 입력 의미를 담아 CI에서 즉시 진단합니다.",
+      "property-based test는 생성된 많은 입력에서 invariant와 metamorphic relation을 찾고 실패 예제를 축소합니다. seed/example database를 artifact로 보존하되 몇 개 example test와 통합해야 설명 가능성이 높습니다.",
+      "coverage는 실행된 line/branch 비율이지 correctness 증명은 아닙니다. missing branch를 위험 기준으로 읽고 mutation test·negative test와 결합합니다.",
+      "CI matrix는 지원 Python·OS·dependency 범위를 대표해야 합니다. 모든 조합의 비용이 크면 최소/최신 version, 주요 OS와 scheduled full matrix를 나누고 flaky retry로 실패를 숨기지 않습니다.",
+    ],
+    concepts: [
+      { term: "interaction test", definition: "mock/fake를 통해 dependency가 어떤 argument·횟수·순서로 호출되는지 외부 observable contract를 검증하는 test입니다.", detail: ["adapter 경계에 제한합니다.", "내부 구현 세부를 과도하게 고정하지 않습니다."] },
+      { term: "property-based testing", definition: "다양한 생성 입력에 대해 항상 성립해야 할 invariant를 검사하고 실패 입력을 축소하는 기법입니다.", detail: ["example test를 보완합니다.", "재현 seed·database를 보존합니다."] },
+    ],
+    codeExamples: [{
+      id: "mock-param-property-ci-contracts",
+      title: "Mock retry·table cases·property invariant와 CI matrix를 한 실행으로 검증합니다",
+      language: "python",
+      filename: "test_strategy_contracts.py",
+      purpose: "third-party test runner 없이 표준 unittest.mock과 deterministic tables로 핵심 test 설계 결과를 확인합니다.",
+      code: String.raw`from unittest.mock import Mock, call
+
+def fetch_with_retry(fetch, attempts=3):
+    for attempt in range(attempts):
+        try:
+            return fetch()
+        except TimeoutError:
+            if attempt == attempts - 1:
+                raise
+
+fetch = Mock(side_effect=[TimeoutError("slow"), {"status": "ok"}])
+result = fetch_with_retry(fetch)
+print("retry:", result, fetch.call_count, fetch.call_args_list == [call(), call()])
+
+def clamp(value, low=0, high=100):
+    return min(high, max(low, value))
+
+cases = [(-1, 0), (0, 0), (50, 50), (100, 100), (101, 100)]
+print("table:", [(value, clamp(value) == expected) for value, expected in cases])
+
+domain = range(-200, 201)
+idempotent = all(clamp(clamp(value)) == clamp(value) for value in domain)
+bounded = all(0 <= clamp(value) <= 100 for value in domain)
+monotonic = all(clamp(value) <= clamp(value + 1) for value in range(-200, 200))
+print("properties:", idempotent, bounded, monotonic)
+
+matrix = [
+    ("3.11", "ubuntu"),
+    ("3.13", "ubuntu"),
+    ("3.13", "windows"),
+]
+print("matrix:", matrix)
+print("coverage_targets:", ["success", "timeout-retry", "timeout-exhausted"])`,
+      walkthrough: [
+        { lines: "1-13", explanation: "TimeoutError 한 번 뒤 성공하는 Mock으로 retry 결과·호출 횟수·arguments를 검증합니다." },
+        { lines: "15-19", explanation: "clamp 경계값 table을 parametrization 가능한 (input, expected) 구조로 실행합니다." },
+        { lines: "21-25", explanation: "401개 정수에서 idempotence·boundedness·monotonic property를 확인합니다." },
+        { lines: "27-33", explanation: "최소/최신 Python과 주요 OS CI matrix, coverage가 요구하는 실패 branch를 명시합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "표준 unittest.mock만 사용", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 test_strategy_contracts.py" },
+      output: { value: "retry: {'status': 'ok'} 2 True\ntable: [(-1, True), (0, True), (50, True), (100, True), (101, True)]\nproperties: True True True\nmatrix: [('3.11', 'ubuntu'), ('3.13', 'ubuntu'), ('3.13', 'windows')]\ncoverage_targets: ['success', 'timeout-retry', 'timeout-exhausted']", explanation: ["Mock은 retry boundary의 observable call 계약만 고정합니다.", "property loop는 개념 demonstration이며 Hypothesis의 생성·shrinking을 대신하지 않습니다."] },
+      experiments: [
+        { change: "fetch side_effect를 TimeoutError 세 개로 바꿉니다.", prediction: "세 번째 뒤 TimeoutError가 전파되고 exhausted branch가 실행됩니다.", result: "coverage target별 별도 test가 필요합니다." },
+        { change: "clamp의 max/min 순서를 깨뜨립니다.", prediction: "table 또는 property 중 하나가 실패합니다.", result: "example과 property test가 서로 보완합니다." },
+        { change: "CI matrix에서 Windows를 제거합니다.", prediction: "path·encoding·shell 차이를 release 전 발견하지 못할 수 있습니다.", result: "지원 platform 위험에 따라 matrix를 선택합니다." },
+      ],
+      sourceRefs: ["py-calc-source", "python-unittest-doc", "pytest-doc", "hypothesis-property-doc", "coverage-branch-doc"],
+    }],
+    diagnostics: [
+      { symptom: "coverage 100%인데 production edge case가 계속 실패한다.", likelyCause: "line 실행률을 assertion quality·branch·data contract 증명으로 오해했습니다.", checks: ["branch/mutation coverage와 assertion을 봅니다.", "실패 taxonomy별 negative test를 확인합니다.", "mock이 실제 adapter 차이를 숨기는지 검토합니다."], fix: "위험 기반 branch·property·integration contract test를 추가하고 coverage를 탐색 지표로 사용합니다.", prevention: "incident마다 빠진 invariant를 회귀 test와 threat model에 반영합니다." },
+    ],
+    expertNotes: ["property-based test의 실패 example database와 CI seed는 재현 artifact로 보존하되 개인정보가 생성 strategy에 들어가지 않도록 합성 domain을 사용합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "venv만 만들면 설치가 재현되나요?", answer: "아닙니다. interpreter와 package graph를 격리할 뿐 version·transitive dependency·artifact source를 lock하지 않습니다." },
+  { question: "pyproject.toml과 deploy lock의 역할은 어떻게 다른가요?", answer: "pyproject는 project/build metadata와 허용 dependency를 기술하고 lock은 특정 환경에 실제 선택된 전체 graph와 artifact를 고정합니다." },
+  { question: "pip hash-checking mode가 무엇을 보장하나요?", answer: "설치 artifact가 허용된 digest와 일치함을 검사하지만 package code의 신뢰성·취약점 부재를 보장하지는 않습니다." },
+  { question: "mock을 어디에 제한하는 것이 좋은가요?", answer: "network·clock·random·외부 service 같은 protocol adapter 경계의 observable interaction에 제한하고 내부 구현 세부는 과도하게 고정하지 않습니다." },
+  { question: "parametrized example과 property test는 어떻게 보완하나요?", answer: "example은 중요한 경계와 기대를 설명하고 property test는 넓은 생성 입력에서 invariant와 예상하지 못한 반례를 찾습니다." },
+  { question: "coverage가 correctness 증명이 아닌 이유는 무엇인가요?", answer: "line이 실행됐다는 사실만 보여 줄 뿐 assertion의 정확성, 누락된 입력·branch와 요구사항 충족을 증명하지 않기 때문입니다." },
+  { question: "CI matrix를 어떤 기준으로 구성하나요?", answer: "지원하는 최소/최신 Python, 주요 OS·architecture·dependency 조합의 위험과 비용을 기준으로 PR 핵심 matrix와 scheduled full matrix를 나눕니다." },
+);
+session.completionChecklist.push(
+  "pyproject의 requires-python·build-system·dependency marker를 검토한다.",
+  "직접·transitive exact version과 실제 distribution hash를 lock한다.",
+  "clean venv와 immutable artifact source에서 hash-checking install을 재현한다.",
+  "fixture scope와 cleanup을 최소화해 test 간 상태 누출을 막는다.",
+  "mock은 adapter interaction contract에 제한하고 실제 integration test를 유지한다.",
+  "경계 table·property invariant·failure seed를 함께 관리한다.",
+  "branch coverage와 지원 Python/OS CI matrix를 위험 기반으로 설계한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "packaging-pyproject-spec", repository: "Python Packaging User Guide", path: "specifications/pyproject-toml/", publicUrl: "https://packaging.python.org/en/latest/specifications/pyproject-toml/", usedFor: ["pyproject", "build-system", "project metadata"], evidence: "공식 Python Packaging specification을 pyproject metadata·build-system 설명의 기준으로 사용했습니다." },
+  { id: "pip-repeatable-installs", repository: "pip documentation", path: "topics/repeatable-installs/", publicUrl: "https://pip.pypa.io/en/stable/topics/repeatable-installs/", usedFor: ["version pin", "repeatable installation", "wheelhouse"], evidence: "공식 pip repeatable installs guide를 전체 graph 고정과 source artifact 정책에 사용했습니다." },
+  { id: "pip-hash-checking", repository: "pip documentation", path: "topics/secure-installs/#hash-checking-mode", publicUrl: "https://pip.pypa.io/en/stable/topics/secure-installs/#hash-checking-mode", usedFor: ["--require-hashes", "artifact integrity"], evidence: "공식 pip secure installs 문서의 hash-checking mode 요구사항을 확인했습니다." },
+  { id: "hypothesis-property-doc", repository: "Hypothesis documentation", path: "details.html", publicUrl: "https://hypothesis.readthedocs.io/en/latest/details.html", usedFor: ["property-based testing", "shrinking", "reproduction"], evidence: "Hypothesis 공식 문서를 생성 입력·shrinking·재현 설명에 사용했습니다." },
+  { id: "coverage-branch-doc", repository: "Coverage.py documentation", path: "branch.html", publicUrl: "https://coverage.readthedocs.io/en/latest/branch.html", usedFor: ["branch coverage", "missing paths", "coverage limit"], evidence: "Coverage.py 공식 branch coverage 문서를 실행률과 correctness의 경계 설명에 사용했습니다." },
+);
 
 export default session;

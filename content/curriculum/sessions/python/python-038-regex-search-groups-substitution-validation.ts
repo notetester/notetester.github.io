@@ -260,4 +260,227 @@ const session = {
   sourceCoverage: { filesRead: 5, filesUsed: 5, uncoveredNotes: ["전용 regex engine별 atomic group·possessive quantifier·timeout API는 선택 engine 문서와 함께 별도 다룹니다.", "ReDoS·structured logging redaction·Unicode confusable·parser differential은 원본 regex 예제를 전문가 보안 수준으로 보강한 내용입니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "compiled-boundaries-groups-and-backrefs",
+    title: "raw pattern·compile·search/match/fullmatch와 group 계약을 분리합니다",
+    lead: "정규식은 문자열 literal escaping과 pattern grammar라는 두 층을 거치므로 raw string을 기본으로 쓰고, 찾기·접두·전체 검증 목적에 맞는 API를 선택합니다.",
+    explanations: [
+      "Python string parser와 regex parser 모두 backslash를 해석합니다. r'\\d+' 같은 raw string은 regex escape를 코드에 그대로 보여 주지만 끝에 홀수 backslash를 둘 수 없는 등 Python raw literal 규칙은 남습니다.",
+      "re.compile은 pattern과 flags를 reusable object로 만들고 잘못된 문법을 경계 초기화 시점에 re.PatternError로 드러낼 수 있습니다. Python도 최근 pattern cache를 갖지만 compile은 의도와 dependency를 명시합니다.",
+      "search는 문자열 어디서나 첫 match를 찾고 match는 시작 위치에서, fullmatch는 문자열 전체 소비를 요구합니다. validation에서 search와 ^...$를 대충 조합하기보다 fullmatch를 우선 검토합니다.",
+      "capture group은 번호와 이름을 가질 수 있고 groupdict는 named field extraction에 적합합니다. 구조화가 필요 없는 grouping에는 (?:...) non-capturing group을 사용해 번호가 흔들리지 않게 합니다.",
+      "backreference는 이전 group과 동일한 text를 다시 요구합니다. pattern 안의 (?P=name)과 replacement의 \\g<name> 문법을 구분하고, 값 equality가 아니라 exact text repetition임을 기억합니다.",
+    ],
+    concepts: [
+      { term: "match boundary", definition: "pattern을 문자열 어디에서, 시작에서, 전체에서 적용할지 정하는 search·match·fullmatch 의미입니다.", detail: ["validation에는 fullmatch가 선명합니다.", "anchors와 MULTILINE 상호작용을 피할 수 있습니다."] },
+      { term: "named group", definition: "(?P<name>...)으로 capture에 의미 있는 이름을 부여한 group입니다.", detail: ["groupdict로 구조화합니다.", "named backreference에도 사용합니다."] },
+    ],
+    codeExamples: [{
+      id: "compiled-search-match-fullmatch-groups",
+      title: "한 compiled pattern의 search·match·fullmatch와 named backreference를 비교합니다",
+      language: "python",
+      filename: "regex_boundaries.py",
+      purpose: "같은 pattern도 API boundary에 따라 결과가 달라지고 groupdict가 구조를 보존함을 exact output으로 확인합니다.",
+      code: String.raw`import re
+
+token = re.compile(r"(?P<kind>[A-Z]+)-(?P<number>\d+)")
+text = "prefix TASK-42 suffix"
+
+searched = token.search(text)
+matched = token.match(text)
+full = token.fullmatch("TASK-42")
+print("search:", searched.group(0), searched.span())
+print("match:", matched)
+print("fullmatch:", full.groupdict())
+
+repeat = re.compile(r"\b(?P<word>[A-Za-z]+)\s+(?P=word)\b", re.IGNORECASE)
+for sentence in ["go go now", "go stop go"]:
+    found = repeat.search(sentence)
+    print("repeat:", sentence, "->", found.group("word") if found else None)
+
+try:
+    re.compile(r"([a-z]+")
+except re.PatternError as error:
+    print("compile_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-11", explanation: "raw string named group pattern을 compile하고 search·match·fullmatch의 서로 다른 boundary 결과를 비교합니다." },
+        { lines: "13-16", explanation: "named backreference가 인접한 같은 단어를 case-insensitive하게 찾는지 확인합니다." },
+        { lines: "18-21", explanation: "닫히지 않은 group을 compile 시점의 re.PatternError type으로 고정합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 regex_boundaries.py" },
+      output: { value: "search: TASK-42 (7, 14)\nmatch: None\nfullmatch: {'kind': 'TASK', 'number': '42'}\nrepeat: go go now -> go\nrepeat: go stop go -> None\ncompile_error: PatternError", explanation: ["search span은 end-exclusive 7..14입니다.", "Python 3.13에서 공식 예외 이름은 PatternError이며 re.error는 alias입니다."] },
+      experiments: [
+        { change: "token.match(text, pos=7)을 사용합니다.", prediction: "TASK-42가 match됩니다.", result: "match는 전체 문자열이 아니라 지정 시작 위치 boundary입니다." },
+        { change: "fullmatch 입력 뒤에 newline을 추가합니다.", prediction: "전체 소비에 실패해 None입니다.", result: "^...$와 fullmatch의 newline 차이를 검토합니다." },
+        { change: "named group 앞에 capture group을 추가합니다.", prediction: "named access는 유지되지만 번호 group은 이동합니다.", result: "외부 extraction에는 이름이 안정적입니다." },
+      ],
+      sourceRefs: ["py-regex-basic-source", "py-regex-meta-source", "python-re-compile", "python-re-fullmatch", "python-re-match-groups"],
+    }],
+    diagnostics: [
+      { symptom: "validation regex가 문자열 일부만 맞아도 통과한다.", likelyCause: "fullmatch 대신 search 또는 unanchored match를 사용했습니다.", checks: ["사용 API와 pattern anchor를 확인합니다.", "앞뒤 garbage·newline fixture를 추가합니다.", "flags MULTILINE 영향을 봅니다."], fix: "전체 field grammar는 fullmatch로 표현하고 길이·type을 별도 검사합니다.", prevention: "prefix/suffix garbage와 empty negative test를 유지합니다." },
+    ],
+    expertNotes: ["regex compile 성공은 업무 grammar가 옳다는 뜻이 아닙니다. positive·negative corpus와 길이·Unicode policy가 필요합니다."],
+  },
+  {
+    id: "substitution-flags-and-unicode-semantics",
+    title: "sub callback·flags와 Unicode/ASCII 문자 class 정책을 명시합니다",
+    lead: "replacement는 단순 문자열 치환과 match 기반 변환이 다르고, \\d·\\w·IGNORECASE의 Unicode 범위는 ASCII 입력 정책과 같지 않습니다.",
+    explanations: [
+      "re.sub는 replacement 문자열 또는 callable을 받습니다. callable은 Match를 입력으로 받아 parsing·formatting·masking을 명시할 수 있고 subn은 결과와 치환 횟수를 함께 반환합니다.",
+      "replacement 문자열의 backslash도 group reference 문법을 사용합니다. 모호한 \\1보다 \\g<name> 형태가 group 번호 뒤 숫자와 구분하기 쉽습니다.",
+      "re.IGNORECASE는 Unicode case matching을 수행하지만 언어별 collation·casefold 전체 의미와 동일하지 않습니다. identifier policy에는 re.ASCII와 명시 alphabet을 검토합니다.",
+      "기본 Unicode pattern에서 \\d는 ASCII 0-9뿐 아니라 Unicode decimal digit을, \\w는 많은 Unicode alphanumeric과 underscore를 포함합니다. 입력 protocol이 ASCII면 flags=re.ASCII 또는 [0-9]를 사용합니다.",
+      "re.MULTILINE은 ^/$의 line boundary, DOTALL은 dot의 newline 포함, VERBOSE는 공백·주석 pattern 작성에 영향을 줍니다. compiled pattern 가까이에 flags 의도를 설명합니다.",
+    ],
+    concepts: [
+      { term: "replacement callback", definition: "각 Match를 받아 동적으로 replacement 문자열을 계산하는 callable입니다.", detail: ["mask·normalization에 적합합니다.", "반환값은 반드시 str입니다."] },
+      { term: "ASCII flag", definition: "Unicode str pattern의 \\w·\\d·\\s·word boundary 등을 ASCII 범위로 제한하는 re.ASCII flag입니다.", detail: ["case-insensitive 범위에도 영향을 줍니다.", "protocol grammar를 명시합니다."] },
+    ],
+    codeExamples: [{
+      id: "regex-sub-callback-flags-unicode",
+      title: "subn callback과 Unicode/ASCII digit class 차이를 확인합니다",
+      language: "python",
+      filename: "regex_sub_flags.py",
+      purpose: "동적 replacement, 치환 횟수와 Unicode 문자 class 정책을 deterministic output으로 비교합니다.",
+      code: String.raw`import re
+
+setting = re.compile(r"(?P<key>[A-Za-z_]+)=(?P<value>\d+)", re.ASCII)
+
+def normalize(match):
+    key = match.group("key").upper()
+    value = int(match.group("value"))
+    return f"{key}:{value:03d}"
+
+converted, count = setting.subn(normalize, "retry=3 timeout=20 mode=fast")
+print("subn:", converted, count)
+
+text = "ASCII 123 / fullwidth １２３"
+print("unicode_digits:", re.findall(r"\d+", text))
+print("ascii_digits:", re.findall(r"\d+", text, flags=re.ASCII))
+
+words = "café_42"
+print("unicode_word:", re.fullmatch(r"\w+", words) is not None)
+print("ascii_word:", re.fullmatch(r"\w+", words, flags=re.ASCII) is not None)
+
+masked = re.sub(
+    r"(?P<local>[A-Za-z0-9._%+-]+)@(?P<host>[A-Za-z0-9.-]+)",
+    lambda match: match.group("local")[0] + "***@" + match.group("host"),
+    "owner=alice@example.com",
+)
+print("masked:", masked)`,
+      walkthrough: [
+        { lines: "1-11", explanation: "named groups와 ASCII flag를 compile하고 callback으로 key/value를 변환하며 subn count를 얻습니다." },
+        { lines: "13-16", explanation: "기본 \\d가 전각 decimal도 찾지만 re.ASCII는 123만 찾는 차이를 확인합니다." },
+        { lines: "18-20", explanation: "Unicode \\w가 café를 허용하고 ASCII \\w는 거부합니다." },
+        { lines: "22-26", explanation: "email-like text를 callback으로 최소 표시만 남겨 masking합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "합성 개인정보만 사용", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 regex_sub_flags.py" },
+      output: { value: "subn: RETRY:003 TIMEOUT:020 mode=fast 2\nunicode_digits: ['123', '１２３']\nascii_digits: ['123']\nunicode_word: True\nascii_word: False\nmasked: owner=a***@example.com", explanation: ["setting pattern은 ASCII digits만 변환해 protocol policy를 고정합니다.", "email 예제는 합성 값이며 실제 민감 원문을 출력하지 않습니다."] },
+      experiments: [
+        { change: "setting에서 re.ASCII를 제거합니다.", prediction: "전각 숫자도 \\d에 맞고 int 변환 허용 범위가 넓어질 수 있습니다.", result: "pattern과 conversion grammar를 함께 정합니다." },
+        { change: "callback이 int를 반환합니다.", prediction: "sub가 TypeError를 냅니다.", result: "replacement callable 반환 contract는 str입니다." },
+        { change: "masking을 첫 글자도 숨기도록 바꿉니다.", prediction: "re-identification 위험은 줄지만 사용자 확인 가능성도 낮아집니다.", result: "mask policy는 threat model에 맞춥니다." },
+      ],
+      sourceRefs: ["python-re-sub", "python-re-match-groups", "python-re-compile"],
+    }],
+    diagnostics: [
+      { symptom: "ASCII 계정 규칙인데 전각 숫자나 비ASCII 문자가 통과한다.", likelyCause: "\\d·\\w가 Unicode str pattern에서 넓은 문자 집합을 포함한다는 점을 놓쳤습니다.", checks: ["pattern flags와 입력 code point를 확인합니다.", "re.ASCII 결과와 비교합니다.", "Unicode 허용 정책을 제품 요구와 맞춥니다."], fix: "ASCII protocol이면 re.ASCII 또는 명시 class를 사용하고 Unicode 지원이면 normalization·script policy를 설계합니다.", prevention: "ASCII·전각·결합문자·confusable fixture를 둡니다." },
+    ],
+    expertNotes: ["regex masking은 parser가 아닙니다. RFC 전체 email grammar·internationalized domain·display name을 다룰 때는 해당 protocol parser와 최소 공개 정책을 사용합니다."],
+  },
+  {
+    id: "validation-redos-and-timeout-boundary",
+    title: "validation을 길이·linear pattern으로 방어하고 ReDoS timeout 경계를 설계합니다",
+    lead: "중첩 quantifier와 ambiguous alternation은 실패 입력에서 catastrophic backtracking을 일으킬 수 있으므로 pattern 검토, 입력 제한과 실행 격리가 필요합니다.",
+    explanations: [
+      "^(a+)+$처럼 같은 문자를 여러 방식으로 나눠 맞출 수 있는 중첩 quantifier는 끝에서 실패할 때 조합 수가 폭발할 수 있습니다. 작은 정상 입력 benchmark만으로 안전하다고 결론내리지 않습니다.",
+      "validation은 먼저 type·최대 길이·허용 alphabet 같은 O(n) guard를 적용하고 가능한 한 명확한 bounded quantifier와 linear한 pattern을 사용합니다.",
+      "Python 표준 re API에는 일반적인 per-match timeout 인자가 없습니다. 신뢰할 수 없는 복잡 pattern 실행은 별도 process deadline, 제한된 pattern service, timeout을 지원하는 검토된 engine 같은 architecture 경계가 필요합니다.",
+      "사용자 문자열을 pattern에 포함해야 하면 re.escape로 literalize합니다. 사용자가 regex 자체를 제출하도록 허용하는 것은 검색 편의 기능이 아니라 code-like resource consumption surface입니다.",
+      "성능 test는 위험 pattern을 production process에서 거대한 입력으로 직접 실행하지 않고 정적 review·bounded corpus·격리 worker와 deadline으로 수행합니다. timeout 후 worker를 폐기할 수 있어야 합니다.",
+    ],
+    concepts: [
+      { term: "catastrophic backtracking", definition: "backtracking engine이 실패를 확정하기 전 매우 많은 가능한 match 분할을 탐색해 시간이 급증하는 현상입니다.", detail: ["중첩 quantifier·ambiguous alternation이 흔한 원인입니다.", "ReDoS 공격으로 이어질 수 있습니다."] },
+      { term: "regex execution boundary", definition: "pattern·입력 크기·deadline·자원과 실패 처리를 제한하는 실행 격리 정책입니다.", detail: ["stdlib re 자체 timeout만 기대할 수 없습니다.", "외부 pattern은 code-like input으로 다룹니다."] },
+    ],
+    codeExamples: [{
+      id: "bounded-linear-regex-validation",
+      title: "길이 guard·ASCII fullmatch·literal escape로 안전한 검증 경계를 만듭니다",
+      language: "python",
+      filename: "regex_validation_boundary.py",
+      purpose: "위험 pattern을 실제로 오래 실행하지 않고 bounded validation과 external literal 처리 결과를 exact output으로 검증합니다.",
+      code: String.raw`import re
+
+USERNAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{2,19}", re.ASCII)
+
+def validate_username(value):
+    if not isinstance(value, str):
+        return False, "type"
+    if len(value) > 20:
+        return False, "too_long"
+    if USERNAME.fullmatch(value) is None:
+        return False, "syntax"
+    return True, value
+
+cases = ["Ada_01", "ab", "1alice", "A" * 21, "café"]
+for value in cases:
+    print(repr(value), "->", validate_username(value))
+
+external = "a+b?.txt"
+literal_pattern = re.compile(re.escape(external))
+print("escaped:", re.escape(external))
+print("literal_found:", literal_pattern.search("file=a+b?.txt") is not None)
+
+risky_example = r"^(a+)+$"
+print("risky_pattern_documented_not_executed:", risky_example)`,
+      walkthrough: [
+        { lines: "1-12", explanation: "bounded ASCII username pattern과 type→length→fullmatch validation 순서를 정의합니다." },
+        { lines: "14-16", explanation: "정상·짧음·첫 문자·초과 길이·Unicode 입력을 stable code로 분류합니다." },
+        { lines: "18-21", explanation: "외부 문자열을 re.escape로 literal pattern에 안전하게 삽입합니다." },
+        { lines: "23-24", explanation: "교육용 위험 pattern은 text로만 기록하고 실행하지 않아 검증 자체가 ReDoS가 되지 않게 합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "위험 pattern 실행 없음", "stdin/network/filesystem 불필요"], command: "python -I -B -X utf8 regex_validation_boundary.py" },
+      output: { value: "'Ada_01' -> (True, 'Ada_01')\n'ab' -> (False, 'syntax')\n'1alice' -> (False, 'syntax')\n'AAAAAAAAAAAAAAAAAAAAA' -> (False, 'too_long')\n'café' -> (False, 'syntax')\nescaped: a\\+b\\?\\.txt\nliteral_found: True\nrisky_pattern_documented_not_executed: ^(a+)+$", explanation: ["길이 초과는 regex 실행 전에 거부됩니다.", "re.escape 결과는 외부 text의 metacharacter를 literal로 만듭니다."] },
+      experiments: [
+        { change: "길이 guard를 regex 뒤로 옮깁니다.", prediction: "복잡 pattern에서는 공격 입력 비용을 먼저 지불합니다.", result: "cheap guard를 expensive parse 전에 둡니다." },
+        { change: "external을 escape 없이 compile합니다.", prediction: "+, ?, .가 regex operator로 해석되어 다른 문자열과 match할 수 있습니다.", result: "literal data와 pattern code를 구분합니다." },
+        { change: "사용자에게 임의 regex를 허용합니다.", prediction: "입력 길이 제한만으로 pattern 자체의 계산 폭발을 막지 못합니다.", result: "격리 process·deadline·pattern 제한이 필요합니다." },
+      ],
+      sourceRefs: ["python-re-fullmatch", "python-re-compile", "owasp-redos"],
+    }],
+    diagnostics: [
+      { symptom: "특정 실패 문자열 하나가 CPU를 오래 점유한다.", likelyCause: "중첩 quantifier·ambiguous alternation의 catastrophic backtracking 또는 무제한 외부 regex입니다.", checks: ["pattern과 입력 길이를 안전하게 기록합니다.", "위험한 중첩·alternation을 review합니다.", "격리 환경에서 timeout profile을 측정합니다."], fix: "linear/bounded pattern으로 재작성하고 입력 cap·격리 deadline을 적용합니다.", prevention: "regex security review, adversarial corpus와 worker timeout budget을 둡니다." },
+    ],
+    expertNotes: ["timeout은 취소 요청일 뿐 같은 process의 C regex 실행을 안전하게 중단할 수 있는지 engine별 확인이 필요합니다. 강한 경계에는 kill 가능한 별도 process가 적합합니다."],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "raw string을 regex pattern에 권장하는 이유는 무엇인가요?", answer: "Python string escape와 regex escape 두 층의 backslash를 코드에 더 직접적으로 표현해 실수를 줄이기 위해서입니다." },
+  { question: "search·match·fullmatch의 차이는 무엇인가요?", answer: "search는 어디서나 첫 match, match는 시작 위치, fullmatch는 문자열 전체 소비를 요구합니다." },
+  { question: "named group의 장점은 무엇인가요?", answer: "group 번호 이동에 덜 취약하고 extraction field 의미를 groupdict와 이름으로 명시합니다." },
+  { question: "sub replacement callback은 언제 유용한가요?", answer: "Match field에 따라 parsing·formatting·masking처럼 동적인 replacement를 계산할 때 유용합니다." },
+  { question: "기본 \\d와 \\w가 ASCII만 의미하나요?", answer: "아닙니다. Unicode str pattern에서는 Unicode decimal·word 문자를 포함하며 ASCII policy에는 re.ASCII나 명시 class가 필요합니다." },
+  { question: "re.escape는 무엇을 해결하고 무엇을 해결하지 못하나요?", answer: "외부 문자열을 literal pattern fragment로 만들지만 임의 외부 regex 허용의 계산량·ReDoS 문제를 해결하지는 않습니다." },
+  { question: "Python stdlib re에서 untrusted regex timeout을 어떻게 설계하나요?", answer: "일반 per-match timeout이 없으므로 pattern/입력 제한과 kill 가능한 별도 process deadline 또는 검토된 대체 engine을 고려합니다." },
+);
+session.completionChecklist.push(
+  "regex pattern은 raw string과 compile 경계로 의도를 명확히 한다.",
+  "찾기·접두·전체 validation에 search·match·fullmatch를 정확히 선택한다.",
+  "구조 extraction은 named group/groupdict와 non-capturing group을 사용한다.",
+  "sub callback·subn과 replacement backreference를 구분한다.",
+  "Unicode와 ASCII \\d·\\w·IGNORECASE 정책을 adversarial fixture로 검증한다.",
+  "validation 전에 type·길이·alphabet guard를 두고 pattern을 bounded하게 작성한다.",
+  "외부 regex에는 ReDoS threat model·격리 deadline·로그 redaction을 적용한다.",
+);
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-re-compile", repository: "Python documentation", path: "library/re.html#re.compile", publicUrl: "https://docs.python.org/3/library/re.html#re.compile", usedFor: ["compile", "flags", "PatternError"], evidence: "공식 re.compile 문서의 compiled Pattern과 flags 계약을 사용했습니다." },
+  { id: "python-re-fullmatch", repository: "Python documentation", path: "library/re.html#re.fullmatch", publicUrl: "https://docs.python.org/3/library/re.html#re.fullmatch", usedFor: ["fullmatch", "validation boundary"], evidence: "공식 re.fullmatch 문서의 전체 문자열 match 계약을 확인했습니다." },
+  { id: "python-re-match-groups", repository: "Python documentation", path: "library/re.html#match-objects", publicUrl: "https://docs.python.org/3/library/re.html#match-objects", usedFor: ["group", "groupdict", "span", "named capture"], evidence: "공식 Match object 문서를 extraction과 callback field 접근의 기준으로 사용했습니다." },
+  { id: "python-re-sub", repository: "Python documentation", path: "library/re.html#re.sub", publicUrl: "https://docs.python.org/3/library/re.html#re.sub", usedFor: ["sub", "subn", "replacement callback"], evidence: "공식 re.sub 문서의 문자열/callable replacement 계약을 확인했습니다." },
+  { id: "owasp-redos", repository: "OWASP", path: "www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS", publicUrl: "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS", usedFor: ["catastrophic backtracking", "ReDoS threat model"], evidence: "OWASP의 ReDoS 설명을 untrusted pattern·입력의 보안 경계 근거로 사용했습니다." },
+);
+
 export default session;
