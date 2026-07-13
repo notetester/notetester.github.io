@@ -127,7 +127,7 @@ const session = {
           language: "python",
           filename: "lambda_basics.py",
           purpose: "원본 ex09_lambda.py의 네 호출을 그대로 재구성해 인수 개수와 반환 결과가 일반 함수와 같음을 확인합니다.",
-          code: "def add(x, y):\n    return x + y\n\nadd2 = lambda x, y: x + y\nhello = lambda: 'Hello Python'\nhi = lambda msg: f'{msg}님 환영합니다.'\n\nprint(add(10, 3))\nprint(add2(10, 3))\nprint(hello())\nprint(hi('hong'))\nprint(add.__name__, add2.__name__)",
+          code: "def add(x, y):\n    return x + y\n\nadd2 = lambda x, y: x + y  # noqa: E731 - lambda 학습 비교용\nhello = lambda: 'Hello Python'  # noqa: E731 - lambda 학습 비교용\nhi = lambda msg: f'{msg}님 환영합니다.'  # noqa: E731 - lambda 학습 비교용\n\nprint(add(10, 3))\nprint(add2(10, 3))\nprint(hello())\nprint(hi('hong'))\nprint(add.__name__, add2.__name__)",
           walkthrough: [
             {
               lines: "1-2",
@@ -152,7 +152,7 @@ const session = {
           ],
           run: {
             environment: ["Python 3.11 이상", "UTF-8로 저장한 lambda_basics.py", "외부 패키지 없음"],
-            command: "python lambda_basics.py",
+            command: "python -I -X utf8 lambda_basics.py",
           },
           output: {
             value: "13\n13\nHello Python\nhong님 환영합니다.\nadd <lambda>",
@@ -259,7 +259,7 @@ const session = {
           ],
           run: {
             environment: ["Python 3.11 이상", "UTF-8로 저장한 transform_filter.py", "외부 패키지 없음"],
-            command: "python transform_filter.py",
+            command: "python -I -X utf8 transform_filter.py",
           },
           output: {
             value: "for: [2, 4, 6, 8, 10]\ncomprehension: [2, 4, 6, 8, 10]\nmap: [2, 4, 6, 8, 10]\nfilter: [2, 4]\nmap\n[11, 12, 13, 14, 15]\n[]",
@@ -514,7 +514,7 @@ const session = {
           ],
           run: {
             environment: ["Python 3.11 이상", "UTF-8로 저장한 callback_binding.py", "표준 라이브러리 functools·operator만 사용"],
-            command: "python callback_binding.py",
+            command: "python -I -X utf8 callback_binding.py",
           },
           output: {
             value: "[30, 30, 30]\n[10, 20, 30]\n[10, 20, 30]",
@@ -843,3 +843,126 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 320;
+expertSession.chapters.push(
+  {
+    id: "closure-cells-late-binding-and-freezing-strategies",
+    title: "closure cell의 late binding을 이해하고 default·factory·partial 중 의도를 선택합니다",
+    lead: "lambda가 loop 변수의 값을 복사해 저장한다고 생각하면 callback이 모두 마지막 값으로 동작하는 버그가 생깁니다. closure는 보통 값 snapshot이 아니라 이름이 해석되는 cell을 공유하므로 호출 시점 binding을 추적해야 합니다.",
+    explanations: [
+      "함수 본문에서 사용하지만 local도 global도 아닌 이름은 free variable이며 enclosing function의 closure cell을 통해 해석될 수 있습니다. loop에서 여러 lambda를 만들면 각 lambda가 동일한 loop 변수 cell을 참조하고, 실제 호출 때 loop가 끝난 마지막 값이 보입니다. lambda만의 문제가 아니라 def로 만든 nested function에도 같은 규칙이 적용됩니다.",
+      "`lambda value, factor=factor: ...`는 함수가 만들어지는 순간 현재 factor 객체를 default에 저장해 각 callback을 고정합니다. 간결하지만 default가 왜 있는지 모르는 독자에게 낯설 수 있고 mutable 객체를 저장하면 객체 내부 변화는 여전히 보입니다. 단순 scalar freeze에 적합합니다.",
+      "factory 함수는 factor를 parameter로 새 frame에 binding하고 내부 함수를 반환합니다. 이름 있는 함수와 docstring·validation을 둘 수 있어 복잡한 callback에 가장 설명력이 좋습니다. `functools.partial`은 기존 callable의 일부 argument를 고정하는 선언적 방법이며 introspection 가능한 func·args·keywords를 제공합니다.",
+      "값을 고정한다는 말은 shallow reference를 저장한다는 뜻입니다. list를 default나 partial에 넣은 뒤 list를 수정하면 callback도 수정된 내용을 봅니다. immutable snapshot이 필요하면 tuple·frozen dataclass로 변환하거나 domain copy 정책을 명시합니다.",
+      "callback lifetime이 enclosing scope보다 길어도 closure cell은 함수 객체가 참조하는 동안 유지됩니다. 큰 객체를 우연히 캡처하면 메모리가 오래 남을 수 있으므로 callback이 실제 필요한 작은 값만 parameter로 받거나 partial에 고정합니다.",
+    ],
+    concepts: [
+      { term: "free variable", definition: "함수 안에서 참조되지만 그 함수의 local parameter·assignment로 만들어지지 않은 이름입니다.", detail: ["enclosing scope cell 또는 global에서 해석됩니다.", "inspect로 closure 정보를 볼 수 있습니다."] },
+      { term: "late binding", definition: "closure가 만들어진 시점의 값을 복사하지 않고 호출 시점에 공유 이름의 현재 값을 해석하는 동작입니다.", detail: ["loop callback에서 마지막 값 반복 버그를 만듭니다.", "lambda와 nested def 모두 해당합니다."] },
+      { term: "partial application", definition: "기존 callable의 일부 positional·keyword argument를 미리 고정해 더 단순한 새 callable을 만드는 기법입니다.", detail: ["functools.partial이 표준 도구입니다.", "고정된 객체는 복사되지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "late-binding-three-remedies",
+        title: "late binding과 default·factory·partial 세 해결책",
+        language: "python",
+        filename: "closure_strategies.py",
+        purpose: "같은 loop에서 만든 callback의 잘못된 공유 binding과 세 가지 snapshot 전략을 같은 입력으로 비교합니다.",
+        code: "from functools import partial\nfrom operator import mul\n\nfactors = [2, 3, 4]\nlate = [lambda value: value * factor for factor in factors]\nfixed_default = [lambda value, factor=factor: value * factor for factor in factors]\n\ndef make_multiplier(factor):\n    def multiply(value):\n        return value * factor\n    return multiply\n\nfixed_factory = [make_multiplier(factor) for factor in factors]\nfixed_partial = [partial(mul, factor) for factor in factors]\n\ndef run(callbacks):\n    return [callback(5) for callback in callbacks]\n\nprint(f'late={run(late)}')\nprint(f'default={run(fixed_default)}')\nprint(f'factory={run(fixed_factory)}')\nprint(f'partial={run(fixed_partial)}')",
+        walkthrough: [
+          { lines: "1-6", explanation: "late list는 동일 factor 이름을 호출 시 읽고, fixed_default는 생성 시 각 scalar를 default에 저장합니다." },
+          { lines: "8-13", explanation: "factory는 호출마다 별도 enclosing frame/cell을 만들고 각 factor를 독립 binding합니다." },
+          { lines: "15", explanation: "partial은 operator.mul의 첫 positional argument를 각 factor로 고정합니다." },
+          { lines: "16-22", explanation: "동일한 값 5로 네 callback 집합을 실행해 late 결과와 세 수정 결과를 비교합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "closure_strategies.py를 UTF-8로 저장"], command: "python -I -X utf8 closure_strategies.py" },
+        output: { value: "late=[20, 20, 20]\ndefault=[10, 15, 20]\nfactory=[10, 15, 20]\npartial=[10, 15, 20]", explanation: ["late callbacks는 loop 종료 후 factor=4를 모두 읽습니다.", "default·factory·partial은 각 생성 시점의 2·3·4를 고정합니다.", "복잡한 validation이 필요하면 factory, 기존 callable 재사용이면 partial이 읽기 좋습니다."] },
+        experiments: [
+          { change: "factors를 list 객체들의 목록으로 만들고 생성 후 내부 list를 수정합니다.", prediction: "세 고정 전략 모두 객체 참조를 저장하므로 내부 mutation을 볼 수 있습니다.", result: "binding freeze와 deep immutable snapshot이 다름을 확인합니다." },
+          { change: "fixed_default lambda에 여러 문장 validation이 필요해집니다.", prediction: "lambda로 표현할 수 없거나 읽기 어려워집니다.", result: "이 경우 factory+def가 더 적절한 가독성 선택임을 확인합니다." },
+        ],
+        sourceRefs: ["python-late-binding-faq", "python-partial-reference", "python-operator-doc", "python-functional-howto-023"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "버튼·task callback이 모두 마지막 loop 항목을 처리한다.", likelyCause: "여러 closure가 같은 loop variable cell을 late binding으로 공유합니다.", checks: ["callback.__code__.co_freevars와 __closure__를 확인합니다.", "loop 종료 후 callback을 호출해 결과를 비교합니다.", "nested def로 바꿔도 같은지 재현합니다."], fix: "단순 값은 default로 freeze하고 복잡한 로직은 factory, 기존 함수 argument 고정은 functools.partial을 사용합니다.", prevention: "loop 안 callback 생성 테스트에서 각 callback의 고유 입력 결과를 검증합니다." },
+      { symptom: "값을 고정했다고 생각했는데 나중 mutation이 callback 결과에 반영된다.", likelyCause: "default·closure·partial이 mutable 객체를 복사하지 않고 같은 reference를 저장했습니다.", checks: ["고정 객체와 외부 객체의 id를 비교합니다.", "생성 후 내부 항목을 수정해 재현합니다.", "snapshot 요구가 shallow인지 deep인지 정의합니다."], fix: "필요한 작은 immutable 값만 추출하거나 tuple/frozen value object로 snapshot합니다.", prevention: "callback capture 목록과 lifetime·mutation 정책을 코드 리뷰합니다." },
+    ],
+    expertNotes: ["default argument freeze는 late binding 해결에 의도적으로 사용하는 mutable-default와 다른 패턴이지만, 고정 값은 가능하면 immutable이어야 합니다.", "partial 객체는 일반 함수처럼 자동 __name__·__doc__을 만들지 않으므로 사용자 표시나 tracing 이름이 필요하면 update_wrapper 또는 명시 metadata를 검토합니다."],
+  },
+  {
+    id: "hof-lazy-iterators-operator-and-readability-boundary",
+    title: "map·filter의 lazy iterator와 operator callable을 사용하되 pipeline의 가독성 경계를 지킵니다",
+    lead: "Python 3의 map과 filter는 list가 아니라 single-pass iterator입니다. 함수 합성이 계산과 메모리를 줄일 수 있지만, domain 단계를 숨기는 중첩 lambda보다 comprehension·generator·이름 있는 함수가 더 명확할 수 있습니다.",
+    explanations: [
+      "map은 각 입력 항목에 함수를 적용하고 filter는 predicate가 truthy인 항목만 통과시키는 lazy iterator를 반환합니다. 생성 시 body를 실행하지 않고 소비자가 next를 요구할 때 upstream부터 한 항목씩 당깁니다. list가 필요하면 경계에서 명시 materialize하며 같은 iterator를 두 번 소비하지 않습니다.",
+      "`operator.itemgetter('name')`, `attrgetter`, `methodcaller`는 단순 lambda를 의도 이름으로 대체합니다. 정렬 key나 map에 `lambda record: record['score']` 대신 itemgetter를 쓰면 field 추출임이 드러나고 C 구현 최적화 이점이 있을 수 있지만, 복잡한 default·검증·예외 문맥은 이름 있는 def가 낫습니다.",
+      "partial은 dependency의 일부 설정을 고정해 callback signature를 줄입니다. 중첩 `map(partial(...), filter(...))`가 domain 용어를 잃으면 intermediate generator에 `active_records`, `normalized_names` 같은 이름을 주거나 comprehension으로 바꿉니다. 한 줄 수가 아니라 처리 단계가 리뷰 가능한지가 기준입니다.",
+      "filter(None, iterable)은 falsy 전체를 제거합니다. 0·False·빈 문자열이 유효 데이터라면 의도보다 많이 버릴 수 있으므로 구체 predicate를 씁니다. predicate는 가능하면 bool을 반환하고 side effect를 피해야 short-circuit·부분 소비에서도 결과가 예측 가능합니다.",
+      "lazy pipeline의 예외는 생성 지점이 아니라 소비 지점에서 발생할 수 있습니다. 오류를 어느 record와 연결할지 필요하면 enumerate나 named transform에서 문맥을 추가합니다. iterator를 API 밖으로 반환할 때는 자원 lifetime, 재사용 불가, 예외 시점을 문서화합니다.",
+    ],
+    concepts: [
+      { term: "higher-order function", definition: "함수를 인수로 받거나 함수를 결과로 반환하는 함수입니다.", detail: ["map·filter·sorted와 decorator가 예입니다.", "callable contract와 side effect를 함께 설계합니다."] },
+      { term: "operator callable", definition: "연산·item 접근·attribute 접근·method 호출을 함수 객체로 제공하는 표준 library 도구입니다.", detail: ["itemgetter·attrgetter·methodcaller가 대표적입니다.", "단순 lambda 의도를 명확히 할 수 있습니다."] },
+      { term: "pull pipeline", definition: "downstream 소비자가 next를 요청할 때 lazy 단계가 upstream에서 필요한 항목만 가져와 처리하는 흐름입니다.", detail: ["map·filter·generator가 조합됩니다.", "예외와 side effect도 소비 시 발생합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "operator-lazy-pipeline-consumption",
+        title: "itemgetter 기반 lazy filter/map의 단일 소비",
+        language: "python",
+        filename: "lazy_hof_pipeline.py",
+        purpose: "operator callable로 field를 추출하고 filter→map pipeline이 요청된 만큼만 소비되며 고갈 뒤 비는 것을 확인합니다.",
+        code: "from operator import itemgetter\n\nrecords = [\n    {'name': 'Ada', 'active': True, 'score': 91},\n    {'name': 'Bob', 'active': False, 'score': 95},\n    {'name': 'Cy', 'active': True, 'score': 88},\n]\n\nactive_records = filter(itemgetter('active'), records)\nactive_names = map(itemgetter('name'), active_records)\nprint(f'first={next(active_names)}')\nprint(f'rest={list(active_names)}')\nprint(f'again={list(active_names)}')\nranked = sorted(records, key=itemgetter('score'), reverse=True)\nprint(f\"ranked={[record['name'] for record in ranked]}\")",
+        walkthrough: [
+          { lines: "1-7", explanation: "작은 합성 record 목록과 itemgetter 도구를 준비합니다." },
+          { lines: "9-12", explanation: "filter와 map은 아직 전체를 만들지 않고, 첫 next가 Ada를 찾는 데 필요한 upstream 항목만 소비합니다." },
+          { lines: "13-14", explanation: "나머지 Cy를 소비한 뒤 같은 map iterator는 고갈되어 빈 list입니다." },
+          { lines: "14-15", explanation: "sorted는 전체를 materialize해 점수 내림차순으로 정렬하고 itemgetter를 key callable로 사용합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "lazy_hof_pipeline.py를 UTF-8로 저장"], command: "python -I -X utf8 lazy_hof_pipeline.py" },
+        output: { value: "first=Ada\nrest=['Cy']\nagain=[]\nranked=['Bob', 'Ada', 'Cy']", explanation: ["첫 next는 첫 active record 하나만 반환합니다.", "filter와 map은 같은 single-pass chain으로 함께 고갈됩니다.", "sorted는 전체 record를 필요로 하는 eager 경계입니다."] },
+        experiments: [
+          { change: "filter predicate를 None으로 바꾸고 records 대신 [0, 1, '', 'x']를 넣습니다.", prediction: "0과 빈 문자열도 제거됩니다.", result: "truthiness filter가 domain-valid falsy 값을 잃을 수 있음을 확인합니다." },
+          { change: "active_names 생성 직후 list(active_names)로 디버깅 출력합니다.", prediction: "후속 실제 소비에서는 아무 이름도 남지 않습니다.", result: "lazy iterator의 소비 소유권을 확인합니다." },
+        ],
+        sourceRefs: ["python-operator-doc", "python-functional-howto-023", "python-partial-reference", "python-lambda-reference"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "map/filter 결과에 len이나 index를 사용하려다 TypeError가 난다.", likelyCause: "Python 3의 map·filter는 list가 아니라 lazy iterator입니다.", checks: ["type과 iter(obj) is obj를 확인합니다.", "downstream이 한 번 순회인지 random access인지 정의합니다.", "전체 크기 상한을 확인합니다."], fix: "streaming이면 for로 소비하고 실제 index·재사용이 필요하며 크기가 제한되면 list로 materialize합니다.", prevention: "API 반환 타입에 Iterator와 Sequence를 정확히 구분합니다." },
+      { symptom: "lazy pipeline 오류가 함수를 만든 줄이 아니라 훨씬 나중에 발생한다.", likelyCause: "transform·predicate 실행이 generator 소비 시점까지 지연됐습니다.", checks: ["최초 next/list/sum 소비 지점을 찾습니다.", "단계별 이름 있는 generator로 분리합니다.", "오류 record index를 enumerate로 추가합니다."], fix: "검증 경계를 앞당기거나 소비를 함수 내부에서 완료하고 domain 문맥과 함께 예외를 변환합니다.", prevention: "iterator API에 평가·예외·자원 lifetime 시점을 문서화합니다." },
+    ],
+    comparisons: [
+      { title: "변환·필터 표현을 무엇으로 작성할까요?", options: [
+        { name: "comprehension / generator", chooseWhen: "한두 단계의 domain 변환과 filter를 Python 문법으로 직접 읽고 싶을 때", avoidWhen: "여러 iterable에 동일 callable을 재사용하거나 callback 객체가 API 요구일 때", tradeoffs: ["입력→필터→출력이 가까이 보입니다.", "generator 괄호로 lazy 선택이 분명합니다.", "복잡한 nesting은 가독성이 떨어집니다."] },
+        { name: "map/filter/operator/partial", chooseWhen: "이미 존재하는 callable을 재사용하고 lazy pipeline이나 callback 조합이 자연스러울 때", avoidWhen: "중첩 lambda가 domain 의미와 오류 문맥을 숨길 때", tradeoffs: ["함수 합성이 명시적입니다.", "single-pass 소비를 이해해야 합니다.", "operator callable이 단순 접근을 간결하게 표현합니다."] },
+      ] },
+    ],
+    expertNotes: ["map은 여러 iterable을 받을 수 있으며 가장 짧은 iterable에서 멈추므로 길이 불일치가 오류여야 하면 zip(strict=True) 등 별도 검증을 고려합니다.", "async I/O나 backpressure가 필요한 pipeline은 동기 map/filter보다 async iterator·queue의 취소와 자원 계약을 사용합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "loop 안 lambda가 모두 마지막 값을 보는 이유는 무엇인가요?", answer: "각 함수가 생성 시 값을 복사하지 않고 같은 loop 변수 closure cell을 호출 시점에 읽는 late binding 때문입니다." },
+  { question: "late binding을 고치는 세 대표 방법은 무엇인가요?", answer: "default argument에 현재 값을 저장하거나, factory가 새 enclosing binding을 만들거나, functools.partial로 기존 callable 인수를 고정합니다." },
+  { question: "default나 partial에 mutable 객체를 고정하면 snapshot이 되나요?", answer: "객체 참조만 고정되므로 내부 mutation은 계속 보입니다. immutable 값 변환이나 명시 복사가 필요합니다." },
+  { question: "Python 3의 map과 filter는 재사용 가능한 list인가요?", answer: "아닙니다. 요청 시 항목을 계산하는 single-pass iterator이며 고갈 뒤 다시 시작하지 않습니다." },
+  { question: "filter(None, values)의 주의점은 무엇인가요?", answer: "None만이 아니라 0·False·빈 문자열·빈 컬렉션 등 모든 falsy 값을 제거하므로 domain-valid 값까지 잃을 수 있습니다." },
+);
+
+expertSession.completionChecklist.push(
+  "free variable·closure cell·late binding을 호출 시점 기준으로 설명할 수 있다.",
+  "default·factory·partial 중 callback 복잡도와 의도에 맞는 freeze 전략을 선택할 수 있다.",
+  "mutable reference 고정과 immutable snapshot의 차이를 검증할 수 있다.",
+  "map·filter pipeline의 지연 평가·단일 소비·예외 시점을 추적할 수 있다.",
+  "itemgetter·attrgetter·methodcaller와 이름 있는 def의 가독성 경계를 판단할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-operator-doc", repository: "Python", path: "library/operator.html", publicUrl: "https://docs.python.org/3/library/operator.html", usedFor: ["itemgetter", "attrgetter", "methodcaller", "연산 callable"], evidence: "표준 연산과 field·attribute·method 접근을 callable로 제공하는 공식 API를 확인했습니다." },
+  { id: "python-functional-howto-023", repository: "Python", path: "howto/functional.html", publicUrl: "https://docs.python.org/3/howto/functional.html", usedFor: ["higher-order function", "iterator", "generator", "함수형 pipeline"], evidence: "공식 Functional Programming HOWTO의 iterator와 map/filter/comprehension 비교를 전문가 설명에 반영했습니다." },
+);

@@ -95,7 +95,7 @@ const session = {
             { lines: "9-10", explanation: "iterable을 끝까지 소비했지만 break가 없을 때만 not found가 출력됩니다." },
             { lines: "12-14", explanation: "찾는 값과 없는 값을 같은 records에 적용해 두 종료 경로를 모두 실행합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "search_records.py를 저장"], command: "python search_records.py" },
+          run: { environment: ["Python 3.11 이상", "search_records.py를 저장"], command: "python -I -X utf8 search_records.py" },
           output: { value: "ready: skip empty at 1\nready: found at 2\nmissing: skip empty at 1\nmissing: not found", explanation: ["ready 검색은 index 1을 건너뛰고 index 2에서 break해 else가 없습니다.", "missing 검색은 빈 값만 건너뛴 뒤 정상 소진돼 else가 실행됩니다.", "continue는 검색 전체가 아니라 현재 빈 item 처리만 끝냅니다."] },
           experiments: [
             { change: "records를 빈 목록으로 바꿉니다.", prediction: "본문이 0회 실행되고 두 target 모두 for-else의 not found를 출력합니다.", result: "break가 없는 정상 소진이므로 빈 iterable에서도 else가 실행됩니다." },
@@ -136,7 +136,7 @@ const session = {
             { lines: "8-9", explanation: "items의 각 2-tuple을 key와 value로 언패킹합니다." },
             { lines: "11", explanation: "set을 바로 출력하지 않고 sorted list로 만든 뒤 join해 환경과 무관한 출력 순서를 보장합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "collection_iteration.py를 저장"], command: "python collection_iteration.py" },
+          run: { environment: ["Python 3.11 이상", "collection_iteration.py를 저장"], command: "python -I -X utf8 collection_iteration.py" },
           output: { value: "color 1: red\ncolor 2: green\ncolor 3: blue\nname=park\nage=24\ntags: basic,loop,python", explanation: ["list가 입력 위치 red→green→blue를 유지합니다.", "dict가 literal insertion order name→age를 유지합니다.", "set 자체 순서가 아니라 sorted 결과를 사용해 basic→loop→python이 재현됩니다."] },
           experiments: [
             { change: "for key, value in profile로 items()를 제거합니다.", prediction: "dict 직접 순회는 key 문자열 하나를 주므로 두 문자로 언패킹할 수 있는 key는 이상하게 분리되거나 다른 길이에서는 ValueError가 납니다.", result: "items를 사용해야 key·value 2-tuple 계약이 명확합니다." },
@@ -179,7 +179,7 @@ const session = {
             { lines: "7-8", explanation: "학습 출력에서만 list로 materialize하고 range의 len을 함께 확인합니다." },
             { lines: "10-11", explanation: "1·3·5·7·9 range에서 7과 8 membership을 비교합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "range_boundaries.py를 저장"], command: "python range_boundaries.py" },
+          run: { environment: ["Python 3.11 이상", "range_boundaries.py를 저장"], command: "python -I -X utf8 range_boundaries.py" },
           output: { value: "up [1, 3, 5, 7] 4\ndown [5, 3, 1] 3\nempty [] 0\nmembership: True False", explanation: ["up은 1부터 2씩 증가해 stop 8 전의 7에서 끝납니다.", "down은 5부터 -2씩 감소해 stop 0을 포함하지 않습니다.", "양수 step으로 5에서 1 방향으로 갈 수 없어 empty는 정상적인 빈 시퀀스입니다."] },
           experiments: [
             { change: "range(5, 0, -2)를 range(5, -1, -2)로 바꿉니다.", prediction: "5·3·1이고 다음 -1은 stop과 같아 여전히 제외됩니다.", result: "stop은 감소 range에서도 포함되지 않습니다." },
@@ -229,7 +229,7 @@ const session = {
             { lines: "8-9", explanation: "안쪽 종료 뒤에도 row 2 done이 나오고 바깥 row 3이 계속됩니다." },
             { lines: "11", explanation: "최종 좌표 목록으로 어느 iteration이 생략됐는지 검증합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "nested_break.py를 저장"], command: "python nested_break.py" },
+          run: { environment: ["Python 3.11 이상", "nested_break.py를 저장"], command: "python -I -X utf8 nested_break.py" },
           output: { value: "row 1 done\nbreak inner at 2,2\nrow 2 done\nrow 3 done\nvisited: [(1, 1), (1, 2), (1, 3), (2, 1), (3, 1), (3, 2), (3, 3)]", explanation: ["row 2 done과 row 3 done이 보여 break가 바깥 for를 끝내지 않았습니다.", "row 2에서는 column 1만 방문하고 2에서 탈출했습니다.", "row 3은 다시 모든 column을 순회합니다."] },
           experiments: [
             { change: "break를 continue로 바꿉니다.", prediction: "(2,2)만 생략하고 (2,3)은 방문합니다.", result: "visited에 (2,3)이 추가되어 현재 iteration 건너뛰기임을 확인합니다." },
@@ -290,7 +290,7 @@ const session = {
             { lines: "8-9", explanation: "다음 iteration으로 실제 이동하기 전에 finally cleanup이 모든 숫자에서 실행됩니다." },
             { lines: "10", explanation: "일반 후처리 completed는 continue한 -1에서는 실행되지 않습니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "continue_cleanup.py를 저장"], command: "python continue_cleanup.py" },
+          run: { environment: ["Python 3.11 이상", "continue_cleanup.py를 저장"], command: "python -I -X utf8 continue_cleanup.py" },
           output: { value: "start 1\nuse 1\ncleanup 1\ncompleted 1\nstart -1\nskip -1\ncleanup -1\nstart 2\nuse 2\ncleanup 2\ncompleted 2", explanation: ["cleanup -1이 보여 continue도 finally를 건너뛰지 않습니다.", "completed -1은 없어 finally 밖 일반 코드는 건너뜁니다.", "양수에서는 use→cleanup→completed 순서입니다."] },
           experiments: [
             { change: "continue를 break로 바꿉니다.", prediction: "cleanup -1 뒤 반복 전체가 끝나 number 2 로그가 없습니다.", result: "finally는 실행되지만 이후 iteration은 실행되지 않습니다." },
@@ -409,3 +409,83 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 300;
+expertSession.chapters.push({
+  id: "iterator-protocol-mutation-and-formal-termination",
+  title: "for를 iterator protocol·StopIteration·변이 안정성·종료 증명으로 해석합니다",
+  lead: "for는 인덱스를 자동 증가시키는 문법이 아니라 iterable에서 iterator를 얻고 next를 반복 호출하는 protocol 소비자입니다. 이 관점을 가지면 단일 소비, loop-else, break, 컨테이너 변이와 무한 iterator의 위험을 일관되게 설명할 수 있습니다.",
+  explanations: [
+    "`for target in iterable`은 개념적으로 `iterator = iter(iterable)`을 한 번 수행한 뒤 `next(iterator)`가 값을 돌려주는 동안 본문을 실행하고 StopIteration에서 정상 종료합니다. iterator의 `__iter__`는 보통 자기 자신을 반환하고 `__next__`는 다음 값 또는 StopIteration을 제공합니다. StopIteration을 for 바깥에서 직접 처리할 필요는 드물지만 custom iterable·stream·generator 디버깅에는 이 모델이 핵심입니다.",
+    "iterable은 여러 iterator를 새로 만들 수 있는 컨테이너일 수 있고, iterator는 대개 한 번 소비하면 되돌릴 수 없는 상태 객체입니다. list는 반복을 두 번 시작할 수 있지만 `iter(list)`가 만든 iterator와 generator expression은 소비 후 비어 있습니다. 동일 데이터의 두 pass가 필요하면 재생성 가능한 iterable을 받거나 필요한 크기 안에서 명시적으로 materialize합니다.",
+    "for-else의 else는 iterable이 비어서 끝나거나 처음부터 비었을 때처럼 break 없이 정상 고갈하면 실행됩니다. continue는 break가 아니므로 else 실행을 막지 않습니다. return·예외는 loop를 빠져나가지만 else로 가지 않습니다. 검색 성공에서 break하고 else에서 not-found를 처리하면 별도 flag를 없앨 수 있지만 중첩 loop에서는 break가 가장 가까운 한 loop만 끝낸다는 점을 반영합니다.",
+    "반복 중 같은 list를 삭제하면 iterator의 다음 index와 요소 이동이 엇갈려 항목이 건너뛰어질 수 있습니다. dict·set 크기를 바꾸면 RuntimeError가 날 수 있습니다. `for item in items.copy()`에서 원본을 수정하거나, 새 컬렉션을 만들어 대체하거나, 삭제 대상을 먼저 수집하는 2단계 방식을 사용합니다. 단, snapshot은 메모리와 시점 일관성 비용을 가집니다.",
+    "range는 값들을 미리 저장한 list가 아니라 start·stop·step 규칙을 가진 불변 sequence 객체입니다. stop은 포함하지 않고 step은 0일 수 없으며 음수 step에서는 start가 stop보다 커야 값이 나옵니다. `range(len(items))`는 index 자체가 필요할 때만 쓰고 값만 필요하면 직접 반복, index와 값이면 enumerate를 선택합니다.",
+    "유한 컨테이너 for의 종료는 iterator가 결국 StopIteration을 내는 것으로 설명됩니다. `itertools.count()`나 종료 없는 generator는 유한하지 않으므로 break·islice·외부 deadline 같은 별도 경계가 필요합니다. 본문이 iterator를 직접 `next()`로 추가 소비하면 한 반복당 여러 항목이 사라지므로 protocol 소유권도 명확히 합니다.",
+  ],
+  concepts: [
+    { term: "iterable", definition: "iter()가 iterator를 반환해 for가 순회할 수 있는 객체입니다.", detail: ["컨테이너는 보통 매번 새 iterator를 제공합니다.", "iterable이라고 모두 길이나 index를 제공하지는 않습니다."] },
+    { term: "iterator", definition: "__next__로 다음 값을 제공하고 끝에서 StopIteration을 발생시키는 상태 있는 단일 소비 객체입니다.", detail: ["__iter__는 보통 self를 반환합니다.", "소비 위치가 객체 안에 저장됩니다."] },
+    { term: "normal exhaustion", definition: "break·return·예외가 아니라 iterator가 StopIteration을 내서 for가 끝난 상태입니다.", detail: ["for-else의 else가 실행됩니다.", "빈 iterable도 정상 고갈입니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "custom-iterator-break-else-snapshot",
+      title: "custom iterator의 고갈, break와 snapshot 변이",
+      language: "python",
+      filename: "iterator_protocol.py",
+      purpose: "__next__/StopIteration, for-else의 정상 고갈 조건, 반복 대상 snapshot을 한 실행에서 검증합니다.",
+      code: "class Countdown:\n    def __init__(self, start):\n        self.current = start\n\n    def __iter__(self):\n        return self\n\n    def __next__(self):\n        if self.current <= 0:\n            raise StopIteration\n        value = self.current\n        self.current -= 1\n        return value\n\ndef find(iterable, target):\n    for value in iterable:\n        if value == target:\n            print(f'found:{value}')\n            break\n    else:\n        print('not-found')\n\nfind(Countdown(3), 2)\nfind(Countdown(2), 9)\n\nvalues = [1, 2, 3, 4]\nfor value in values.copy():\n    if value % 2 == 0:\n        values.remove(value)\nprint(f'odds={values}')",
+      walkthrough: [
+        { lines: "1-14", explanation: "Countdown은 자기 자신을 iterator로 반환하고 상태를 한 칸씩 줄이다 0에서 StopIteration을 냅니다." },
+        { lines: "16-23", explanation: "검색 성공은 break로 else를 건너뛰고, 정상 고갈은 not-found else를 실행합니다." },
+        { lines: "25-30", explanation: "복사 snapshot을 순회하며 원본 list에서 짝수를 제거해 index 이동에 따른 누락을 피합니다." },
+      ],
+      run: { environment: ["Python 3.8 이상", "iterator_protocol.py를 UTF-8로 저장"], command: "python -I -X utf8 iterator_protocol.py" },
+      output: { value: "found:2\nnot-found\nodds=[1, 3]", explanation: ["첫 iterator는 2에서 break하므로 else가 실행되지 않습니다.", "둘째는 2와 1을 모두 소비한 뒤 StopIteration으로 끝나 else가 실행됩니다.", "snapshot과 원본을 분리해 모든 짝수가 제거됩니다."] },
+      experiments: [
+        { change: "첫 find 호출이 끝난 Countdown 객체를 변수에 보존해 다시 find합니다.", prediction: "break 당시 남은 상태부터 이어서 소비하며 처음부터 재시작하지 않습니다.", result: "iterator가 단일 소비 상태 객체임을 확인합니다." },
+        { change: "values.copy()를 values로 바꿉니다.", prediction: "요소 이동 때문에 일부 입력에서는 삭제 대상이 건너뛰어질 수 있습니다.", result: "반복 중 동일 list 구조 변경의 불안정성을 재현합니다." },
+      ],
+      sourceRefs: ["python-iterator-protocol-doc", "python-for-reference-doc", "python-range-doc", "python-itertools-doc", "python-enumerate-doc"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "generator를 두 번째 for에서 순회했더니 아무 값도 나오지 않는다.", likelyCause: "generator iterator가 첫 번째 순회에서 이미 StopIteration까지 소비됐습니다.", checks: ["type과 iter(obj) is obj 여부를 확인합니다.", "첫 pass 뒤 next를 sentinel default와 함께 호출합니다.", "두 pass가 정말 필요한지 데이터 흐름을 검토합니다."], fix: "generator를 새로 만드는 factory를 호출하거나, 크기가 제한된 경우 list로 한 번 materialize합니다.", prevention: "함수 인수 계약에서 iterable과 single-pass iterator를 구분하고 소비 주체를 하나로 정합니다." },
+    { symptom: "list에서 조건에 맞는 항목을 지웠는데 일부가 남는다.", likelyCause: "같은 list를 순회하면서 삭제해 다음 index로 이동한 요소를 건너뛰었습니다.", checks: ["for 대상과 remove/pop 대상이 동일 객체인지 확인합니다.", "연속된 삭제 대상 입력으로 재현합니다.", "dict/set 크기 변경 RuntimeError도 함께 확인합니다."], fix: "새 list comprehension을 만들거나 snapshot을 순회하거나 삭제 대상을 먼저 수집합니다.", prevention: "순회 단계와 구조 변경 단계를 분리하는 코딩 규칙을 둡니다." },
+  ],
+  comparisons: [
+    { title: "반복에서 값·index·병렬 입력을 어떻게 얻을까요?", options: [
+      { name: "직접 for / enumerate", chooseWhen: "값 또는 index와 값이 필요할 때", avoidWhen: "두 iterable을 위치별로 함께 묶어야 할 때", tradeoffs: ["값만 쓰면 가장 단순합니다.", "enumerate는 시작 index를 명시할 수 있습니다.", "길이 기반 index 오류를 줄입니다."] },
+      { name: "zip / range", chooseWhen: "여러 iterable을 병렬 소비하거나 숫자 progression 자체가 필요할 때", avoidWhen: "단순 컨테이너 값을 얻기 위해 range(len(...))가 불필요할 때", tradeoffs: ["zip은 기본적으로 가장 짧은 입력에서 끝납니다.", "strict=True는 길이 불일치를 검출할 수 있습니다.", "range는 stop exclusive와 step 방향을 명시합니다."] },
+    ] },
+  ],
+  expertNotes: ["PEP 479 때문에 generator 함수 내부에서 의도치 않게 발생한 StopIteration은 RuntimeError로 변환될 수 있으므로 generator 종료는 return을 사용합니다.", "외부 iterator를 여러 소비자가 나눠 next하는 구조는 항목 소유권과 backpressure를 명시하지 않으면 누락·순서 버그가 됩니다."],
+});
+
+expertSession.reviewQuestions.push(
+  { question: "for 문은 내부적으로 어떤 종료 신호를 사용하나요?", answer: "iterable에서 얻은 iterator의 __next__를 반복 호출하고 StopIteration이 발생하면 정상 고갈로 종료합니다." },
+  { question: "iterable과 iterator의 핵심 차이는 무엇인가요?", answer: "iterable은 iter()로 순회자를 제공하는 객체이고 iterator는 현재 소비 위치를 가진 단일 소비 객체입니다. 컨테이너는 보통 새 iterator를 여러 번 만들 수 있습니다." },
+  { question: "continue가 실행되면 for-else의 else가 생략되나요?", answer: "아닙니다. continue는 다음 반복으로 갈 뿐이며 break 없이 정상 고갈하면 else가 실행됩니다." },
+  { question: "반복 중 list 삭제를 안전하게 하는 대표 방법은 무엇인가요?", answer: "새 컬렉션을 만들어 대체하거나 snapshot 복사본을 순회하거나 삭제 대상을 먼저 수집한 뒤 두 번째 단계에서 변경합니다." },
+  { question: "무한 iterator의 종료를 어떻게 보장하나요?", answer: "break 조건, itertools.islice 같은 항목 상한, 취소 신호나 monotonic deadline을 소비자 계약으로 추가합니다." },
+);
+
+expertSession.completionChecklist.push(
+  "for를 iter()·next()·StopIteration 순서로 풀어 설명할 수 있다.",
+  "재사용 가능한 iterable과 single-pass iterator를 구분할 수 있다.",
+  "break·continue·return·예외·정상 고갈이 loop-else에 미치는 영향을 예측할 수 있다.",
+  "range의 stop exclusive·음수 step·step 0 경계를 검증할 수 있다.",
+  "반복 중 list·dict·set 구조 변경을 안전한 2단계 처리로 바꿀 수 있다.",
+  "무한 iterator에 항목·시간·취소 종료 경계를 추가할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-iterator-protocol-doc", repository: "Python", path: "reference/datamodel.html#object.__iter__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__iter__", usedFor: ["iterable", "iterator", "__next__", "StopIteration"], evidence: "언어 데이터 모델의 iterator protocol과 종료 신호를 확인했습니다." },
+  { id: "python-for-reference-doc", repository: "Python", path: "reference/compound_stmts.html#the-for-statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-for-statement", usedFor: ["for 실행", "break", "continue", "loop else"], evidence: "for가 iterator 항목을 순서대로 대입하고 정상 고갈 시 else를 실행하는 규칙을 확인했습니다." },
+  { id: "python-range-doc", repository: "Python", path: "library/stdtypes.html#range", publicUrl: "https://docs.python.org/3/library/stdtypes.html#range", usedFor: ["range sequence", "stop exclusive", "음수 step"], evidence: "range가 값을 미리 저장하지 않는 불변 sequence이며 start·stop·step 규칙을 갖는 점을 확인했습니다." },
+  { id: "python-itertools-doc", repository: "Python", path: "library/itertools.html", publicUrl: "https://docs.python.org/3/library/itertools.html", usedFor: ["무한 iterator", "islice", "lazy 조합"], evidence: "무한 iterator와 유한 소비 경계를 설명하기 위해 표준 iterator building blocks를 확인했습니다." },
+  { id: "python-enumerate-doc", repository: "Python", path: "library/functions.html#enumerate", publicUrl: "https://docs.python.org/3/library/functions.html#enumerate", usedFor: ["index와 값", "range(len()) 대체"], evidence: "enumerate가 iterable에서 index와 값을 함께 생성하는 공식 의미를 확인했습니다." },
+);

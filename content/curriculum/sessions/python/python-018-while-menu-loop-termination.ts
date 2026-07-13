@@ -129,7 +129,7 @@ const session = {
           ],
           run: {
             environment: ["Python 3.11 이상", "UTF-8로 저장한 while_counts.py", "외부 패키지 없음"],
-            command: "python while_counts.py",
+            command: "python -I -X utf8 while_counts.py",
           },
           output: {
             value: "1 2 3 4 5 6 7 8 9 10 \n2 4 6 8 10 \n종료 상태: count=11",
@@ -270,7 +270,7 @@ const session = {
           ],
           run: {
             environment: ["Python 3.11 이상", "UTF-8로 저장한 menu_simulation.py", "외부 패키지 없음"],
-            command: "python menu_simulation.py",
+            command: "python -I -X utf8 menu_simulation.py",
           },
           output: {
             value: "입력: 1\n실행: Add\n입력: 9\n지원하지 않는 메뉴\n입력: 3\n실행: List\n입력: 4\n수고하셨습니다.\n소비한 입력 수: 4",
@@ -608,3 +608,170 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 320;
+expertSession.chapters.push(
+  {
+    id: "loop-invariant-sentinel-and-input-termination",
+    title: "불변식·진행 함수·sentinel로 while의 종료 증명을 작성합니다",
+    lead: "while은 조건이 참인 동안 반복한다는 문장만으로 안전해지지 않습니다. 반복 시작마다 유지되는 불변식, 종료 방향으로 움직이는 진행 함수, 외부 입력이 끝났을 때의 정책을 함께 적어야 합니다.",
+    explanations: [
+      "loop invariant는 매 반복의 조건 검사 직전과 본문 수행 뒤에 항상 참이어야 하는 명제입니다. 예를 들어 `0 <= index <= len(items)`와 `total == sum(items[:index])`를 적으면 이미 처리한 범위와 다음 처리 위치를 동시에 설명할 수 있습니다. assert는 개발 중 위반을 빠르게 찾지만 최적화 옵션에서 제거될 수 있으므로 사용자 입력 검증을 assert에 맡기지는 않습니다.",
+      "termination variant 또는 진행 함수는 반복할수록 잘 정렬된 하한을 향해 감소하거나 유한 집합을 소모하는 값입니다. `len(items)-index`, 남은 재시도 횟수, deadline까지 남은 시간처럼 음수가 될 수 없고 매 반복 감소하는 값을 찾으면 정상 경로의 종료를 논리적으로 설명할 수 있습니다. continue 경로에서도 진행 값이 갱신되는지 반드시 확인합니다.",
+      "sentinel은 데이터가 끝났음을 나타내는 특별한 값입니다. 빈 문자열, None, 객체 singleton을 쓸 수 있지만 정상 데이터와 충돌하지 않아야 합니다. `iter(callable, sentinel)`은 callable 반환값이 sentinel과 같아질 때 멈추는 iterator를 만들며, 파일 chunk 읽기처럼 입력과 종료가 한 쌍인 상황에 적합합니다.",
+      "메뉴 루프의 종료 원인은 사용자의 quit, 입력 스트림 EOF, 유효하지 않은 입력 횟수 초과, 예외, 외부 취소처럼 여러 개입니다. `input()`은 EOF에서 빈 문자열을 돌려주는 것이 아니라 EOFError를 일으킬 수 있으므로 대화형 터미널만 가정하지 말고 파이프·테스트 입력 종료 정책을 별도 경로로 둡니다.",
+    ],
+    concepts: [
+      { term: "loop invariant", definition: "반복이 시작될 때마다 계속 참이며 지금까지 처리한 상태의 정확성을 표현하는 조건입니다.", detail: ["초기화 전에 성립해야 합니다.", "본문 한 회가 invariant를 보존해야 합니다.", "종료 조건과 합쳐 최종 결과를 설명합니다."] },
+      { term: "termination variant", definition: "각 정상 반복에서 엄격히 종료 방향으로 변하고 무한히 진행할 수 없는 측정값입니다.", detail: ["남은 항목·남은 시도·남은 시간 등이 후보입니다.", "continue와 예외 경로도 값을 진전시키는지 봅니다."] },
+      { term: "sentinel", definition: "정상 데이터 범위와 구별되어 입력 종료나 값 부재를 나타내는 표식입니다.", detail: ["None이 정상값이면 고유 object를 사용합니다.", "문자열 quit은 명령 프로토콜의 sentinel입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "invariant-driven-sentinel-menu",
+        title: "불변식과 입력 고갈을 명시한 deterministic 메뉴 루프",
+        language: "python",
+        filename: "invariant_menu.py",
+        purpose: "대화형 input 대신 유한 iterator를 사용해 정상 명령, 잘못된 명령, quit, EOF 종료를 정확히 재현합니다.",
+        code: "def run_menu(commands):\n    iterator = iter(commands)\n    total = 0\n    accepted = 0\n    while True:\n        assert total >= 0 and accepted >= 0\n        try:\n            command = next(iterator)\n        except StopIteration:\n            return total, accepted, 'eof'\n\n        if command == 'quit':\n            return total, accepted, 'quit'\n        if command.isdecimal():\n            total += int(command)\n            accepted += 1\n            continue\n        print(f'rejected:{command}')\n\nfor commands in [('3', 'bad', '4', 'quit'), ('2',)]:\n    total, accepted, reason = run_menu(commands)\n    print(f'total={total}, accepted={accepted}, reason={reason}')",
+        walkthrough: [
+          { lines: "1-5", explanation: "입력 iterable과 누적 상태를 초기화하고 각 반복 시작의 비음수 불변식을 확인합니다." },
+          { lines: "7-10", explanation: "입력 고갈을 예외로 구분해 EOF 종료 원인을 반환합니다." },
+          { lines: "12-18", explanation: "quit sentinel, 숫자 상태 전이, 거부 경로를 나누며 숫자 경로의 continue 전에도 두 상태가 함께 진전됩니다." },
+          { lines: "20-22", explanation: "quit과 EOF 두 종료 원인을 실제 키보드 없이 재현합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "invariant_menu.py를 UTF-8로 저장"], command: "python -I -X utf8 invariant_menu.py" },
+        output: { value: "rejected:bad\ntotal=7, accepted=2, reason=quit\ntotal=2, accepted=1, reason=eof", explanation: ["잘못된 명령은 상태를 바꾸지 않고 다음 입력으로 진행합니다.", "첫 입력열은 명시 quit으로, 둘째는 iterator 고갈로 끝납니다.", "종료 이유를 결과에 포함해 호출자가 정책을 구분할 수 있습니다."] },
+        experiments: [
+          { change: "숫자 분기에서 accepted 증가를 제거합니다.", prediction: "합계는 맞지만 처리 건수 invariant의 의도와 결과가 어긋납니다.", result: "관련 상태를 원자적 전이처럼 함께 갱신해야 함을 확인합니다." },
+          { change: "StopIteration 처리를 삭제합니다.", prediction: "두 번째 입력열이 정상 결과 대신 예외로 종료됩니다.", result: "입력 소스 고갈도 메뉴 프로토콜의 정상 종료 정책이 될 수 있음을 확인합니다." },
+        ],
+        sourceRefs: ["python-while-reference", "python-iterator-reference", "python-builtins-iter-doc", "pep-572-assignment-expression"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "특정 잘못된 입력에서만 루프가 영원히 반복된다.", likelyCause: "continue 또는 오류 처리 경로에서 다음 입력을 읽거나 진행 상태를 갱신하지 않았습니다.", checks: ["모든 continue 지점에서 variant 전후 값을 적습니다.", "입력 읽기가 루프 한 곳에만 있는지 확인합니다.", "같은 잘못된 입력 세 개를 유한 iterator로 재현합니다."], fix: "반복 시작에서 입력을 정확히 한 번 소비하거나 각 분기에서 진행 값 갱신을 보장합니다.", prevention: "분기별 invariant·variant 표와 최대 반복 보호 테스트를 둡니다." },
+      { symptom: "파이프나 자동 테스트에서 메뉴가 traceback으로 끝난다.", likelyCause: "input()의 EOFError 또는 iterator의 StopIteration을 사용자 quit과 별도 정책으로 처리하지 않았습니다.", checks: ["stdin이 TTY인지와 입력 공급 방식을 확인합니다.", "EOF를 의도적으로 주입해 종료 상태를 봅니다.", "종료 이유를 로그·반환값에서 구분하는지 확인합니다."], fix: "EOF를 명시적으로 잡아 취소·정상 종료·오류 중 도메인 정책에 맞는 결과로 변환합니다.", prevention: "대화형 입력과 비대화형 입력을 같은 유한 command source 인터페이스로 테스트합니다." },
+    ],
+    expertNotes: ["invariant는 주석 장식이 아니라 초기화·보존·종료의 세 질문에 답해야 합니다.", "입력 검증 실패 횟수에도 상한을 두면 공격적 입력이나 자동화 오류가 무한 CPU·로그 사용으로 이어지는 것을 막을 수 있습니다."],
+  },
+  {
+    id: "retry-backoff-deadline-budget",
+    title: "재시도는 횟수·backoff·deadline·예외 분류가 있는 유한 정책입니다",
+    lead: "`while True`로 성공할 때까지 호출하는 코드는 장애를 증폭시킬 수 있습니다. 무엇을 재시도하고 언제 포기할지, 다음 시도까지 얼마나 기다릴지, 전체 시간 예산을 어떻게 지킬지 먼저 계약으로 만듭니다.",
+    explanations: [
+      "재시도 가능한 오류는 일시적 timeout·rate limit처럼 같은 요청이 나중에 성공할 가능성이 있는 경우입니다. 인증 실패, 잘못된 입력, 존재하지 않는 자원처럼 영구 오류는 즉시 실패해야 합니다. 넓은 `except Exception` 뒤 무조건 continue는 프로그래밍 버그까지 숨기므로 구체 예외를 분류하고 마지막 예외를 원인으로 보존합니다.",
+      "exponential backoff는 보통 `min(cap, base * 2 ** (attempt-1))`로 증가합니다. 모든 클라이언트가 같은 시각에 다시 몰리는 동기화를 줄이기 위해 jitter를 더하지만 테스트에서는 난수 생성기를 주입하거나 지연 계산 함수를 순수하게 만들어 결정론적으로 검증합니다. 서버가 Retry-After를 제공하면 허용 범위 안에서 우선 고려합니다.",
+      "max_attempts는 호출 횟수이며 max_retries와 하나 차이 날 수 있습니다. 이름을 명확히 하고 최초 호출을 포함하는지 문서화합니다. attempt를 증가시키는 위치가 예외 분기마다 달라지면 off-by-one이 생기므로 한 반복이 한 시도라는 invariant를 둡니다.",
+      "횟수 제한만으로는 한 번의 호출이 오래 멈추는 문제를 해결하지 못합니다. 각 호출 timeout과 전체 monotonic deadline을 함께 사용합니다. wall clock은 시스템 시간 보정으로 뒤로 갈 수 있어 경과 시간에는 `time.monotonic()`이 적합합니다. 기다리기 전 남은 budget과 delay를 비교하고 취소 신호도 확인합니다.",
+    ],
+    concepts: [
+      { term: "exponential backoff", definition: "연속 실패 시 재시도 간격을 지수적으로 늘리고 상한으로 제한하는 부하 완화 정책입니다.", detail: ["base·cap·attempt 기준을 문서화합니다.", "분산 시스템에서는 jitter로 동시 재시도를 흩뜨립니다."] },
+      { term: "retry budget", definition: "최대 시도 횟수와 전체 deadline으로 재시도가 소비할 수 있는 자원을 제한하는 계약입니다.", detail: ["호출별 timeout과 별개입니다.", "대기 전에 남은 예산을 확인합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "bounded-retry-backoff-policy",
+        title: "sleep 없이 검증하는 유한 지수 backoff 정책",
+        language: "python",
+        filename: "retry_policy.py",
+        purpose: "일시 오류만 재시도하고 최대 시도와 지연 상한을 순수 계산으로 검증합니다.",
+        code: "class TemporaryFailure(Exception):\n    pass\n\ndef backoff(attempt, base=0.5, cap=2.0):\n    return min(cap, base * (2 ** (attempt - 1)))\n\ndef fetch(outcomes, max_attempts=4):\n    iterator = iter(outcomes)\n    delays = []\n    for attempt in range(1, max_attempts + 1):\n        try:\n            value = next(iterator)\n            if isinstance(value, Exception):\n                raise value\n            return value, delays, attempt\n        except TemporaryFailure:\n            if attempt == max_attempts:\n                raise\n            delays.append(backoff(attempt))\n    raise RuntimeError('unreachable')\n\nvalue, delays, attempts = fetch([TemporaryFailure(), TemporaryFailure(), 'OK'])\nprint(f'value={value}, attempts={attempts}')\nprint(f'delays={delays}')",
+        walkthrough: [
+          { lines: "1-5", explanation: "재시도 가능한 전용 예외와 side effect 없는 지연 계산 함수를 정의합니다." },
+          { lines: "7-18", explanation: "한 반복을 한 시도로 고정하고, 성공 즉시 반환하며, 마지막 일시 오류는 원래 traceback으로 다시 올립니다." },
+          { lines: "20-22", explanation: "실제 sleep 없이 두 번 실패 후 세 번째 성공과 예정 지연을 정확히 검증합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "retry_policy.py를 UTF-8로 저장"], command: "python -I -X utf8 retry_policy.py" },
+        output: { value: "value=OK, attempts=3\ndelays=[0.5, 1.0]", explanation: ["최초 호출을 포함해 세 번 시도했습니다.", "실패 뒤 지연은 0.5초, 1.0초로 계산됐지만 예제는 실제로 기다리지 않습니다.", "성공 뒤 추가 재시도는 없습니다."] },
+        experiments: [
+          { change: "outcomes를 일시 오류 네 개로 바꿉니다.", prediction: "네 번째 실패에서 같은 TemporaryFailure를 다시 올리고 세 번의 대기만 계획합니다.", result: "마지막 실패 뒤 불필요한 sleep이 없음을 확인합니다." },
+          { change: "ValueError를 outcomes에 넣습니다.", prediction: "재시도 대상이 아니므로 첫 시도에서 즉시 전파됩니다.", result: "오류 분류가 재시도 안전성의 핵심임을 확인합니다." },
+        ],
+        sourceRefs: ["python-time-monotonic-doc", "python-random-doc", "python-exceptions-reference", "python-while-reference"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "장애가 나면 요청량이 오히려 급증한다.", likelyCause: "지연·jitter·상한 없이 즉시 재시도하거나 여러 계층이 독립적으로 재시도합니다.", checks: ["한 사용자 요청이 최악에 몇 번 downstream 호출을 만드는지 곱합니다.", "attempt별 지연과 Retry-After 처리 로그를 확인합니다.", "클라이언트·gateway·worker의 중복 재시도를 찾습니다."], fix: "한 계층에 유한 retry budget을 두고 capped exponential backoff와 jitter를 적용합니다.", prevention: "장애 주입 테스트에서 총 호출 수와 지연 분포를 품질 기준으로 측정합니다." },
+      { symptom: "max_attempts=3인데 네 번 호출되거나 두 번만 호출된다.", likelyCause: "최초 호출과 retry 수를 혼동하거나 attempt 증가 위치가 분기마다 다릅니다.", checks: ["호출 직전 attempt 값을 기록합니다.", "range의 시작·끝과 inclusive 의미를 확인합니다.", "즉시 성공·마지막 성공·전부 실패를 테스트합니다."], fix: "`for attempt in range(1, max_attempts + 1)`처럼 한 반복 한 호출을 고정합니다.", prevention: "max_attempts가 최초 호출을 포함한다고 API 문서와 변수 이름에 명시합니다." },
+    ],
+    expertNotes: ["멱등하지 않은 POST를 재시도하려면 idempotency key와 서버 중복 제거가 먼저입니다.", "deadline은 호출 체인을 따라 남은 예산으로 전파해야 하며 각 계층이 새 전체 timeout을 시작하면 최종 응답 시간이 폭증합니다."],
+  },
+  {
+    id: "cooperative-cancellation-and-cleanup",
+    title: "취소는 반복 조건이 아니라 협력 프로토콜이며 cleanup까지 완료해야 합니다",
+    lead: "긴 while 작업은 외부 취소 신호를 주기적으로 확인하고, 부분 결과의 상태를 정하고, 열린 자원을 정리한 뒤 일관된 종료 이유를 반환해야 합니다.",
+    explanations: [
+      "threading.Event는 한 실행 주체가 set하고 다른 작업이 `is_set()` 또는 `wait(timeout)`으로 관찰하는 간단한 취소 신호입니다. Python은 임의 스레드를 안전하게 강제 종료하는 일반 API를 제공하지 않으므로 작업 함수가 안전한 지점에서 협력적으로 빠져나와야 합니다. asyncio에서는 CancelledError 전파와 finally 정리가 같은 역할을 합니다.",
+      "취소 확인 주기는 반응성과 오버헤드의 절충입니다. 항목 하나가 수분 걸린다면 항목 사이 확인만으로 부족하므로 하위 I/O에도 timeout·취소 기능을 전달합니다. 너무 촘촘한 polling 대신 Event.wait(timeout)을 쓰면 대기와 신호 확인을 결합할 수 있습니다.",
+      "부분 결과는 폐기, checkpoint 저장, resume 가능 상태 중 하나를 명시합니다. 취소를 성공 완료처럼 반환하면 호출자가 누락을 모릅니다. 상태를 `completed`, `cancelled`, `deadline`, `failed`처럼 구분하고 처리 개수·마지막 checkpoint를 함께 반환합니다.",
+      "break는 가장 가까운 loop만 끝내고 finally를 건너뛰지 않습니다. 파일·lock·transaction은 context manager로 묶고, 취소 검사 때문에 continue/break가 생겨도 `with`와 finally 정리를 통과하도록 구조화합니다. cleanup 자체 실패는 원래 취소 이유를 가리지 않도록 기록·예외 체인을 설계합니다.",
+    ],
+    concepts: [
+      { term: "cooperative cancellation", definition: "작업이 외부 신호를 안전한 지점에서 스스로 확인하고 상태를 정리한 뒤 종료하는 방식입니다.", detail: ["강제 thread kill과 다릅니다.", "하위 blocking 호출에도 timeout이나 취소를 전달해야 합니다."] },
+      { term: "cancellation point", definition: "부분 상태가 일관되고 취소 신호를 확인해도 안전한 반복 내부 위치입니다.", detail: ["대개 작업 시작 전·checkpoint 직후입니다.", "transaction 중간처럼 invariant가 깨진 위치는 피합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "cooperative-cancellation-state",
+        title: "결정론적 취소 토큰과 부분 진행 상태",
+        language: "python",
+        filename: "cancellable_worker.py",
+        purpose: "두 항목 처리 뒤 취소되는 합성 worker로 취소 확인 위치와 완료 상태 구분을 검증합니다.",
+        code: "class CancelToken:\n    def __init__(self):\n        self.cancelled = False\n\n    def cancel(self):\n        self.cancelled = True\n\ndef run(items, token):\n    index = 0\n    processed = []\n    while index < len(items):\n        if token.cancelled:\n            return processed, 'cancelled'\n        processed.append(items[index].upper())\n        index += 1\n        if index == 2:\n            token.cancel()\n    return processed, 'completed'\n\ntoken = CancelToken()\nprocessed, status = run(['a', 'b', 'c', 'd'], token)\nprint(f'processed={processed}')\nprint(f'status={status}')",
+        walkthrough: [
+          { lines: "1-6", explanation: "외부 상태를 노출하는 최소 합성 취소 토큰을 정의합니다. 실제 thread 작업에서는 threading.Event를 사용합니다." },
+          { lines: "8-13", explanation: "반복 시작을 취소 지점으로 두고 index와 processed 길이가 함께 증가하는 invariant를 유지합니다." },
+          { lines: "14-17", explanation: "두 번째 항목 뒤 신호를 설정하면 다음 반복 시작에서 부분 결과와 cancelled 상태를 반환합니다." },
+          { lines: "19-22", explanation: "취소가 성공 완료와 구분되고 세 번째 항목이 처리되지 않았음을 출력합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "cancellable_worker.py를 UTF-8로 저장"], command: "python -I -X utf8 cancellable_worker.py" },
+        output: { value: "processed=['A', 'B']\nstatus=cancelled", explanation: ["취소 신호는 두 항목 처리 직후 설정됩니다.", "다음 반복의 안전한 취소 지점에서 빠져나옵니다.", "부분 결과와 종료 상태가 함께 반환됩니다."] },
+        experiments: [
+          { change: "cancel 호출을 제거합니다.", prediction: "네 항목을 모두 처리하고 completed를 반환합니다.", result: "정상 완료와 취소 경로의 결과 계약을 비교합니다." },
+          { change: "취소 검사를 append 뒤로 옮깁니다.", prediction: "이미 취소된 토큰으로 시작해도 항목 하나가 추가 처리될 수 있습니다.", result: "취소 지점 위치가 응답성과 부작용 범위를 결정함을 확인합니다." },
+        ],
+        sourceRefs: ["python-threading-event-doc", "python-context-manager-reference", "python-time-monotonic-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "취소 버튼을 눌러도 작업이 오랫동안 멈추지 않는다.", likelyCause: "취소 검사가 큰 작업 단위 사이에만 있거나 하위 blocking I/O에 timeout이 없습니다.", checks: ["최악의 한 작업 단위 시간을 측정합니다.", "모든 네트워크·queue·sleep 호출의 timeout을 확인합니다.", "신호 set 시각과 실제 종료 시각을 비교합니다."], fix: "작업을 더 작은 안전 단위로 나누고 Event.wait·I/O timeout에 취소 예산을 전달합니다.", prevention: "취소 응답 시간 SLO와 장애 주입 테스트를 둡니다." },
+      { symptom: "취소 후 파일·lock이 남아 다음 실행이 실패한다.", likelyCause: "break·return 경로가 수동 close/release보다 앞에 있거나 cleanup 실패가 숨겨졌습니다.", checks: ["자원 획득이 with/context manager 안에 있는지 봅니다.", "모든 return·break·예외에서 __exit__/finally가 실행되는지 합성 자원으로 테스트합니다.", "부분 파일·lock owner metadata를 확인합니다."], fix: "자원을 context manager로 감싸고 취소 결과 반환을 with 바깥 또는 finally 정리 뒤에 둡니다.", prevention: "정상·취소·예외 세 경로에서 자원 0개 잔존을 검증합니다." },
+    ],
+    expertNotes: ["취소 토큰을 전역 변수로 숨기지 말고 작업 함수 인수로 전달하면 동시 실행과 테스트가 쉬워집니다.", "deadline 초과와 사용자 취소는 후속 재시도·알림 정책이 다를 수 있으므로 같은 Boolean 하나보다 원인 enum을 권장합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "loop invariant는 언제 참이어야 하나요?", answer: "초기 반복 진입 전에 성립하고, 본문 한 회가 이를 보존해 다음 조건 검사 때도 참이어야 하며, 종료 조건과 함께 최종 결과를 설명해야 합니다." },
+  { question: "종료 가능성을 설명하는 variant의 조건은 무엇인가요?", answer: "하한이 있고 각 정상 반복에서 엄격히 종료 방향으로 변해야 합니다. continue·오류 경로에서도 진전하는지 확인합니다." },
+  { question: "input()은 EOF에서 빈 문자열을 반환하나요?", answer: "일반적으로 EOFError를 일으킬 수 있으므로 사용자 quit 문자열과 별도 종료 경로로 처리해야 합니다." },
+  { question: "max_attempts와 max_retries는 왜 혼동되나요?", answer: "max_attempts는 최초 호출을 포함하는 경우가 많고 retries는 최초 실패 뒤 추가 호출 수라서 하나 차이 날 수 있습니다. API 계약에 명시해야 합니다." },
+  { question: "모든 예외를 재시도하면 왜 위험한가요?", answer: "인증·입력 오류와 프로그래밍 버그처럼 재시도해도 낫지 않은 실패를 숨기고 부하만 증폭시킬 수 있습니다." },
+  { question: "backoff에 jitter를 더하는 이유는 무엇인가요?", answer: "같은 장애를 본 다수 클라이언트가 같은 시간표로 동시에 재시도하는 thundering herd를 줄이기 위해서입니다." },
+  { question: "threading.Event 기반 취소가 강제 종료와 다른 점은 무엇인가요?", answer: "작업이 안전한 취소 지점에서 신호를 관찰해 상태와 자원을 정리한 뒤 스스로 반환하는 협력 방식입니다." },
+);
+
+expertSession.completionChecklist.push(
+  "초기화·보존·종료의 세 단계로 loop invariant를 설명할 수 있다.",
+  "모든 continue 경로에서 termination variant가 진전하는지 점검할 수 있다.",
+  "정상 데이터와 충돌하지 않는 sentinel을 선택할 수 있다.",
+  "quit·EOF·invalid-limit·exception·cancel 종료 이유를 구분할 수 있다.",
+  "재시도 가능한 예외와 즉시 실패할 예외를 분류할 수 있다.",
+  "max attempts·호출별 timeout·전체 deadline·capped backoff·jitter를 하나의 정책으로 설계할 수 있다.",
+  "멱등성 보장 없이 쓰기 작업을 자동 재시도하지 않는 이유를 설명할 수 있다.",
+  "cooperative cancellation point와 부분 결과 정책을 정의할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-iterator-reference", repository: "Python", path: "reference/datamodel.html#object.__next__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__next__", usedFor: ["iterator 고갈", "StopIteration", "유한 입력"], evidence: "iterator가 항목을 소모하고 고갈 시 StopIteration으로 종료되는 프로토콜을 확인했습니다." },
+  { id: "python-builtins-iter-doc", repository: "Python", path: "library/functions.html#iter", publicUrl: "https://docs.python.org/3/library/functions.html#iter", usedFor: ["callable sentinel iterator", "입력 종료"], evidence: "두 인수 iter(callable, sentinel)의 종료 의미를 확인했습니다." },
+  { id: "pep-572-assignment-expression", repository: "Python", path: "PEP 572", publicUrl: "https://peps.python.org/pep-0572/", usedFor: ["while named expression", "읽기와 조건 결합"], evidence: "while에서 값을 읽고 sentinel을 검사하는 named expression의 공식 설계와 범위를 확인했습니다." },
+  { id: "python-time-monotonic-doc", repository: "Python", path: "library/time.html#time.monotonic", publicUrl: "https://docs.python.org/3/library/time.html#time.monotonic", usedFor: ["deadline", "경과 시간", "retry budget"], evidence: "시스템 시계 보정에 영향받지 않는 monotonic clock을 deadline 계산 근거로 사용했습니다." },
+  { id: "python-random-doc", repository: "Python", path: "library/random.html", publicUrl: "https://docs.python.org/3/library/random.html", usedFor: ["jitter", "결정론적 난수 주입"], evidence: "backoff jitter 생성과 테스트 시 명시적 생성기 주입 경계를 보강했습니다." },
+  { id: "python-threading-event-doc", repository: "Python", path: "library/threading.html#event-objects", publicUrl: "https://docs.python.org/3/library/threading.html#event-objects", usedFor: ["cooperative cancellation", "Event wait", "신호 확인"], evidence: "Event의 set·is_set·wait 동작을 취소 프로토콜 설명에 반영했습니다." },
+  { id: "python-context-manager-reference", repository: "Python", path: "reference/datamodel.html#context-managers", publicUrl: "https://docs.python.org/3/reference/datamodel.html#context-managers", usedFor: ["취소 cleanup", "with", "예외 경로 자원 해제"], evidence: "정상·break·return·예외 경로에서 context manager가 자원 수명을 감싸는 의미를 확인했습니다." },
+  { id: "python-exceptions-reference", repository: "Python", path: "reference/compound_stmts.html#except-clause", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#except-clause", usedFor: ["구체 예외 분류", "재시도 경계", "예외 재전파"], evidence: "except clause의 type matching과 bare raise를 사용한 원래 예외 재전파 규칙을 확인했습니다." },
+);

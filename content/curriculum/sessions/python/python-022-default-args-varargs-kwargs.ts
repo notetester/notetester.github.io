@@ -93,9 +93,9 @@ const session = {
             { lines: "1-3", explanation: "빈 리스트 하나가 정의 시 기본값으로 만들어지고 생략 호출마다 같은 객체에 append합니다." },
             { lines: "5-10", explanation: "기본값 None은 불변 sentinel이고 생략할 때마다 본문에서 새 리스트를 만듭니다." },
             { lines: "12-15", explanation: "bad 두 호출은 누적되고 good 두 생략 호출은 독립적임을 비교합니다." },
-            { lines: "16-18", explanation: "호출자가 리스트를 명시하면 add_tag가 그 객체를 변경하므로 caller sees에도 css가 보입니다. 이것은 별도 mutation 계약입니다." },
+            { lines: "16-17", explanation: "호출자가 리스트를 명시하면 add_tag가 그 객체를 변경하므로 caller sees에도 css가 보입니다. 이것은 별도 mutation 계약입니다." },
           ],
-          run: { environment: ["Python 3.8 이상", "mutable_defaults.py로 저장"], command: "python mutable_defaults.py" },
+          run: { environment: ["Python 3.8 이상", "mutable_defaults.py로 저장"], command: "python -I -X utf8 mutable_defaults.py" },
           output: { value: "bad 1: ['python']\nbad 2: ['python', 'java']\ngood 1: ['python']\ngood 2: ['java']\nprovided: ['web', 'css']\ncaller sees: ['web', 'css']", explanation: ["bad 2에 첫 호출 python이 남아 기본 객체 공유가 증명됩니다.", "good 생략 호출은 서로 다른 리스트를 생성합니다.", "명시 전달한 리스트는 여전히 같은 가변 객체이므로 수정 정책을 따로 결정해야 합니다."] },
           experiments: [
             { change: "tags=[] 대신 tags={}로 바꾸고 key를 추가합니다.", prediction: "dict도 같은 방식으로 호출 사이 key를 누적합니다.", result: "문제의 본질은 list 문법이 아니라 상태를 바꿀 수 있는 기본 객체 공유입니다." },
@@ -155,7 +155,7 @@ const session = {
             { lines: "10-13", explanation: "list는 *로 위치 인수에, dict는 **로 키워드 인수에 펼칩니다." },
             { lines: "15-18", explanation: "*args가 0개일 수도 있으므로 함수 계약이 한 개 이상을 요구하면 본문에서 명시적으로 검증합니다." },
           ],
-          run: { environment: ["Python 3.8 이상", "variadic_report.py로 저장"], command: "python variadic_report.py" },
+          run: { environment: ["Python 3.8 이상", "variadic_report.py로 저장"], command: "python -I -X utf8 variadic_report.py" },
           output: { value: "('중간고사', 187.0, {'teacher': '둘리'})\n('기말고사', 250.0, {'teacher': '고길동', 'room': 3})\nERROR: at least one score is required", explanation: ["현재 실행에서는 80*1.1과 90*1.1의 합이 repr 기준 187.0으로 표시됩니다. 금액처럼 십진 정밀도가 계약이면 float 표시만 믿지 말고 Decimal·반올림 정책을 사용합니다.", "scale은 keyword-only 매개변수에 소비되어 meta dict에는 들어가지 않습니다.", "*values와 **options는 호출 전에 각각 위치·키워드 인수로 전개됩니다."] },
           experiments: [
             { change: "report('시험', 80, 2.0)처럼 scale을 위치로 전달합니다.", prediction: "2.0도 scores tuple 요소가 되고 scale은 기본 1.0을 유지합니다.", result: "*scores 뒤 scale이 keyword-only이므로 중요한 옵션을 이름으로 강제할 수 있습니다." },
@@ -259,3 +259,171 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 350;
+expertSession.chapters.push(
+  {
+    id: "default-evaluation-sentinel-and-omission",
+    title: "default의 정의 시점 평가와 sentinel로 ‘생략’·None·빈 값을 구분합니다",
+    lead: "기본값은 호출 때마다 다시 계산되지 않고 def 문이 실행될 때 한 번 만들어져 함수 객체에 저장됩니다. 이 규칙을 이해해야 mutable default뿐 아니라 현재 시각·환경 설정·객체 identity 버그까지 예방할 수 있습니다.",
+    explanations: [
+      "`def add(item, bucket=[]):`의 list는 함수 정의 시 한 번 생성되어 default를 생략한 모든 호출이 공유합니다. 첫 호출의 append가 다음 호출에서 보이는 것은 Python이 default를 cache해 최적화해서가 아니라 함수 객체의 `__defaults__`에 같은 객체 참조가 보존되기 때문입니다. 공유 cache를 의도했다면 전역 이름과 문서, 동시성 정책으로 드러내야 합니다.",
+      "안전한 일반 패턴은 default를 None으로 두고 본문에서 새 list를 만드는 것입니다. 하지만 None 자체가 유효한 명시 입력이면 ‘인수를 생략함’과 ‘None을 전달함’을 구분할 수 없습니다. 이때 module 내부 고유 `object()` sentinel을 default로 사용하고 identity `is`로 비교합니다.",
+      "빈 list·0·빈 문자열을 `value or default`로 바꾸면 유효한 falsy 값을 생략으로 오인합니다. default 적용은 `is None` 또는 고유 sentinel identity처럼 정확한 의미 조건으로 수행합니다. 특히 pagination limit=0, 빈 tag 목록, 명시적 None 해제 같은 API에서 중요합니다.",
+      "`datetime.now()`·환경 변수 조회·함수 호출도 default expression에 쓰면 def 실행 시 한 번 고정됩니다. 현재값이 필요하면 default를 sentinel로 두고 호출 본문에서 의존성을 평가합니다. 테스트 가능성을 위해 clock callable을 별도 인수로 받는 방식도 고려합니다.",
+      "default 객체를 introspection으로 바꾸는 것은 지원되는 설정 API가 아닙니다. `__defaults__`와 `__kwdefaults__`는 진단에 쓸 수 있지만 runtime mutation은 wrapper·문서·type checker와 계약이 어긋나므로 피합니다.",
+    ],
+    concepts: [
+      { term: "definition-time default", definition: "def 문이 실행될 때 한 번 평가되어 함수 객체에 저장되는 parameter 기본값입니다.", detail: ["호출마다 새로 계산되지 않습니다.", "mutable 객체면 생략 호출 사이에 상태가 공유됩니다."] },
+      { term: "sentinel object", definition: "정상 입력과 충돌하지 않는 고유 identity로 인수 생략 상태를 표현하는 객체입니다.", detail: ["`_MISSING = object()`처럼 만듭니다.", "동등성 `==`가 아니라 identity `is`로 검사합니다."] },
+      { term: "omission semantics", definition: "argument를 전달하지 않은 경우와 None·빈 값·0을 명시적으로 전달한 경우를 API가 구분하는 규칙입니다.", detail: ["부분 update와 reset API에서 중요합니다.", "default 문서에 각 의미를 적습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "sentinel-omitted-none-empty",
+        title: "고유 sentinel로 생략·None·빈 list 구분",
+        language: "python",
+        filename: "sentinel_defaults.py",
+        purpose: "호출마다 새 list를 만들면서 None은 명시적 비활성화, 빈 list는 caller가 제공한 가변 대상이라는 서로 다른 계약을 구현합니다.",
+        code: "_MISSING = object()\n\ndef add_tag(tag, tags=_MISSING):\n    if tags is _MISSING:\n        tags = []\n    elif tags is None:\n        return None\n    tags.append(tag)\n    return tags\n\nfirst = add_tag('python')\nsecond = add_tag('git')\nprovided = []\nthird = add_tag('web', provided)\nprint(first)\nprint(second)\nprint(third is provided, provided)\nprint(add_tag('skip', None))",
+        walkthrough: [
+          { lines: "1-9", explanation: "고유 sentinel을 생략 default로 쓰고, 생략이면 새 list, None이면 명시 비활성화, list면 in-place append라는 세 계약을 분기합니다." },
+          { lines: "11-14", explanation: "두 생략 호출이 독립 객체인지와 명시 list가 같은 객체로 수정되는지 준비합니다." },
+          { lines: "15-18", explanation: "독립 default, identity, None 의미를 정확한 출력으로 확인합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "sentinel_defaults.py를 UTF-8로 저장"], command: "python -I -X utf8 sentinel_defaults.py" },
+        output: { value: "['python']\n['git']\nTrue ['web']\nNone", explanation: ["생략 호출마다 새 list가 만들어져 tag가 섞이지 않습니다.", "명시한 list는 계약대로 같은 객체가 수정됩니다.", "None은 생략과 구별되어 비활성화 결과를 냅니다."] },
+        experiments: [
+          { change: "default를 []로 바꾸고 sentinel 분기를 제거합니다.", prediction: "첫 두 호출이 같은 list를 공유해 두 번째 출력에 python과 git이 함께 보입니다.", result: "definition-time mutable default 함정을 재현합니다." },
+          { change: "`if not tags:`로 생략을 검사합니다.", prediction: "caller가 명시한 빈 list도 새 list로 교체되어 identity 계약이 깨집니다.", result: "falsy와 omission을 구분해야 함을 확인합니다." },
+        ],
+        sourceRefs: ["python-default-arguments-tutorial", "python-function-def-reference-022", "python-data-model-function-objects"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "인수 없이 호출할수록 이전 호출 데이터가 누적된다.", likelyCause: "mutable list·dict·set 객체가 definition-time default로 한 번 생성되어 공유됩니다.", checks: ["함수 signature의 mutable literal·constructor를 확인합니다.", "함수.__defaults__의 id를 호출 전후 비교합니다.", "인수를 생략한 두 독립 호출을 재현합니다."], fix: "None 또는 고유 sentinel을 default로 두고 호출 본문에서 새 객체를 만듭니다.", prevention: "mutable default lint 규칙과 독립 호출 회귀 테스트를 둡니다." },
+      { symptom: "명시적으로 빈 list를 넘겼는데 함수가 다른 list를 만들어 수정 결과가 caller에 보이지 않는다.", likelyCause: "`tags = tags or []`가 빈 list를 falsy로 판단해 교체했습니다.", checks: ["or default 패턴을 검색합니다.", "None·[]·생략 세 호출의 identity를 비교합니다.", "빈 값이 domain에서 유효한지 계약을 확인합니다."], fix: "생략만 sentinel identity로 검사하고 명시 빈 값은 그대로 존중합니다.", prevention: "falsy 값 각각의 의미를 parameter 계약 테스트에 포함합니다." },
+    ],
+    expertNotes: ["sentinel을 public API에 노출할 필요가 없다면 module private 이름으로 유지하고 repr에 의존하지 않습니다.", "pickle·multiprocessing 경계를 넘어 sentinel identity가 필요하면 plain object 대신 안정적 singleton 설계를 별도로 검토합니다."],
+  },
+  {
+    id: "full-signature-binding-and-introspection",
+    title: "`/`·`*`·`*args`·`**kwargs`를 binding grammar로 읽고 inspect.signature로 검증합니다",
+    lead: "가변 인수는 ‘많이 받는 문법’이 아니라 공개 호출 형태를 설계하는 도구입니다. positional-only, positional-or-keyword, var-positional, keyword-only, var-keyword의 다섯 parameter kind를 구분해야 wrapper와 API가 정확해집니다.",
+    explanations: [
+      "slash `/` 왼쪽 parameter는 positional-only입니다. 이름이 의미 없거나 구현상 이름을 향후 바꾸고 싶고 순서가 안정적인 소수 인수에 적합합니다. 이 이름은 keyword로 binding되지 않으므로 `**kwargs`가 같은 문자열 key를 별도 metadata로 받을 수 있다는 PEP 570의 중요한 corner case도 있습니다.",
+      "별표 `*` 뒤 parameter는 keyword-only라 호출자가 이름을 적어야 합니다. Boolean flag·단위·timeout처럼 위치만 보면 의미가 모호한 설정에 적합합니다. `*args`가 있으면 그 뒤 parameter도 자동 keyword-only이고, 가변 위치 인수는 tuple로 묶입니다.",
+      "`**kwargs`는 남은 keyword를 dict로 모으지만 typo까지 조용히 받아들이는 위험이 있습니다. plugin metadata처럼 열린 확장이 실제 요구일 때만 사용하고, 허용 key allowlist 또는 namespace를 검증합니다. 미래 호환을 이유로 모든 함수에 **kwargs를 붙이면 오류 탐지와 IDE 지원이 약해집니다.",
+      "호출 쪽 `*iterable`과 `**mapping`은 정의 쪽 가변 parameter와 다른 unpacking 문법입니다. 여러 mapping을 펼칠 때 중복 keyword는 TypeError가 될 수 있으며 key는 문자열이어야 합니다. wrapper는 원 함수 signature를 보존하기 위해 functools.wraps와 필요 시 `__signature__`를 신중히 사용합니다.",
+      "`inspect.signature(callable)`은 parameter kind·default·annotation을 구조화해 제공하고 `Signature.bind()`는 실제 호출과 같은 binding 검사를 수행합니다. `bind_partial`은 일부 필수 인수 누락을 허용해 partial 구성에 적합하고, `apply_defaults()`는 생략된 default·빈 args/kwargs를 BoundArguments에 채웁니다.",
+    ],
+    concepts: [
+      { term: "parameter kind", definition: "Signature가 parameter를 POSITIONAL_ONLY·POSITIONAL_OR_KEYWORD·VAR_POSITIONAL·KEYWORD_ONLY·VAR_KEYWORD로 분류하는 호출 규칙입니다.", detail: ["선언 순서 제약이 있습니다.", "inspect.Parameter.kind로 확인합니다."] },
+      { term: "Signature.bind", definition: "인수 집합을 signature에 실제 호출처럼 대응시키고 잘못된 호출이면 TypeError를 발생시키는 introspection API입니다.", detail: ["wrapper·router 검증에 유용합니다.", "bind_partial은 일부 필수값 누락을 허용합니다."] },
+      { term: "argument unpacking", definition: "호출 위치에서 `*iterable`을 positional arguments로, `**mapping`을 keyword arguments로 펼치는 문법입니다.", detail: ["정의의 *args/**kwargs와 역할이 다릅니다.", "중복 binding은 TypeError입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "signature-kinds-and-bind",
+        title: "다섯 parameter kind와 BoundArguments 검사",
+        language: "python",
+        filename: "signature_binding.py",
+        purpose: "복합 signature의 문자열 표현과 bind 결과를 고정해 positional-only·varargs·keyword-only·kwargs binding을 확인합니다.",
+        code: "from inspect import signature\n\ndef configure(name, /, *features, retries=3, **metadata):\n    return name, features, retries, metadata\n\nsig = signature(configure)\nprint(sig)\nbound = sig.bind('worker', 'fast', 'safe', retries=2, owner='team')\nbound.apply_defaults()\nprint(bound.arguments)\nprint(configure(*bound.args, **bound.kwargs))\n\ntry:\n    sig.bind(name='worker')\nexcept TypeError as error:\n    print(type(error).__name__)",
+        walkthrough: [
+          { lines: "1-4", explanation: "name은 positional-only, features는 VAR_POSITIONAL, retries는 keyword-only, metadata는 VAR_KEYWORD입니다." },
+          { lines: "6-11", explanation: "Signature.bind로 인수를 검증하고 defaults를 채운 뒤 BoundArguments의 args/kwargs를 실제 호출에 재사용합니다." },
+          { lines: "13-16", explanation: "positional-only name을 keyword로 전달한 잘못된 호출을 본문 실행 없이 검출합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "signature_binding.py를 UTF-8로 저장"], command: "python -I -X utf8 signature_binding.py" },
+        output: { value: "(name, /, *features, retries=3, **metadata)\n{'name': 'worker', 'features': ('fast', 'safe'), 'retries': 2, 'metadata': {'owner': 'team'}}\n('worker', ('fast', 'safe'), 2, {'owner': 'team'})\nTypeError", explanation: ["signature 문자열이 /와 * 위치를 드러냅니다.", "BoundArguments는 선언 순서로 각 kind에 값을 모읍니다.", "잘못된 keyword binding은 TypeError입니다."] },
+        experiments: [
+          { change: "sig.bind 대신 sig.bind_partial을 사용해 인수를 하나도 넘기지 않습니다.", prediction: "필수 name 누락을 허용한 빈 BoundArguments를 만듭니다.", result: "partial 구성과 실제 호출 검증의 차이를 확인합니다." },
+          { change: "configure 선언에서 **metadata를 제거하고 owner keyword를 전달합니다.", prediction: "unknown keyword TypeError가 발생합니다.", result: "열린 keyword surface의 장단점을 확인합니다." },
+        ],
+        sourceRefs: ["python-inspect-signature-doc", "pep-570-positional-only", "pep-3102-keyword-only", "python-calls-reference-022"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "wrapper가 원래 함수에서는 거부될 잘못된 keyword를 받아 나중에 실패한다.", likelyCause: "wrapper가 무조건 *args/**kwargs를 받고 signature binding을 검증하지 않거나 내부에서 keyword를 잃었습니다.", checks: ["inspect.signature(wrapper)와 wrapped 함수를 비교합니다.", "functools.wraps 적용 여부를 봅니다.", "Signature.bind로 대표 오류 호출을 재현합니다."], fix: "wrapper가 원 호출을 그대로 위임하고 wraps로 metadata를 보존하며 필요한 전처리는 bind 결과 기준으로 수행합니다.", prevention: "원 함수와 wrapper의 유효·무효 호출 matrix를 동일하게 테스트합니다." },
+      { symptom: "Boolean 설정의 위치를 바꿔도 호출은 성공하지만 의미가 뒤바뀐다.", likelyCause: "의미 있는 option을 positional-or-keyword로 노출해 여러 Boolean을 위치로 전달했습니다.", checks: ["호출부의 True/False 연속 인수를 찾습니다.", "parameter 이름 없이 의미를 설명할 수 있는지 봅니다.", "keyword-only 전환의 호환성 영향을 조사합니다."], fix: "새 API에서는 option을 keyword-only로 만들고 기존 호출자는 deprecation 기간에 migration합니다.", prevention: "단위·flag·timeout·policy는 기본적으로 keyword-only를 검토합니다." },
+    ],
+    expertNotes: ["inspect.signature는 일부 C extension callable이나 custom __signature__ 객체에서 제한·재정의될 수 있으므로 보안 검증의 유일한 경계로 사용하지 않습니다.", "positional-only parameter 이름과 **kwargs key가 같을 수 있는 corner case는 dict 업데이트류 API가 모든 문자열 key를 받을 수 있게 합니다."],
+  },
+  {
+    id: "signature-evolution-compatibility-and-deprecation",
+    title: "signature를 호환성 표면으로 관리하고 keyword-only 확장·alias deprecation을 설계합니다",
+    lead: "함수 signature 변경은 구현 리팩터링이 아니라 호출자와의 API migration입니다. positional 의미 이동을 피하고, 새 설정은 keyword-only로 추가하며, 이전 이름은 충돌을 검출하는 adapter를 거쳐 단계적으로 제거합니다.",
+    explanations: [
+      "기존 positional-or-keyword parameter 사이에 새 parameter를 끼우면 오래된 위치 호출의 값이 다른 slot에 binding될 수 있습니다. 새 option은 보통 끝의 keyword-only default로 추가하면 기존 호출을 유지하면서 의도를 드러낼 수 있습니다. 필수 새 값은 호환 기본이 가능한지, 새 함수·major version이 필요한지 판단합니다.",
+      "parameter rename은 keyword caller에게 breaking change입니다. migration 기간에는 old alias를 고유 sentinel로 받고, 새 이름과 동시에 제공되면 모호성을 TypeError로 거부하며, old만 오면 새 값으로 변환하고 deprecation signal을 냅니다. warning은 필터·stacklevel·테스트 정책까지 설계해야 하며 예제에서는 migration note를 구조화해 보입니다.",
+      "무차별 `**kwargs`로 이전 이름을 받으면 typo와 미래 option 충돌을 숨깁니다. adapter는 정확히 허용한 legacy key만 소비하고 남은 key는 TypeError로 거부합니다. `inspect.signature`에 사용자에게 권장하는 새 surface를 보여줄지 wrapper signature도 결정합니다.",
+      "default 의미를 바꾸는 것은 문법상 signature가 같아도 행동 breaking change입니다. timeout=None이 무제한에서 시스템 default로 바뀌거나 flag 기본이 True로 바뀌는 경우 versioning과 release note가 필요합니다. 호출 생략과 명시 값을 분리하면 migration 위험을 측정할 수 있습니다.",
+      "API evolution 테스트는 old positional, old keyword, new keyword, old+new conflict, unknown keyword, default omission을 포함합니다. deprecation 종료 전 telemetry로 old 사용량을 측정하되 인수 값이나 개인정보를 기록하지 않습니다.",
+    ],
+    concepts: [
+      { term: "compatible extension", definition: "기존 유효 호출의 binding과 행동을 유지하면서 새 기능을 선택적으로 추가하는 signature 변경입니다.", detail: ["default 있는 keyword-only 추가가 대표적입니다.", "행동 default 변화는 별도 검토합니다."] },
+      { term: "deprecation adapter", definition: "이전 parameter 이름이나 호출 형태를 한시적으로 받아 새 계약으로 변환하고 충돌·unknown을 명시적으로 검출하는 계층입니다.", detail: ["old와 new 동시 제공을 거부합니다.", "제거 version과 migration 경로를 문서화합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "keyword-alias-api-evolution",
+        title: "legacy keyword alias의 충돌 없는 단계적 migration",
+        language: "python",
+        filename: "api_evolution.py",
+        purpose: "새 keyword-only 이름, old alias, 생략을 sentinel로 구분하고 unknown keyword를 즉시 거부합니다.",
+        code: "_MISSING = object()\n\ndef export_report(path, *, include_header=_MISSING, **legacy):\n    notes = []\n    old_value = legacy.pop('header', _MISSING)\n    if legacy:\n        raise TypeError(f\"unknown options: {sorted(legacy)}\")\n    if include_header is not _MISSING and old_value is not _MISSING:\n        raise TypeError('use include_header or header, not both')\n    if old_value is not _MISSING:\n        include_header = old_value\n        notes.append('header->include_header')\n    if include_header is _MISSING:\n        include_header = True\n    return f'{path}:header={include_header}', notes\n\nprint(export_report('a.csv'))\nprint(export_report('b.csv', include_header=False))\nprint(export_report('c.csv', header=False))\ntry:\n    export_report('d.csv', include_header=True, header=False)\nexcept TypeError as error:\n    print(type(error).__name__)",
+        walkthrough: [
+          { lines: "1-6", explanation: "생략 sentinel과 legacy dict에서 정확히 old alias 하나만 꺼내고 남은 unknown option은 거부합니다." },
+          { lines: "7-14", explanation: "old와 new 동시 제공을 거부하고 old만 온 경우 새 값으로 변환한 뒤 migration note를 남기며 완전 생략에만 새 default를 적용합니다." },
+          { lines: "17-23", explanation: "생략·새 keyword·old alias·충돌 네 호출 계약을 실행합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "api_evolution.py를 UTF-8로 저장"], command: "python -I -X utf8 api_evolution.py" },
+        output: { value: "('a.csv:header=True', [])\n('b.csv:header=False', [])\n('c.csv:header=False', ['header->include_header'])\nTypeError", explanation: ["기존 생략 호출은 default 행동을 유지합니다.", "새 이름은 migration note 없이 동작합니다.", "old alias는 변환 사실을 남기고 모호한 동시 제공은 거부됩니다."] },
+        experiments: [
+          { change: "legacy의 남은 key 검사를 삭제하고 typo `incldue_header`를 전달합니다.", prediction: "호출이 성공한 것처럼 보이지만 option은 무시됩니다.", result: "무차별 **kwargs가 typo 탐지를 약화시키는 이유를 확인합니다." },
+          { change: "include_header default를 바로 True로 두고 old와 new 제공 여부를 비교합니다.", prediction: "caller가 True를 명시했는지 생략했는지 구분하기 어려워 old alias 충돌 판단이 모호해집니다.", result: "migration adapter에서 sentinel omission 정보가 중요한 이유를 확인합니다." },
+        ],
+        sourceRefs: ["python-inspect-signature-doc", "pep-570-positional-only", "pep-3102-keyword-only", "python-warnings-doc", "python-calls-reference-022"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "parameter 이름만 바꿨는데 일부 사용자 코드가 TypeError로 깨진다.", likelyCause: "keyword 호출자는 parameter 이름을 API로 사용하고 있었습니다.", checks: ["호출 telemetry나 저장소에서 old keyword 사용을 찾습니다.", "위치 호출과 keyword 호출을 분리해 재현합니다.", "wrapper·dependency injection이 이름을 참조하는지 봅니다."], fix: "old alias adapter와 충돌 검사를 제공하고 migration 기간·제거 version을 공지합니다.", prevention: "공개 parameter rename을 breaking API change로 분류합니다." },
+      { symptom: "새 option을 추가한 뒤 기존 위치 호출의 의미가 조용히 바뀐다.", likelyCause: "기존 positional parameter 사이에 새 slot을 삽입했습니다.", checks: ["이전·현재 signature에 같은 args tuple을 bind해 비교합니다.", "모든 위치 호출 최대 arity를 찾습니다.", "새 option이 keyword-only가 될 수 있는지 검토합니다."], fix: "새 option을 끝의 keyword-only default로 옮기거나 새 version 함수로 분리합니다.", prevention: "signature diff에 binding compatibility 자동 테스트를 둡니다." },
+    ],
+    expertNotes: ["warning을 사용할 때는 caller 위치를 가리키는 stacklevel과 테스트에서 warning 누락·중복을 검증해야 합니다.", "decorator가 adapter를 구현한다면 functools.wraps만으로 실제 새 signature가 자동 표현되지 않을 수 있어 문서 생성 결과도 확인합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "mutable default가 호출마다 새로 만들어지지 않는 이유는 무엇인가요?", answer: "default expression은 def 문 실행 시 한 번 평가되어 함수 객체에 저장되기 때문입니다." },
+  { question: "None 대신 고유 sentinel이 필요한 경우는 언제인가요?", answer: "None 자체가 유효한 명시 값이라 인수 생략과 구분해야 할 때입니다." },
+  { question: "`value or default`가 API default 처리에 위험한 이유는 무엇인가요?", answer: "0·빈 문자열·빈 컬렉션 같은 유효한 falsy 값까지 생략으로 오인해 교체하기 때문입니다." },
+  { question: "slash 왼쪽과 별표 뒤 parameter는 각각 어떻게 호출하나요?", answer: "slash 왼쪽은 positional-only라 위치로만, 별표 뒤는 keyword-only라 이름으로만 전달합니다." },
+  { question: "Signature.bind와 bind_partial의 차이는 무엇인가요?", answer: "bind는 실제 호출처럼 모든 필수 parameter를 요구하고 bind_partial은 partial 구성처럼 일부 누락을 허용합니다." },
+  { question: "모든 함수에 **kwargs를 추가하면 미래 호환성이 좋아지나요?", answer: "항상 그렇지 않습니다. typo와 unknown option을 숨기고 도구 지원을 약화하므로 실제 열린 확장 계약이 있을 때만 검증과 함께 사용합니다." },
+  { question: "새 option을 호환되게 추가하는 대표 방법은 무엇인가요?", answer: "기존 binding을 바꾸지 않도록 끝에 의미 있는 default가 있는 keyword-only parameter로 추가하는 방법입니다." },
+);
+
+expertSession.completionChecklist.push(
+  "default expression의 정의 시점 평가와 함수.__defaults__ 관계를 설명할 수 있다.",
+  "생략·None·0·빈 문자열·빈 컬렉션을 sentinel로 정확히 구분할 수 있다.",
+  "positional-only·positional-or-keyword·var-positional·keyword-only·var-keyword를 식별할 수 있다.",
+  "호출의 *unpacking/**unpacking과 정의의 *args/**kwargs를 구분할 수 있다.",
+  "inspect.signature·bind·bind_partial·apply_defaults로 호출 계약을 검증할 수 있다.",
+  "unknown keyword를 숨기지 않는 열린 metadata 정책을 설계할 수 있다.",
+  "parameter rename·default 변화·새 option 추가의 호환성 matrix와 deprecation adapter를 만들 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-default-arguments-tutorial", repository: "Python", path: "tutorial/controlflow.html#default-argument-values", publicUrl: "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values", usedFor: ["default 평가 시점", "mutable default", "호출별 새 객체"], evidence: "공식 튜토리얼의 default가 한 번만 평가되는 규칙과 mutable list 예제를 확인했습니다." },
+  { id: "python-function-def-reference-022", repository: "Python", path: "reference/compound_stmts.html#function-definitions", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#function-definitions", usedFor: ["parameter grammar", "default", "annotation"], evidence: "function definition의 parameter 선언 순서와 기본값 문법을 언어 레퍼런스에서 확인했습니다." },
+  { id: "python-data-model-function-objects", repository: "Python", path: "reference/datamodel.html#user-defined-functions", publicUrl: "https://docs.python.org/3/reference/datamodel.html#user-defined-functions", usedFor: ["함수 객체", "__defaults__", "__kwdefaults__"], evidence: "사용자 정의 함수 객체가 default와 keyword-only default metadata를 보관하는 속성을 확인했습니다." },
+  { id: "python-inspect-signature-doc", repository: "Python", path: "library/inspect.html#inspect.signature", publicUrl: "https://docs.python.org/3/library/inspect.html#inspect.signature", usedFor: ["Signature", "Parameter kind", "bind", "BoundArguments"], evidence: "다섯 parameter kind와 bind·bind_partial·apply_defaults의 공식 동작을 확인했습니다." },
+  { id: "pep-570-positional-only", repository: "Python", path: "PEP 570", publicUrl: "https://peps.python.org/pep-0570/", usedFor: ["positional-only", "slash", "API evolution"], evidence: "slash 문법과 positional-only parameter의 호환성·kwargs corner case를 확인했습니다." },
+  { id: "pep-3102-keyword-only", repository: "Python", path: "PEP 3102", publicUrl: "https://peps.python.org/pep-3102/", usedFor: ["keyword-only", "별표", "호출 명시성"], evidence: "keyword-only argument 도입 목적과 binding 의미를 확인했습니다." },
+  { id: "python-calls-reference-022", repository: "Python", path: "reference/expressions.html#calls", publicUrl: "https://docs.python.org/3/reference/expressions.html#calls", usedFor: ["호출 binding", "argument unpacking", "중복 keyword"], evidence: "positional·keyword·starred argument가 parameter slot에 binding되는 규칙을 확인했습니다." },
+  { id: "python-warnings-doc", repository: "Python", path: "library/warnings.html", publicUrl: "https://docs.python.org/3/library/warnings.html", usedFor: ["deprecation warning", "filter", "stacklevel"], evidence: "legacy alias migration에서 warning category·filter·caller 위치 정책을 설계하는 근거로 사용했습니다." },
+);

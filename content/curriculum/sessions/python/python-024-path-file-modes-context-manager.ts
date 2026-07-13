@@ -97,7 +97,7 @@ const session = {
             { lines: "15-16", explanation: "파일 객체를 iteration해 한 줄씩 읽고 줄 끝 개행만 제거합니다." },
             { lines: "18-20", explanation: "무작위 임시 절대 경로 대신 안정적인 name·존재·내용·UTF-8 byte 크기·행 수를 출력합니다." },
           ],
-          run: { environment: ["Python 3.8 이상", "file_modes.py로 저장"], command: "python file_modes.py" },
+          run: { environment: ["Python 3.8 이상", "file_modes.py로 저장"], command: "python -I -X utf8 file_modes.py" },
           output: { value: "name=study.txt, exists=True\n['1. Python', '2. 함수', '3. 파일']\nbytes=30, lines=3", explanation: ["UTF-8에서 한글 한 글자는 대체로 3 bytes여서 문자 수와 file byte 크기는 다르며 이 실행 파일은 30 bytes입니다.", "a로 추가한 세 번째 줄이 기존 두 줄 뒤에 남습니다.", "TemporaryDirectory 블록 뒤에는 디렉터리와 파일이 자동 제거됩니다."] },
           experiments: [
             { change: "두 번째 open mode를 a에서 w로 바꿉니다.", prediction: "기존 두 줄이 truncate되고 '3. 파일' 한 줄만 남습니다.", result: "mode 선택이 write 내용보다 먼저 데이터 보존 정책을 결정합니다." },
@@ -155,9 +155,9 @@ const session = {
             { lines: "1-5", explanation: "격리 임시 경로를 만들고 아직 파일을 열지 않습니다." },
             { lines: "6-10", explanation: "with 안에서 한 줄을 버퍼에 쓰고 file이 열린 상태를 확인한 뒤 의도적으로 RuntimeError를 발생시킵니다." },
             { lines: "11-13", explanation: "except로 오기 전에 file.__exit__가 flush와 close를 수행하고 예외는 그대로 전파됩니다." },
-            { lines: "15-16", explanation: "블록 밖 file 객체가 닫혔고 flush된 한 줄을 새 read_text 호출로 읽을 수 있음을 확인합니다." },
+            { lines: "14-15", explanation: "블록 밖 file 객체가 닫혔고 flush된 한 줄을 새 read_text 호출로 읽을 수 있음을 확인합니다." },
           ],
-          run: { environment: ["Python 3.8 이상", "context_cleanup.py로 저장"], command: "python context_cleanup.py" },
+          run: { environment: ["Python 3.8 이상", "context_cleanup.py로 저장"], command: "python -I -X utf8 context_cleanup.py" },
           output: { value: "inside closed=False\ncaught=처리 중단\noutside closed=True\ncontent=저장됨", explanation: ["예외가 발생한 순간에는 블록 안이라 file이 열려 있습니다.", "except가 실행될 때는 __exit__ 정리가 끝나 file.closed가 True입니다.", "with는 close를 보장하지만 부분 결과를 자동 rollback하지 않아 이미 쓴 한 줄은 남습니다."] },
           experiments: [
             { change: "with를 직접 open과 마지막 close로 바꾸고 raise 뒤에 close를 둡니다.", prediction: "raise 때문에 close 줄을 건너뛰고 except 뒤 file.closed는 False일 수 있습니다.", result: "정리 코드를 일반 흐름 마지막 줄에 두는 방식의 누수 위험을 확인합니다." },
@@ -262,3 +262,179 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 380;
+expertSession.chapters.push(
+  {
+    id: "text-io-encoding-newline-buffering-lifetime",
+    title: "텍스트 파일을 bytes↔str 변환·newline·buffer·자원 수명 계약으로 다룹니다",
+    lead: "파일을 연다는 것은 path만 맞추는 일이 아닙니다. mode가 허용하는 연산, bytes를 str로 바꾸는 encoding과 errors, newline 변환, buffering, close 시점을 모두 명시해야 플랫폼과 데이터가 바뀌어도 결과를 재현할 수 있습니다.",
+    explanations: [
+      "text mode는 storage의 bytes와 Python str 사이에 encoding/decoding을 수행합니다. encoding을 생략하면 locale 기본값에 의존해 같은 파일이 컴퓨터마다 다르게 읽히거나 UnicodeDecodeError가 날 수 있습니다. 애플리케이션 포맷은 `encoding='utf-8'`처럼 명시하고 BOM이 있는 외부 CSV 등은 실제 포맷 계약에 맞춰 utf-8-sig 등을 선택합니다.",
+      "errors='ignore'는 읽을 수 없는 bytes를 조용히 버려 데이터 손실을 만들 수 있습니다. strict를 기본으로 실패 위치를 보고하고, 대체가 제품 요구라면 replace·surrogateescape 같은 정책과 round-trip 가능성을 문서화합니다. 비밀 데이터의 raw bytes를 예외 로그에 그대로 남기지 않습니다.",
+      "newline=None 읽기는 `\r`, `\n`, `\r\n`을 universal newline로 인식해 반환 str에서 `\n`으로 변환합니다. newline=''은 여러 줄 끝을 인식하되 원래 terminator를 보존합니다. 쓰기에서 newline='\n'을 명시하면 포맷의 line ending을 고정할 수 있습니다. csv 모듈은 자체 newline 처리를 위해 문서가 권장하는 `newline=''`을 따릅니다.",
+      "mode `r`는 존재 파일 읽기, `w`는 열자마자 truncate, `a`는 끝에 추가, `x`는 이미 존재하면 FileExistsError인 exclusive create입니다. `+`는 읽기/쓰기를 모두 허용하지만 file position을 명시적으로 seek해야 합니다. binary mode에서는 encoding/newline 인수가 허용되지 않습니다.",
+      "Python file object는 buffering을 사용하므로 write가 OS에 전달됐다는 사실과 저장 장치에 durability가 확보됐다는 사실은 다릅니다. close는 Python buffer를 flush하지만 crash-consistent 저장이 필요하면 flush·os.fsync·atomic replace와 filesystem 특성을 별도로 설계합니다.",
+      "with 문은 __enter__ 결과를 binding하고 정상·예외·return 경로에서 __exit__를 호출합니다. 파일을 with 바깥으로 반환하면 이미 닫힌 handle이 되므로 필요한 데이터나 caller가 책임질 context manager를 반환합니다. iterator로 line을 지연 반환할 때도 파일 수명이 소비 기간 전체를 감싸야 합니다.",
+    ],
+    concepts: [
+      { term: "text I/O layer", definition: "bytes stream 위에서 encoding·errors·newline 변환을 적용해 str을 읽고 쓰는 계층입니다.", detail: ["encoding을 포맷 계약으로 명시합니다.", "binary mode와 parameter가 다릅니다."] },
+      { term: "universal newlines", definition: "읽을 때 여러 운영체제 line ending을 인식하고 선택한 정책에 따라 `\n`으로 변환하는 기능입니다.", detail: ["newline=None은 변환합니다.", "newline=''은 terminator를 반환값에 보존합니다."] },
+      { term: "resource lifetime", definition: "파일 descriptor가 열린 시점부터 flush·close되고 더 이상 사용할 수 없는 시점까지의 소유권 범위입니다.", detail: ["with block이 가장 명확한 경계입니다.", "lazy iterator는 소비 기간과 file lifetime을 맞춰야 합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "utf8-newline-roundtrip",
+        title: "UTF-8과 LF를 고정한 cross-platform round trip",
+        language: "python",
+        filename: "text_io_contract.py",
+        purpose: "임시 디렉터리 안에서 text mode의 명시 encoding/newline과 실제 bytes, context manager close 상태를 검증합니다.",
+        code: "from pathlib import Path\nfrom tempfile import TemporaryDirectory\n\nwith TemporaryDirectory() as directory:\n    path = Path(directory) / 'lesson.txt'\n    with path.open('w', encoding='utf-8', newline='\\n') as file:\n        file.write('파이썬\\n파일\\n')\n    print(path.read_bytes() == '파이썬\\n파일\\n'.encode('utf-8'))\n\n    with path.open('r', encoding='utf-8', newline=None) as file:\n        text = file.read()\n        print(repr(text))\n    print(f'closed={file.closed}')",
+        walkthrough: [
+          { lines: "1-5", explanation: "운영체제가 정리하는 임시 directory 아래 pathlib Path를 만들어 실제 사용자 경로와 격리합니다." },
+          { lines: "6-8", explanation: "UTF-8과 LF newline을 명시해 쓰고 raw bytes가 포맷 계약과 같은지 확인합니다." },
+          { lines: "10-13", explanation: "universal newline 읽기로 str을 얻고 with를 나온 뒤 handle이 닫혔음을 확인합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "text_io_contract.py를 UTF-8로 저장"], command: "python -I -X utf8 text_io_contract.py" },
+        output: { value: "True\n'파이썬\\n파일\\n'\nclosed=True", explanation: ["파일 bytes는 UTF-8로 인코딩된 LF 문자열과 정확히 같습니다.", "read 결과의 line ending은 `\n`입니다.", "정상 경로에서도 context manager가 파일을 닫았습니다."] },
+        experiments: [
+          { change: "읽기 encoding을 ascii로 바꿉니다.", prediction: "한글 bytes를 decode할 수 없어 UnicodeDecodeError입니다.", result: "encoding은 표시 옵션이 아니라 bytes↔str 계약임을 확인합니다." },
+          { change: "with 안에서 의도적으로 RuntimeError를 raise하고 finally에서 file.closed를 봅니다.", prediction: "예외가 전파돼도 __exit__가 실행되어 파일은 닫힙니다.", result: "context manager의 예외 cleanup을 확인합니다." },
+        ],
+        sourceRefs: ["python-open-doc", "python-context-doc", "python-pathlib-doc-024", "python-io-doc-024", "python-tempfile-doc-024"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "같은 텍스트 파일이 한 PC에서는 읽히고 다른 PC에서는 UnicodeDecodeError가 난다.", likelyCause: "encoding을 생략해 서로 다른 locale 기본 encoding을 사용했습니다.", checks: ["파일 포맷의 실제 encoding/BOM을 확인합니다.", "open 호출의 encoding·errors를 검색합니다.", "raw bytes의 작은 fixture를 격리 환경에서 읽습니다."], fix: "생산 포맷에 맞는 명시 encoding을 사용하고 잘못된 bytes 정책을 strict 중심으로 정합니다.", prevention: "UTF-8·비 ASCII·잘못된 byte fixture를 CI에서 round-trip 테스트합니다." },
+      { symptom: "Windows와 Linux에서 snapshot diff에 모든 줄이 변경된 것처럼 보인다.", likelyCause: "newline 변환이나 도구 기본 line ending이 파일 포맷과 일치하지 않습니다.", checks: ["read_bytes로 `\r\n`과 `\n`을 확인합니다.", "open newline 인수와 VCS 설정을 봅니다.", "csv 모듈이면 newline='' 권고를 확인합니다."], fix: "파일 형식의 newline을 명시하고 reader/writer를 같은 계약으로 맞춥니다.", prevention: "bytes 수준 golden fixture와 .gitattributes line-ending 정책을 둡니다." },
+    ],
+    expertNotes: ["텍스트 파일의 tell 값은 단순 문자 index가 아닌 opaque cookie일 수 있으므로 임의 arithmetic 대신 받은 위치를 seek에 되돌려 사용합니다.", "file object finalizer에 close를 맡기면 구현·GC 시점에 의존하므로 descriptor가 많은 서비스에서는 반드시 명시 수명을 사용합니다."],
+  },
+  {
+    id: "atomic-write-replace-flush-fsync-durability",
+    title: "원본 보존을 위해 같은 디렉터리 임시 파일→flush→fsync→atomic replace 순서를 설계합니다",
+    lead: "`open(path, 'w')`는 성공적인 새 내용이 준비되기 전에 기존 파일을 truncate합니다. 중간 crash·예외에서도 이전 또는 완성된 새 파일만 보이게 하려면 임시 파일에 완전히 쓴 뒤 원자적 이름 교체를 사용합니다.",
+    explanations: [
+      "안전한 replace 패턴은 target과 같은 filesystem·directory에 예측 불가능하게 생성한 temp file을 열고, 전체 내용을 기록·검증한 뒤 flush와 os.fsync로 file data를 요청하고, handle을 닫은 다음 `os.replace(temp, target)`를 호출합니다. 같은 filesystem 안 replace는 일반적으로 관찰자에게 이름 교체를 atomic하게 제공하지만 filesystem·네트워크 mount별 보장은 확인해야 합니다.",
+      "tempfile.mkstemp 또는 NamedTemporaryFile은 이름 선택과 생성 사이 race를 피하도록 파일을 즉시 안전하게 생성합니다. deprecated mktemp처럼 이름만 먼저 얻고 나중 open하면 공격자나 다른 process가 그 사이 같은 이름을 만들 수 있습니다. descriptor 소유권과 Windows에서 열린 파일 rename 제약 때문에 close 순서를 테스트합니다.",
+      "`file.flush()`는 Python user-space buffer를 OS로 밀고 `os.fsync(file.fileno())`는 OS에 file descriptor data를 저장 장치로 동기화하도록 요청합니다. replace 뒤 directory entry durability까지 필요하면 POSIX에서 directory descriptor fsync를 고려하지만 Windows와 일부 filesystem에서 방법·보장이 다릅니다. atomic visibility와 power-loss durability는 별도 속성입니다.",
+      "replace 실패 전에는 target을 그대로 두고 temp를 cleanup해야 합니다. replace 성공 뒤 temp path는 더 이상 존재하지 않으므로 finally의 missing-ok 삭제가 안전합니다. cleanup 오류가 원래 write 오류를 가리지 않게 예외 정책을 세우고 temp filename에 비밀을 넣지 않습니다.",
+      "여러 writer의 lost update는 atomic replace만으로 해결되지 않습니다. 둘 다 같은 이전 버전을 읽어 각자 완성 파일을 replace하면 마지막 writer가 이깁니다. file lock, compare-and-swap version, database transaction, single writer queue 같은 동시성 제어가 별도로 필요합니다.",
+      "append는 각 write 호출의 원자성·record 경계를 플랫폼마다 다르게 보장할 수 있고 여러 process line이 섞일 수 있습니다. 감사 로그처럼 강한 순서와 durability가 필요하면 전용 logging handler·database·append-only service를 선택합니다.",
+    ],
+    concepts: [
+      { term: "atomic replace", definition: "독자가 target 이름에서 부분 작성 파일을 관찰하지 않도록 완성된 임시 파일을 한 번의 이름 교체 연산으로 대체하는 패턴입니다.", detail: ["temp와 target을 같은 filesystem에 둡니다.", "동시 writer lost update는 별도 문제입니다."] },
+      { term: "flush versus fsync", definition: "flush는 Python buffer를 OS에 전달하고 fsync는 file descriptor의 data를 저장 장치에 동기화하도록 OS에 요청하는 서로 다른 단계입니다.", detail: ["둘 다 atomicity와 같지 않습니다.", "directory metadata durability도 별도일 수 있습니다."] },
+      { term: "crash consistency", definition: "process·OS·전원 실패 중에도 저장 상태가 사전에 정의한 유효 상태 집합 안에 남도록 하는 속성입니다.", detail: ["이전 파일 또는 완성된 새 파일을 목표로 합니다.", "filesystem 보장과 fault injection으로 검증합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "atomic-tempfile-os-replace",
+        title: "mkstemp·fsync·os.replace로 완성 파일만 교체",
+        language: "python",
+        filename: "atomic_write.py",
+        purpose: "사용자 파일을 건드리지 않는 임시 디렉터리에서 두 번의 atomic write와 temp cleanup을 검증합니다.",
+        code: "import os\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory, mkstemp\n\ndef atomic_write_text(target, text):\n    descriptor, temp_name = mkstemp(prefix=f'.{target.name}.', suffix='.tmp', dir=target.parent)\n    temp_path = Path(temp_name)\n    try:\n        with os.fdopen(descriptor, 'w', encoding='utf-8', newline='\\n') as file:\n            file.write(text)\n            file.flush()\n            os.fsync(file.fileno())\n        os.replace(temp_path, target)\n    finally:\n        temp_path.unlink(missing_ok=True)\n\nwith TemporaryDirectory() as directory:\n    root = Path(directory)\n    target = root / 'state.txt'\n    atomic_write_text(target, 'version=1\\n')\n    atomic_write_text(target, 'version=2\\n')\n    print(target.read_text(encoding='utf-8'), end='')\n    print(f'temps={sorted(path.name for path in root.glob(\"*.tmp\"))}')",
+        walkthrough: [
+          { lines: "1-7", explanation: "target과 같은 directory에 mkstemp로 즉시 생성된 임시 파일 descriptor와 path를 얻습니다." },
+          { lines: "8-14", explanation: "descriptor를 text file object로 소유하고 write→flush→fsync→close 뒤 os.replace하며 모든 실패 경로에서 남은 temp를 지웁니다." },
+          { lines: "16-22", explanation: "격리 임시 directory에서 version 1을 version 2로 교체하고 최종 내용과 temp 잔존 0개를 확인합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "atomic_write.py를 UTF-8로 저장"], command: "python -I -X utf8 atomic_write.py" },
+        output: { value: "version=2\ntemps=[]", explanation: ["target에는 두 번째 완성 내용만 보입니다.", "replace 뒤 temp 이름은 사라지고 finally cleanup 후 잔존 파일도 없습니다.", "예제는 file fsync까지 수행하며 directory fsync의 플랫폼별 정책은 별도입니다."] },
+        experiments: [
+          { change: "os.replace 직전에 예외를 발생시킵니다.", prediction: "기존 target은 그대로이고 finally가 새 temp를 삭제합니다.", result: "부분 새 내용으로 원본을 덮지 않는 실패 격리를 확인합니다." },
+          { change: "tempfile을 다른 filesystem directory에 만듭니다.", prediction: "os.replace가 실패하거나 atomic rename 보장이 성립하지 않을 수 있습니다.", result: "같은 target directory에 temp를 두는 이유를 확인합니다." },
+        ],
+        sourceRefs: ["python-tempfile-doc-024", "python-os-replace-doc-024", "python-os-fsync-doc-024", "python-pathlib-doc-024"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "쓰기 중 예외 뒤 원본 파일이 0 byte 또는 절반 내용이 됐다.", likelyCause: "target을 w mode로 직접 truncate한 뒤 전체 쓰기 성공 전에 실패했습니다.", checks: ["write path가 target 직접 open인지 확인합니다.", "예외를 write 중간에 주입해 원본을 비교합니다.", "temp와 target이 같은 filesystem인지 봅니다."], fix: "같은 directory temp에 완전히 쓴 뒤 close하고 os.replace합니다.", prevention: "write·flush·fsync·replace 각 단계 fault injection과 원본 보존 테스트를 둡니다." },
+      { symptom: "atomic replace를 썼는데 두 writer 중 한쪽 변경이 사라진다.", likelyCause: "이름 교체의 atomic visibility를 read-modify-write 동시성 제어로 오해해 last-writer-wins가 발생했습니다.", checks: ["각 writer가 읽은 base version을 기록합니다.", "replace 시각과 lock/CAS 사용 여부를 봅니다.", "동시 실행 stress test를 수행합니다."], fix: "version compare-and-swap, lock, single writer 또는 transaction storage를 사용합니다.", prevention: "atomicity·durability·isolation을 별도 요구사항과 테스트로 관리합니다." },
+    ],
+    expertNotes: ["os.replace 성공이 모든 저장 매체에서 전원 손실 후 새 directory entry 생존을 보장한다는 뜻은 아니며 제품 durability 등급에 맞춰 directory sync와 storage 문서를 확인합니다.", "권한·ownership·extended attributes를 새 파일에 어떻게 보존할지도 replace 프로토콜 일부입니다."],
+  },
+  {
+    id: "path-traversal-symlink-and-toctou-boundaries",
+    title: "외부 경로 입력을 root 아래로 제한하고 traversal·symlink·TOCTOU 경계를 구분합니다",
+    lead: "`root / user_input`은 안전한 sandbox가 아닙니다. 절대 경로와 `..`, symlink가 root 밖을 가리킬 수 있고, 검사와 open 사이 filesystem 상태가 바뀔 수 있으므로 lexical 정규화와 실제 object 접근을 하나의 보안 경계로 설계해야 합니다.",
+    explanations: [
+      "외부 문자열을 Path로 바꿀 때 absolute path면 앞의 root를 무시할 수 있고 `..`는 상위로 이동합니다. `candidate = (root / user).resolve()` 후 `candidate.relative_to(root.resolve())`가 성공하는지 확인하면 현재 시점의 canonical path가 root 아래인지 검증할 수 있습니다. 단순 문자열 startswith는 `/safe/data2`를 `/safe/data` 아래로 오인하고 대소문자·separator 문제도 있습니다.",
+      "Path.resolve는 `..`를 제거하고 symlink를 따라 실제 경로를 계산합니다. strict=True는 존재하지 않거나 loop인 path에서 오류를 내고, strict=False는 존재하는 prefix까지만 해결합니다. 새 파일 생성에서는 parent를 strict resolve한 뒤 허용 leaf name을 별도로 검증하는 편이 낫습니다.",
+      "확인 뒤 open하기 전 공격자가 symlink나 directory를 바꾸면 check-time-to-use race가 생깁니다. 높은 신뢰 경계에서는 이미 연 directory descriptor를 기준으로 상대 open을 수행하고 플랫폼이 지원하면 dir_fd·O_NOFOLLOW 등을 사용하며, ownership/permission과 mount 정책을 함께 제한합니다. pathlib resolve+open만으로 적대적 동시 변경에 완전한 보안을 주장하지 않습니다.",
+      "symlink 허용 정책을 정해야 합니다. 사용자 workspace 안 symlink가 유용할 수 있지만 root 밖 link를 따라가면 격리가 깨집니다. 업로드 저장소는 symlink 자체를 거부하거나 최종 object가 root 아래임을 descriptor 기반으로 확인합니다. Windows reparse point·junction도 고려합니다.",
+      "exclusive mode `x`는 같은 이름이 이미 있으면 실패하므로 존재 확인 후 w로 여는 TOCTOU를 줄입니다. 하지만 parent directory 교체와 symlink race까지 모두 해결하지는 않습니다. 안전한 temp 생성에는 tempfile의 즉시 생성 API를 사용합니다.",
+      "사용자에게 오류를 반환할 때 서버의 절대 root path를 노출하지 않습니다. 허용되지 않은 경로라는 domain error code와 정규화된 상대 식별자만 기록하고, 입력 원문에 제어문자·비밀이 있을 수 있음을 고려합니다.",
+    ],
+    concepts: [
+      { term: "path traversal", definition: "외부 경로의 절대 경로·`..`·symlink 등을 이용해 의도한 root 밖 파일에 접근하는 취약점입니다.", detail: ["문자열 prefix 비교로 막을 수 없습니다.", "읽기와 쓰기 모두 영향받습니다."] },
+      { term: "TOCTOU", definition: "filesystem 상태를 검사한 시점과 실제 사용하는 시점 사이에 상태가 바뀌어 검증 전제가 깨지는 race입니다.", detail: ["resolve 뒤 open 사이 symlink 교체가 예입니다.", "descriptor-relative 원자적 API로 범위를 줄입니다."] },
+      { term: "exclusive create", definition: "대상 이름이 이미 존재하면 실패하도록 파일을 원자적으로 생성하는 x mode 또는 O_EXCL 의미입니다.", detail: ["exists 검사 뒤 open보다 race가 적습니다.", "부모 경로 보안은 별도로 필요합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "resolved-root-containment",
+        title: "resolve와 relative_to로 root containment 검증",
+        language: "python",
+        filename: "safe_paths.py",
+        purpose: "격리 임시 root에서 정상 상대 경로와 `..`·절대 경로를 구분하되 실제 절대 경로를 출력하지 않습니다.",
+        code: "from pathlib import Path\nfrom tempfile import TemporaryDirectory\n\ndef safe_path(root, user_path):\n    resolved_root = root.resolve(strict=True)\n    candidate = (resolved_root / user_path).resolve(strict=False)\n    try:\n        relative = candidate.relative_to(resolved_root)\n    except ValueError as error:\n        raise ValueError('path escapes root') from error\n    if relative == Path('.'):\n        raise ValueError('file path required')\n    return candidate\n\nwith TemporaryDirectory() as directory:\n    root = Path(directory) / 'uploads'\n    root.mkdir()\n    absolute_escape = root.parent / 'outside.txt'\n    cases = [('normal', 'notes/a.txt'), ('parent', '../outside.txt'), ('absolute', str(absolute_escape))]\n    for label, raw in cases:\n        try:\n            safe_path(root, raw)\n            print(f'{label}:accepted')\n        except ValueError:\n            print(f'{label}:rejected')",
+        walkthrough: [
+          { lines: "1-12", explanation: "존재하는 root를 strict resolve하고 candidate를 정규화한 뒤 path-aware relative_to로 root 포함 관계를 검사합니다." },
+          { lines: "14-18", explanation: "실제 사용자 경로와 격리된 임시 uploads root, root 밖 absolute 합성 경로를 준비합니다." },
+          { lines: "19-25", explanation: "정상·parent traversal·absolute escape 결과만 label로 출력해 host 절대 경로를 노출하지 않습니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "safe_paths.py를 UTF-8로 저장"], command: "python -I -X utf8 safe_paths.py" },
+        output: { value: "normal:accepted\nparent:rejected\nabsolute:rejected", explanation: ["정상 상대 경로는 root 아래로 resolve됩니다.", "`..`와 root 밖 absolute path는 relative_to에 실패해 거부됩니다.", "이 검사는 현재 snapshot의 containment이며 적대적 TOCTOU까지 완전히 해결하지는 않습니다."] },
+        experiments: [
+          { change: "containment를 문자열 `str(candidate).startswith(str(root))`로 바꿉니다.", prediction: "root와 prefix만 같은 sibling 경로를 잘못 허용할 수 있습니다.", result: "filesystem component 인식 relative_to가 필요한 이유를 확인합니다." },
+          { change: "exists()로 없음 확인 뒤 w mode로 만들도록 바꿉니다.", prediction: "검사와 생성 사이 다른 process가 같은 이름을 만들 수 있습니다.", result: "x mode·tempfile처럼 검사와 생성을 결합한 API가 필요한 이유를 확인합니다." },
+        ],
+        sourceRefs: ["python-pathlib-doc-024", "python-os-open-doc-024", "python-tempfile-doc-024", "python-open-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "root를 붙였는데도 외부 absolute path 파일이 열렸다.", likelyCause: "Path 결합에서 오른쪽 absolute path가 앞 root를 대체했고 containment 검증이 없었습니다.", checks: ["user path의 is_absolute를 확인합니다.", "결합 후 resolve 결과를 민감정보 없이 비교합니다.", "Windows drive·UNC·junction 입력 fixture를 포함합니다."], fix: "absolute 입력을 거부하고 canonical candidate가 canonical root에 relative_to 가능한지 검증합니다.", prevention: "경로 입력 parser를 한 함수로 중앙화하고 플랫폼별 traversal corpus를 테스트합니다." },
+      { symptom: "resolve 검사 직후인데 가끔 root 밖 파일이 열리는 보안 사고가 난다.", likelyCause: "검사와 open 사이 symlink·directory가 교체되는 TOCTOU race입니다.", checks: ["공유 directory의 write 권한과 symlink 생성 권한을 확인합니다.", "resolve와 open 사이 호출을 추적합니다.", "dir_fd·O_NOFOLLOW 지원과 실제 사용을 확인합니다."], fix: "신뢰 경계를 줄이고 열린 directory descriptor 기준의 상대·no-follow 접근과 권한 격리를 적용합니다.", prevention: "path 문자열 검증만으로 race-free라고 주장하지 않고 플랫폼별 보안 API와 공격적 race test를 사용합니다." },
+    ],
+    comparisons: [
+      { title: "새 파일을 어떤 방식으로 만들까요?", options: [
+        { name: "x mode / tempfile", chooseWhen: "기존 파일을 덮지 않거나 안전한 임시 이름을 즉시 생성해야 할 때", avoidWhen: "기존 target을 완성된 새 내용으로 교체해야 할 때 x mode만으로 충분하다고 생각할 때", tradeoffs: ["check-then-create race를 줄입니다.", "tempfile은 예측 불가능 이름과 cleanup 도구를 제공합니다.", "최종 교체는 os.replace와 결합합니다."] },
+        { name: "w mode / atomic replace", chooseWhen: "덮어쓰기가 의도되고 완성된 새 버전으로 교체해야 할 때", avoidWhen: "target을 w로 직접 열어 중간 실패 원본 손실을 허용할 수 없을 때", tradeoffs: ["직접 w는 단순하지만 즉시 truncate합니다.", "temp+replace는 코드와 durability 결정이 더 필요합니다.", "동시 writer isolation은 별도입니다."] },
+      ] },
+    ],
+    expertNotes: ["보안 경로 처리는 application root containment뿐 아니라 OS 권한·container mount·service account 최소 권한을 중첩해야 합니다.", "파일 확장자·MIME 검사는 path traversal 방지와 다른 문제이며 업로드 contents는 별도 parser sandbox·크기 제한이 필요합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "text mode에서 encoding을 생략하면 어떤 위험이 있나요?", answer: "locale 기본 encoding에 의존해 다른 환경에서 decode 결과가 달라지거나 UnicodeDecodeError와 데이터 손실이 발생할 수 있습니다." },
+  { question: "newline=None과 newline='' 읽기의 차이는 무엇인가요?", answer: "둘 다 여러 line ending을 인식하지만 None은 반환 문자열을 `\n`으로 변환하고 빈 문자열은 원래 line terminator를 보존합니다." },
+  { question: "flush와 fsync는 같은가요?", answer: "아닙니다. flush는 Python buffer를 OS에 전달하고 fsync는 file descriptor data를 저장 장치에 동기화하도록 OS에 요청합니다." },
+  { question: "atomic replace가 lost update도 막나요?", answer: "아닙니다. 부분 파일 관찰을 막는 atomic visibility와 여러 writer의 isolation은 별도이며 lock·version CAS·transaction이 필요합니다." },
+  { question: "문자열 startswith로 root containment를 검사하면 왜 안 되나요?", answer: "filesystem component 경계를 모르므로 비슷한 prefix sibling을 허용하고 대소문자·separator·symlink 의미도 제대로 처리하지 못합니다." },
+  { question: "resolve 후 relative_to 검사가 모든 symlink 공격을 막나요?", answer: "현재 시점 containment에는 유용하지만 검사와 open 사이 상태 변경 TOCTOU를 막지는 못합니다. 높은 신뢰 경계에는 descriptor-relative no-follow 접근과 권한 격리가 필요합니다." },
+  { question: "exists 확인 후 w로 만드는 것과 x mode의 차이는 무엇인가요?", answer: "exists+open은 두 연산 사이 race가 있지만 x mode는 이미 존재하면 실패하는 생성 검사를 하나의 open 연산으로 결합합니다." },
+);
+
+expertSession.completionChecklist.push(
+  "text mode의 encoding·errors·newline·buffering을 파일 포맷 계약으로 명시할 수 있다.",
+  "r·w·a·x·+·b mode의 데이터 보존과 위치 의미를 구분할 수 있다.",
+  "with 정상·return·예외 경로에서 file lifetime과 cleanup을 검증할 수 있다.",
+  "같은 directory temp→write→flush→fsync→close→os.replace 순서를 구현할 수 있다.",
+  "atomic visibility·power-loss durability·동시 writer isolation을 서로 구분할 수 있다.",
+  "resolve·relative_to 기반 root containment와 절대·`..`·symlink 입력을 테스트할 수 있다.",
+  "TOCTOU 한계를 설명하고 dir_fd·no-follow·OS 최소 권한이 필요한 보안 경계를 식별할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-pathlib-doc-024", repository: "Python", path: "library/pathlib.html", publicUrl: "https://docs.python.org/3/library/pathlib.html", usedFor: ["Path 결합", "resolve", "relative_to", "read_text/write_text"], evidence: "object-oriented path 연산과 symlink를 포함한 resolve·component 기반 relative_to 의미를 확인했습니다." },
+  { id: "python-io-doc-024", repository: "Python", path: "library/io.html", publicUrl: "https://docs.python.org/3/library/io.html", usedFor: ["text I/O", "encoding", "newline", "buffering"], evidence: "raw·buffered·text I/O 계층과 TextIOWrapper의 변환 책임을 확인했습니다." },
+  { id: "python-tempfile-doc-024", repository: "Python", path: "library/tempfile.html", publicUrl: "https://docs.python.org/3/library/tempfile.html", usedFor: ["TemporaryDirectory", "mkstemp", "안전한 즉시 생성", "cleanup"], evidence: "고수준 context manager와 mkstemp의 안전한 임시 파일 생성, deprecated mktemp race 경고를 확인했습니다." },
+  { id: "python-os-replace-doc-024", repository: "Python", path: "library/os.html#os.replace", publicUrl: "https://docs.python.org/3/library/os.html#os.replace", usedFor: ["atomic replace", "같은 filesystem", "target 교체"], evidence: "os.replace의 기존 target 교체와 cross-filesystem 실패 경계를 확인했습니다." },
+  { id: "python-os-fsync-doc-024", repository: "Python", path: "library/os.html#os.fsync", publicUrl: "https://docs.python.org/3/library/os.html#os.fsync", usedFor: ["flush 후 fsync", "durability", "descriptor"], evidence: "buffered file object에서 flush 후 fsync를 호출해야 하는 순서를 공식 문서에서 확인했습니다." },
+  { id: "python-os-open-doc-024", repository: "Python", path: "library/os.html#os.open", publicUrl: "https://docs.python.org/3/library/os.html#os.open", usedFor: ["dir_fd", "O_NOFOLLOW", "descriptor-relative open", "exclusive flag"], evidence: "플랫폼별 low-level open flags와 directory descriptor 기반 경로 접근 경계를 확인했습니다." },
+);

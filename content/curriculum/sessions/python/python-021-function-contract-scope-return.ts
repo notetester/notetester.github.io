@@ -94,7 +94,7 @@ const session = {
             { lines: "5", explanation: "검증을 통과한 정상 경로는 항상 float 계산 결과를 반환합니다." },
             { lines: "8-13", explanation: "정수 목록, 실수 목록, 빈 경계를 같은 호출부에서 실행하고 예상된 ValueError만 처리합니다." },
           ],
-          run: { environment: ["Python 3.9 이상", "function_contract.py로 저장"], command: "python function_contract.py" },
+          run: { environment: ["Python 3.9 이상", "function_contract.py로 저장"], command: "python -I -X utf8 function_contract.py" },
           output: { value: "[10, 20, 30] -> 20.00\n[2.5, 3.5] -> 3.00\n[] -> ERROR: values must not be empty", explanation: ["두 정상 입력은 동일한 float 출력 형식을 유지합니다.", "빈 입력은 ZeroDivisionError까지 진행하지 않고 계약에 적은 ValueError가 됩니다.", "호출자는 오류를 0이라는 정상 데이터와 혼동하지 않습니다."] },
           experiments: [
             { change: "if not values 검사를 지웁니다.", prediction: "빈 목록에서 len(values)가 0이므로 0으로 나누는 ZeroDivisionError가 발생합니다.", result: "저수준 계산 오류보다 도메인 입력 오류를 경계에서 명시하는 편이 호출자에게 유용합니다." },
@@ -133,9 +133,9 @@ const session = {
             { lines: "1-5", explanation: "show_local의 x는 호출 frame 지역 이름이며 모듈 전역 x와 별개입니다." },
             { lines: "7-14", explanation: "make_counter 호출 frame의 count를 내부 함수가 캡처하고 nonlocal로 재연결합니다. 반환 뒤에도 closure가 그 상태를 보존합니다." },
             { lines: "16-17", explanation: "increment는 숨은 상태를 읽거나 바꾸지 않고 현재 값을 받아 새 값을 반환합니다." },
-            { lines: "19-25", explanation: "세 모델을 실행해 전역 보존, closure의 누적, 명시적 상태 누적을 비교합니다." },
+            { lines: "19-24", explanation: "세 모델을 실행해 전역 보존, closure의 누적, 명시적 상태 누적을 비교합니다." },
           ],
-          run: { environment: ["Python 3.8 이상", "scope_models.py로 저장"], command: "python scope_models.py" },
+          run: { environment: ["Python 3.8 이상", "scope_models.py로 저장"], command: "python -I -X utf8 scope_models.py" },
           output: { value: "local=50, global=100\nclosure=1, closure=2\nexplicit state=2", explanation: ["지역 x 대입 뒤에도 전역 x는 100입니다.", "동일한 counter 함수 객체는 캡처한 count를 두 호출 사이에 보존합니다.", "increment는 상태를 내부에 숨기지 않아 입력과 반환만으로 테스트할 수 있습니다."] },
           experiments: [
             { change: "next_value의 nonlocal count를 삭제합니다.", prediction: "count += 1이 count를 지역 이름으로 분류해 읽기 전에 대입하는 UnboundLocalError가 발생합니다.", result: "바깥 이름을 다시 연결할 때 nonlocal 선언이 필요한 이유를 확인합니다." },
@@ -258,3 +258,174 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 340;
+expertSession.chapters.push(
+  {
+    id: "call-contract-binding-annotations",
+    title: "함수 계약을 입력 domain·binding·출력·오류·부작용으로 명세합니다",
+    lead: "좋은 함수 문서는 파라미터 이름만 나열하지 않습니다. 어떤 값이 허용되고, 인수가 어떻게 파라미터에 묶이며, 성공 시 무엇을 반환하고, 실패 시 무엇을 raise하며, 외부 상태를 바꾸는지를 호출자 관점에서 설명합니다.",
+    explanations: [
+      "parameter는 함수 정의의 이름 있는 slot이고 argument는 호출 시 전달하는 실제 값입니다. positional argument는 순서로, keyword argument는 이름으로 binding됩니다. 한 parameter에 위치와 keyword로 값을 중복 제공하면 TypeError이며, 필수 값 누락·알 수 없는 keyword·너무 많은 위치 인수도 함수 본문 진입 전에 binding 단계에서 TypeError가 납니다.",
+      "입력 domain은 타입만이 아니라 범위와 관계 invariant를 포함합니다. count가 int여도 0이면 평균 분모로 허용되지 않을 수 있고, start와 end는 둘 다 datetime이면서 start <= end여야 할 수 있습니다. 호출자가 복구할 수 있는 잘못된 값은 구체 ValueError 같은 예외로 표현하고 메시지에는 비밀·전체 payload를 포함하지 않습니다.",
+      "return 문이 없는 경로는 암시적으로 None을 반환합니다. 성공 결과가 None일 수 있는 함수에서 None을 not-found 신호로 함께 사용하면 두 의미가 충돌합니다. Optional, sentinel, 구체 예외, tagged result 중 하나를 골라 모든 경로가 같은 계약을 갖게 합니다.",
+      "annotation은 런타임 강제 변환이나 검증이 아닙니다. `def f(x: int) -> str`에 다른 타입을 전달해도 Python 호출 binding 자체는 이를 막지 않습니다. type checker·IDE·문서화 도구가 이용할 metadata이며, 외부 입력 경계에서는 별도 parse와 validation이 필요합니다.",
+      "공개 함수의 keyword로 사용되는 parameter 이름은 API 일부입니다. 이름을 바꾸면 위치 호출은 유지돼도 keyword 호출이 깨질 수 있습니다. 내부 구현 변수와 공개 parameter를 구분하고 변경에는 deprecation·adapter·major version 정책을 적용합니다.",
+    ],
+    concepts: [
+      { term: "argument binding", definition: "호출의 positional·keyword 값을 함수 signature의 각 parameter slot에 대응시키는 단계입니다.", detail: ["본문 실행 전에 완료됩니다.", "중복·누락·unknown은 TypeError가 됩니다."] },
+      { term: "function contract", definition: "허용 입력, 반환 의미, 발생 가능한 예외, 부작용과 성능 기대를 호출자에게 약속하는 API 규칙입니다.", detail: ["annotation보다 넓은 개념입니다.", "정상·경계·실패 예제로 검증합니다."] },
+      { term: "annotation", definition: "parameter와 반환값에 부착되는 metadata로 정적 분석과 문서화에 사용됩니다.", detail: ["기본 Python 런타임은 자동으로 강제하지 않습니다.", "검증 라이브러리 사용 여부는 별도 계약입니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "contract-binding-and-annotations",
+        title: "binding 오류와 domain 오류를 분리한 비율 함수",
+        language: "python",
+        filename: "function_binding.py",
+        purpose: "positional·keyword binding, annotation metadata, 본문 domain validation이 서로 다른 단계임을 재현합니다.",
+        code: "def completion_rate(done: int, total: int, *, digits: int = 1) -> float:\n    if isinstance(done, bool) or isinstance(total, bool):\n        raise TypeError('counts must be integers, not bool')\n    if not isinstance(done, int) or not isinstance(total, int):\n        raise TypeError('counts must be integers')\n    if total <= 0 or not 0 <= done <= total:\n        raise ValueError('require 0 <= done <= total and total > 0')\n    return round(done / total * 100, digits)\n\nprint(completion_rate(3, 8, digits=2))\nprint(completion_rate(done=7, total=10))\nprint(completion_rate.__annotations__)\n\nfor call in [lambda: completion_rate(1, 0), lambda: completion_rate(1, 2, unknown=3)]:\n    try:\n        call()\n    except (TypeError, ValueError) as error:\n        print(type(error).__name__)",
+        walkthrough: [
+          { lines: "1-9", explanation: "signature와 annotation을 선언하고 bool-as-int 경계, 타입, 값 관계를 순서대로 검증한 뒤 일관된 float를 반환합니다." },
+          { lines: "11-13", explanation: "혼합 호출과 keyword 호출, 런타임에 보존된 annotation metadata를 확인합니다." },
+          { lines: "15-18", explanation: "값 domain 위반은 본문의 ValueError, unknown keyword는 본문 진입 전 binding TypeError로 구분됩니다." },
+        ],
+        run: { environment: ["Python 3.9 이상", "function_binding.py를 UTF-8로 저장"], command: "python -I -X utf8 function_binding.py" },
+        output: { value: "37.5\n70.0\n{'done': <class 'int'>, 'total': <class 'int'>, 'digits': <class 'int'>, 'return': <class 'float'>}\nValueError\nTypeError", explanation: ["annotation은 metadata dict로 보이지만 검증 코드는 본문에 별도로 있습니다.", "digits는 keyword-only라 호출 의도가 드러납니다.", "binding 오류와 domain 오류의 타입이 다릅니다."] },
+        experiments: [
+          { change: "`completion_rate(1, 2, 3)`을 호출합니다.", prediction: "digits는 keyword-only라 본문 전에 TypeError입니다.", result: "호출 형태도 함수 계약임을 확인합니다." },
+          { change: "명시 타입 검사를 제거하고 문자열 '3', '8'을 전달합니다.", prediction: "annotation이 자동 변환하지 않아 본문 연산에서 TypeError가 납니다.", result: "annotation과 runtime validation을 구분합니다." },
+        ],
+        sourceRefs: ["python-calls-reference", "python-function-def-reference", "python-typing-doc", "python-annotations-howto"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "TypeError가 함수 첫 줄 로그보다 먼저 발생한다.", likelyCause: "본문이 아니라 호출 argument binding 단계에서 누락·중복·unknown keyword가 검출됐습니다.", checks: ["실제 signature를 inspect.signature로 확인합니다.", "같은 parameter를 위치와 이름으로 두 번 전달했는지 봅니다.", "wrapper가 인수를 변형하는지 확인합니다."], fix: "호출 형태를 signature에 맞추고 wrapper는 원래 TypeError 문맥을 보존합니다.", prevention: "공개 signature의 대표 positional·keyword·invalid 호출 계약 테스트를 둡니다." },
+      { symptom: "annotation을 추가했는데 잘못된 런타임 타입이 그대로 들어온다.", likelyCause: "Python annotation을 자동 validation·coercion으로 오해했습니다.", checks: ["type checker가 CI에서 실행되는지 확인합니다.", "외부 입력 parse 경계를 찾습니다.", "검증 framework가 실제 호출을 감싸는지 확인합니다."], fix: "정적 검사를 CI에 추가하고 신뢰 경계에서 명시 validation을 수행합니다.", prevention: "annotation·static checking·runtime validation의 책임을 아키텍처 문서에 분리합니다." },
+    ],
+    expertNotes: ["bool은 int의 subclass라 단순 isinstance(value, int)만으로 도메인 count를 검증하면 True가 1로 통과할 수 있습니다.", "parameter 이름 안정성은 keyword 호출자뿐 아니라 dependency injection container와 serialization adapter에도 영향을 줄 수 있습니다."],
+  },
+  {
+    id: "pure-functions-side-effects-and-dependency-injection",
+    title: "순수 계산과 I/O 부작용을 분리하고 의존성을 인수로 주입합니다",
+    lead: "함수가 외부 시계·난수·파일·네트워크·전역 상태를 직접 읽으면 같은 입력에 같은 결과라는 추론이 깨집니다. 핵심 계산을 순수하게 유지하고 효과를 경계 함수로 이동하면 테스트와 재사용이 쉬워집니다.",
+    explanations: [
+      "pure function은 같은 입력 값에 같은 출력을 만들고 관찰 가능한 외부 상태를 변경하지 않습니다. Python이 강제하는 문법 분류는 아니며, 전달받은 mutable 객체를 변경하거나 전역 cache를 채우면 순수하지 않습니다. 순수성은 최적화보다 먼저 테스트 격리와 reasoning에 가치를 줍니다.",
+      "side effect에는 print, 파일 쓰기, DB update, 로그, 전역 list append, clock·random 읽기처럼 반환값 외의 관찰 가능한 상호작용이 포함됩니다. side effect 자체가 나쁜 것은 아니며 애플리케이션은 결국 효과를 내야 합니다. 중요한 것은 계산 중간에 숨기지 않고 이름·반환·주입된 port로 경계를 드러내는 것입니다.",
+      "dependency injection은 필요한 동작을 global import 안에 고정하지 않고 callable 또는 작은 protocol 인수로 전달합니다. production에서는 실제 writer·clock을, 테스트에서는 기록용 fake를 전달합니다. 단순 함수에 거대한 container를 도입하기보다 가장 작은 의존성 표면을 선택합니다.",
+      "mutable argument를 받아 수정하는 in-place 함수라면 이름과 반환 계약을 명확히 합니다. Python list.sort는 list를 바꾸고 None을 반환해 새 list를 돌려준다는 오해를 줄입니다. 새 값을 반환하는 함수와 in-place command를 섞으면 caller가 aliasing을 추적하기 어려워집니다.",
+      "로그 callback이 실패할 수 있는지, writer가 재시도하는지, transaction과 어떤 순서인지도 효과 계약입니다. 돈을 청구한 뒤 로그 실패 때문에 전체 함수를 재시도하면 중복 청구가 생길 수 있습니다. 도메인 effect와 관찰성 effect의 실패 정책을 분리합니다.",
+    ],
+    concepts: [
+      { term: "pure function", definition: "명시 입력만으로 결과가 결정되고 외부에서 관찰되는 상태를 변경하지 않는 함수입니다.", detail: ["같은 값 입력에 같은 값 출력입니다.", "전역 시계·난수·I/O를 직접 읽지 않습니다."] },
+      { term: "side effect", definition: "반환값 외에 외부 상태나 관찰 가능한 세계를 읽거나 변경하는 상호작용입니다.", detail: ["I/O·로그·mutation·clock·random이 포함됩니다.", "경계를 명시하면 안전하게 조합할 수 있습니다."] },
+      { term: "dependency injection", definition: "함수가 필요한 외부 동작을 내부에서 고정 생성하지 않고 parameter로 받는 설계입니다.", detail: ["테스트 fake로 교체할 수 있습니다.", "가장 작은 callable이나 protocol을 선호합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "pure-core-injected-effect",
+        title: "순수 영수증 계산과 주입된 출력 효과",
+        language: "python",
+        filename: "pure_and_effect.py",
+        purpose: "동일 입력에 동일 값을 만드는 계산 함수와 외부 기록을 담당하는 command 함수를 분리합니다.",
+        code: "def calculate_receipt(prices, tax_rate):\n    if not 0 <= tax_rate <= 1:\n        raise ValueError('tax_rate must be between 0 and 1')\n    subtotal = sum(prices)\n    tax = round(subtotal * tax_rate, 2)\n    return {'subtotal': subtotal, 'tax': tax, 'total': subtotal + tax}\n\ndef issue_receipt(prices, tax_rate, write_line):\n    receipt = calculate_receipt(prices, tax_rate)\n    write_line(f\"total={receipt['total']:.2f}\")\n    return receipt\n\nmessages = []\nfirst = issue_receipt([10.0, 5.0], 0.1, messages.append)\nsecond = calculate_receipt([10.0, 5.0], 0.1)\nprint(first)\nprint(second == first)\nprint(messages)",
+        walkthrough: [
+          { lines: "1-6", explanation: "검증과 계산만 수행하고 새 dict를 반환하는 순수 core를 만듭니다." },
+          { lines: "8-11", explanation: "효과 경계가 writer callable을 인수로 받아 한 줄을 기록하고 core 결과를 반환합니다." },
+          { lines: "13-18", explanation: "테스트 fake로 list.append를 주입해 실제 파일·콘솔 없이 효과와 순수 결과를 각각 검증합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "pure_and_effect.py를 UTF-8로 저장"], command: "python -I -X utf8 pure_and_effect.py" },
+        output: { value: "{'subtotal': 15.0, 'tax': 1.5, 'total': 16.5}\nTrue\n['total=16.50']", explanation: ["순수 core를 다시 호출하면 동일한 dict 값이 나옵니다.", "부작용은 주입된 messages.append 한 곳에 격리됩니다.", "반환 결과와 출력 형식을 독립적으로 테스트할 수 있습니다."] },
+        experiments: [
+          { change: "write_line에 예외를 일으키는 fake를 전달합니다.", prediction: "계산은 끝나지만 issue_receipt는 writer 예외를 전파합니다.", result: "효과 실패 정책을 caller가 명시해야 함을 확인합니다." },
+          { change: "calculate_receipt가 prices.append를 수행하게 만듭니다.", prediction: "caller list가 바뀌고 같은 객체 재사용 시 결과가 달라질 수 있습니다.", result: "숨은 mutation이 순수 계약을 깨뜨리는 방식을 확인합니다." },
+        ],
+        sourceRefs: ["python-functions-doc", "python-unittest-mock-doc", "python-protocols-typing-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "단위 테스트가 실행 순서나 현재 시간에 따라 실패한다.", likelyCause: "함수가 전역 mutable 상태·datetime.now·random·환경 변수를 직접 읽습니다.", checks: ["테스트 단독·역순 실행 결과를 비교합니다.", "함수 내부의 module global과 I/O 호출을 찾습니다.", "동일 인수 반복 호출의 결과와 side effect를 기록합니다."], fix: "clock·random generator·repository를 인수로 주입하고 핵심 계산을 순수 함수로 분리합니다.", prevention: "core 계산에는 명시 인수 외 입력을 금지하는 리뷰 기준을 둡니다." },
+      { symptom: "함수 반환은 맞지만 caller의 list가 예상치 않게 바뀐다.", likelyCause: "전달받은 mutable 객체를 in-place 수정했고 alias가 여러 곳에 공유됐습니다.", checks: ["호출 전후 id와 repr을 비교합니다.", "append·sort·clear·item assignment를 검색합니다.", "함수 이름과 문서가 mutation을 알리는지 확인합니다."], fix: "새 컬렉션을 만들어 반환하거나 in-place 함수로 이름·None 반환·문서를 명확히 합니다.", prevention: "값 반환 함수와 command-style mutation 함수를 한 API에서 섞지 않습니다." },
+    ],
+    expertNotes: ["주입된 callable signature도 계약이므로 Protocol로 인수·반환·예외 기대를 정적 표현할 수 있습니다.", "완전한 순수성보다 effect boundary를 좁게 만드는 것이 Python 애플리케이션에서 실용적인 목표입니다."],
+  },
+  {
+    id: "error-channel-return-raise-result-finally",
+    title: "return·raise·tagged result를 선택하고 finally가 제어 흐름을 덮지 않게 합니다",
+    lead: "실패를 None, Boolean, 예외, result 객체 중 무엇으로 표현할지는 호출자의 복구 방식에 달려 있습니다. 어떤 방식을 택하든 성공 값과 실패 정보를 잃지 않고 finally는 정리만 수행해야 합니다.",
+    explanations: [
+      "예외는 함수의 정상 성공 값을 만들 수 없을 때 stack을 따라 가장 가까운 handler로 제어를 이동합니다. 값 범위 위반은 ValueError, 잘못된 타입은 TypeError처럼 기존 의미가 맞는 구체 예외를 사용하고, domain 문맥이 필요하면 자체 예외를 만들되 원인을 `raise DomainError(...) from error`로 연결합니다.",
+      "Optional return은 not-found가 빈번하고 정상적인 결과이며 실패 이유가 하나일 때 간단합니다. 여러 실패 원인·재시도 여부·필드 오류가 필요하면 tagged dataclass/union result가 명시적입니다. 모든 호출자가 반드시 처리해야 하는 치명적 실패를 error code로만 돌리면 무시될 수 있고, 예상 가능한 검증 오류를 예외로만 던지면 batch 오류 수집이 불편할 수 있습니다.",
+      "early return은 guard clause로 잘못된 입력과 예외적 상태를 앞에서 제거해 happy path 들여쓰기를 줄입니다. 그러나 서로 다른 실패가 모두 `return None`이면 원인을 잃습니다. 각 return 경로가 함수의 한 가지 반환 타입 의미에 맞는지 표로 검토합니다.",
+      "finally는 return·break·continue·예외 여부와 관계없이 정리에 사용됩니다. finally 안의 return은 try의 반환값과 진행 중 예외를 덮어써 버리므로 피해야 합니다. cleanup 중 예외도 원래 실패를 가릴 수 있으므로 context manager와 예외 chaining, 로깅 정책을 설계합니다.",
+      "catch는 복구할 수 있는 가장 좁은 경계에 둡니다. `except Exception: return None`은 프로그래밍 버그·취소·데이터 손상 신호를 같은 값으로 숨깁니다. 오류를 변환할 때는 입력의 비밀을 제거한 문맥을 더하고 원래 cause를 보존합니다.",
+    ],
+    concepts: [
+      { term: "error channel", definition: "함수가 성공 값 이외의 실패 정보를 호출자에게 전달하는 예외·tagged result·Optional 등의 통로입니다.", detail: ["복구 가능성과 빈도에 맞춰 선택합니다.", "여러 방식을 임의로 섞지 않습니다."] },
+      { term: "exception chaining", definition: "새 예외를 올리면서 `raise ... from cause`로 원래 실패 원인을 연결하는 방식입니다.", detail: ["domain 문맥과 저수준 원인을 함께 보존합니다.", "민감 입력은 메시지에서 제거합니다."] },
+      { term: "finally override", definition: "finally 블록의 return·raise가 try의 기존 return 또는 진행 중 예외를 대체하는 제어 흐름 위험입니다.", detail: ["finally는 cleanup에 집중합니다.", "결과 결정은 try/except 바깥에서 수행합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "explicit-error-channel-cleanup",
+        title: "구체 예외를 tagged result로 변환하고 cleanup을 보존",
+        language: "python",
+        filename: "error_contract.py",
+        purpose: "내부 parser는 구체 예외를 사용하고 경계 함수는 예상 오류만 결과로 변환하며 finally는 정리 기록만 수행합니다.",
+        code: "def parse_port(text):\n    if not text.isdecimal():\n        raise ValueError('port must contain decimal digits')\n    value = int(text)\n    if not 1 <= value <= 65535:\n        raise ValueError('port must be in 1..65535')\n    return value\n\ndef attempt(text, cleanup_log):\n    try:\n        return ('ok', parse_port(text))\n    except ValueError as error:\n        return ('error', str(error))\n    finally:\n        cleanup_log.append(f'checked:{text}')\n\ncleanup = []\nfor raw in ['8080', '0', 'abc']:\n    print(attempt(raw, cleanup))\nprint(cleanup)",
+        walkthrough: [
+          { lines: "1-7", explanation: "parser는 성공하면 int 한 타입을 반환하고 두 domain 위반을 구체 ValueError로 표현합니다." },
+          { lines: "9-15", explanation: "경계 함수는 예상 ValueError만 tagged tuple로 변환하고 finally에서는 반환하지 않은 채 cleanup만 기록합니다." },
+          { lines: "17-20", explanation: "성공·범위 오류·형식 오류와 모든 경로의 정리를 확인합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "error_contract.py를 UTF-8로 저장"], command: "python -I -X utf8 error_contract.py" },
+        output: { value: "('ok', 8080)\n('error', 'port must be in 1..65535')\n('error', 'port must contain decimal digits')\n['checked:8080', 'checked:0', 'checked:abc']", explanation: ["성공과 오류가 첫 tag로 구분됩니다.", "오류 원인이 문자열에 보존되어 caller가 표시할 수 있습니다.", "finally cleanup은 세 경로 모두 실행되며 기존 결과를 덮지 않습니다."] },
+        experiments: [
+          { change: "finally 마지막에 `return ('cleanup', None)`을 넣습니다.", prediction: "모든 성공·오류 결과가 cleanup tuple로 덮입니다.", result: "finally의 return이 기존 제어 흐름을 파괴함을 확인합니다." },
+          { change: "except ValueError를 except Exception으로 넓히고 parse_port에 NameError 버그를 넣습니다.", prediction: "버그가 일반 error 결과로 숨겨집니다.", result: "복구 가능한 예외만 좁게 잡아야 함을 확인합니다." },
+        ],
+        sourceRefs: ["python-exceptions-tutorial", "python-raise-reference", "python-try-reference", "python-functions-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "함수가 예외를 냈어야 하는데 None을 반환해 이후 코드에서 더 멀리 실패한다.", likelyCause: "넓은 except가 모든 오류를 None으로 바꾸거나 일부 return 경로가 암시적 None입니다.", checks: ["모든 return과 함수 끝 도달 경로를 표로 만듭니다.", "except Exception·bare except를 검색합니다.", "not-found와 failure가 같은 None인지 확인합니다."], fix: "예상 실패만 구체적으로 변환하고 나머지는 cause와 함께 전파하며 반환 의미를 하나로 통일합니다.", prevention: "type checker와 성공·각 실패·버그 주입 테스트를 함께 둡니다." },
+      { symptom: "try에서 반환한 값이나 원래 예외가 사라진다.", likelyCause: "finally 안에서 return 또는 새 예외가 기존 제어 흐름을 덮었습니다.", checks: ["finally의 return·raise·break·continue를 찾습니다.", "cleanup 함수 자체의 실패 가능성을 주입합니다.", "traceback의 __cause__·__context__를 확인합니다."], fix: "finally는 정리만 수행하고 결과 결정은 바깥에서 하며 cleanup 예외 정책을 명시합니다.", prevention: "finally 제어 이동을 금지하고 context manager를 우선 사용하는 리뷰 규칙을 둡니다." },
+    ],
+    expertNotes: ["batch validation은 여러 field 오류를 모아 tagged result로 반환하고, 시스템 불변식 위반은 예외로 분리하는 혼합 모델이 실용적입니다.", "예외 메시지는 API 안정 계약으로 취급하기 어렵기 때문에 programmatic 처리는 예외 type·error code·구조화 필드를 사용합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "parameter와 argument는 어떻게 다른가요?", answer: "parameter는 함수 정의의 이름 있는 slot이고 argument는 호출할 때 그 slot에 전달하는 실제 값입니다." },
+  { question: "unknown keyword TypeError는 함수 본문 안에서 발생하나요?", answer: "일반적으로 본문 진입 전 argument binding 단계에서 발생합니다." },
+  { question: "type annotation이 런타임 입력을 자동 검증하나요?", answer: "기본 Python에서는 아닙니다. 정적 도구용 metadata이며 외부 입력에는 별도 runtime validation이 필요합니다." },
+  { question: "순수 함수가 주는 실무 이점은 무엇인가요?", answer: "명시 입력만으로 결과를 재현할 수 있어 테스트 격리, 병렬 실행, reasoning과 cache 가능성이 좋아집니다." },
+  { question: "dependency injection을 항상 큰 framework로 구현해야 하나요?", answer: "아닙니다. clock이나 writer 같은 작은 callable 하나를 parameter로 받는 것부터 충분한 의존성 주입입니다." },
+  { question: "Optional 반환과 예외는 어떤 기준으로 고르나요?", answer: "not-found가 정상적이고 이유가 하나면 Optional이 간단하며, 호출자가 복구할 수 없는 실패나 반드시 처리해야 할 오류는 구체 예외가 적합합니다. 여러 예상 오류는 tagged result가 유용합니다." },
+  { question: "finally 안 return이 위험한 이유는 무엇인가요?", answer: "try의 반환값뿐 아니라 진행 중인 예외까지 덮어 원래 결과와 실패 원인을 잃게 만들 수 있기 때문입니다." },
+);
+
+expertSession.completionChecklist.push(
+  "parameter·argument·binding·본문 실행 순서를 구분할 수 있다.",
+  "타입·범위·관계·반환·오류·부작용을 포함한 함수 계약을 작성할 수 있다.",
+  "annotation과 runtime validation의 책임을 분리할 수 있다.",
+  "공개 parameter 이름 변경이 keyword 호출자에게 미치는 호환성 영향을 판단할 수 있다.",
+  "순수 계산과 I/O effect 경계를 두 함수로 분리할 수 있다.",
+  "clock·writer·repository를 작은 callable 또는 Protocol로 주입할 수 있다.",
+  "Optional·예외·tagged result 중 호출자 복구 방식에 맞는 오류 채널을 선택할 수 있다.",
+  "finally에서 return하지 않고 정상·오류·취소 경로의 cleanup을 검증할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-calls-reference", repository: "Python", path: "reference/expressions.html#calls", publicUrl: "https://docs.python.org/3/reference/expressions.html#calls", usedFor: ["argument binding", "positional", "keyword", "호출 오류"], evidence: "호출 표현식에서 argument가 parameter slot에 binding되는 공식 순서와 오류를 확인했습니다." },
+  { id: "python-function-def-reference", repository: "Python", path: "reference/compound_stmts.html#function-definitions", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#function-definitions", usedFor: ["함수 정의", "parameter", "annotation", "scope"], evidence: "function definition의 parameter list와 annotation 평가 의미를 언어 레퍼런스에서 확인했습니다." },
+  { id: "python-typing-doc", repository: "Python", path: "library/typing.html", publicUrl: "https://docs.python.org/3/library/typing.html", usedFor: ["type annotation", "Protocol", "Optional", "정적 분석"], evidence: "annotation이 runtime 강제가 아닌 type hint이며 callable Protocol로 주입 계약을 표현할 수 있음을 확인했습니다." },
+  { id: "python-annotations-howto", repository: "Python", path: "howto/annotations.html", publicUrl: "https://docs.python.org/3/howto/annotations.html", usedFor: ["annotation introspection", "런타임 metadata"], evidence: "함수 annotation을 안전하게 읽고 해석하는 공식 HOWTO를 보조 근거로 사용했습니다." },
+  { id: "python-unittest-mock-doc", repository: "Python", path: "library/unittest.mock.html", publicUrl: "https://docs.python.org/3/library/unittest.mock.html", usedFor: ["의존성 대체", "호출 검증", "side effect 테스트"], evidence: "외부 의존성을 fake/mock로 대체하고 호출 효과를 검증하는 표준 도구 경계를 확인했습니다." },
+  { id: "python-protocols-typing-doc", repository: "Python", path: "library/typing.html#typing.Protocol", publicUrl: "https://docs.python.org/3/library/typing.html#typing.Protocol", usedFor: ["구조적 callable 계약", "dependency injection"], evidence: "주입 의존성의 최소 구조 계약을 Protocol로 표현하는 근거를 추가했습니다." },
+  { id: "python-exceptions-tutorial", repository: "Python", path: "tutorial/errors.html", publicUrl: "https://docs.python.org/3/tutorial/errors.html", usedFor: ["raise", "except", "finally", "exception chaining"], evidence: "예외 선택·처리·정리의 공식 학습 순서를 오류 채널 설명에 반영했습니다." },
+  { id: "python-raise-reference", repository: "Python", path: "reference/simple_stmts.html#the-raise-statement", publicUrl: "https://docs.python.org/3/reference/simple_stmts.html#the-raise-statement", usedFor: ["raise", "cause chaining", "traceback"], evidence: "raise statement와 explicit cause 연결 의미를 확인했습니다." },
+  { id: "python-try-reference", repository: "Python", path: "reference/compound_stmts.html#the-try-statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-try-statement", usedFor: ["try except else finally", "제어 흐름 override"], evidence: "finally가 return·예외 뒤에도 실행되고 새 제어 흐름이 기존 결과를 덮을 수 있음을 확인했습니다." },
+);

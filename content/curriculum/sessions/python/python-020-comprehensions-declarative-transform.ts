@@ -115,7 +115,7 @@ print(scores)`,
             { lines: "4", explanation: "별도 입력 숫자 각각을 세 배로 변환해 같은 길이의 새 list를 만듭니다." },
             { lines: "6-9", explanation: "필터 결과, 분기 결과, 변환 결과, 변경되지 않은 원본을 순서대로 출력합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 list_comprehensions.py"], command: "python list_comprehensions.py" },
+          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 list_comprehensions.py"], command: "python -I -X utf8 list_comprehensions.py" },
           output: {
             value: `[90, 67, 80, 75]
 ['pass', 'fail', 'pass', 'fail', 'pass', 'pass']
@@ -205,7 +205,7 @@ print(len(records), len(passed_scores))`,
             { lines: "5", explanation: "set 순서는 계약이 아니므로 sorted list로 바꾸어 재현 가능한 출력을 만듭니다." },
             { lines: "6-7", explanation: "dict 내용과 원본 record 수·결과 key 수 차이로 key 충돌을 관찰합니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 set_dict_comprehensions.py"], command: "python set_dict_comprehensions.py" },
+          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 set_dict_comprehensions.py"], command: "python -I -X utf8 set_dict_comprehensions.py" },
           output: {
             value: `['둘리', '장길산']
 {'둘리': 95, '장길산': 67}
@@ -309,7 +309,7 @@ print(list(squares))`,
             { lines: "6", explanation: "next가 첫 입력 number=0을 요청해 제곱 0을 계산하고 소비합니다." },
             { lines: "7", explanation: "남아 있는 number 1~4만 list로 materialize하므로 [1, 4, 9, 16]입니다." },
           ],
-          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 nested_and_generator.py"], command: "python nested_and_generator.py" },
+          run: { environment: ["Python 3.11 이상", "UTF-8로 저장한 nested_and_generator.py"], command: "python -I -X utf8 nested_and_generator.py" },
           output: {
             value: `[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
 generator
@@ -572,3 +572,126 @@ generator
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 330;
+expertSession.chapters.push(
+  {
+    id: "generator-expression-laziness-memory-and-consumption",
+    title: "generator expression의 지연 평가·메모리·단일 소비 계약을 측정합니다",
+    lead: "대괄호를 괄호로 바꾸면 단순히 더 적은 문자를 쓰는 것이 아니라 결과 컨테이너를 즉시 만들지 않고 요청 시 한 항목씩 계산하는 iterator pipeline으로 의미가 바뀝니다.",
+    explanations: [
+      "list comprehension은 입력을 순회해 결과 list를 완성한 뒤 반환합니다. generator expression은 generator 객체를 즉시 반환하고 `next()`·for·sum 같은 소비자가 값을 요구할 때 body expression과 filter를 실행합니다. 다만 가장 왼쪽 for의 iterable 표현식은 generator를 만들 때 즉시 평가되어 iterator가 생성됩니다. 이후 clause와 계산이 모두 생성 시점까지 지연된다고 오해하면 예외 시점을 잘못 예측합니다.",
+      "laziness의 장점은 전체 결과를 보관하지 않고 소비 중인 소수 항목만 유지할 수 있다는 점입니다. 큰 파일·DB cursor·무한 sequence에서 중요합니다. 그러나 `list(gen)`·`sorted(gen)`·`tuple(gen)`처럼 결국 모두 materialize하면 최종 메모리 비용은 발생하며, 중간 list만 줄이는 정도입니다. 정확한 판단은 tracemalloc과 실제 peak memory로 측정합니다.",
+      "generator는 iterator이므로 한 번 소비하면 이미 지난 값을 다시 제공하지 않습니다. `sum(gen)` 뒤 `list(gen)`은 빈 list가 됩니다. 디버깅을 위해 미리 `list(gen)`으로 출력하면 본 처리에서 데이터가 사라질 수 있습니다. 여러 소비자가 필요하면 생성 함수(factory)를 전달하거나, 입력 크기가 제한됐다는 근거와 함께 명시적으로 materialize합니다.",
+      "short-circuit 소비자는 laziness를 더 크게 활용합니다. `any(predicate(x) for x in data)`는 첫 True에서, `all`은 첫 False에서, `next((x for ...), default)`는 첫 일치에서 멈춥니다. 반면 side effect가 generator body에 있으면 실제 실행 횟수가 소비자에 따라 달라지므로 comprehension과 generator는 값 계산에 집중해야 합니다.",
+      "generator가 참조하는 외부 mutable 상태는 소비 시점의 값을 볼 수 있습니다. 생성 시점 snapshot이 필요하다면 immutable 값으로 캡처하거나 입력을 복사해야 합니다. 반대로 최신 상태를 의도한다면 그 시간 의존성을 API 이름과 테스트에 드러냅니다.",
+    ],
+    concepts: [
+      { term: "lazy evaluation", definition: "결과가 필요해지는 소비 시점까지 각 항목의 계산을 미루는 평가 방식입니다.", detail: ["generator 생성과 항목 계산 시점이 다릅니다.", "가장 왼쪽 iterable은 생성 시 즉시 평가됩니다."] },
+      { term: "materialization", definition: "iterator의 모든 값을 list·tuple·set 같은 메모리 내 컬렉션으로 실제 생성하는 과정입니다.", detail: ["반복 재사용과 길이·index 접근을 얻습니다.", "입력 크기만큼 메모리와 선행 시간을 지불합니다."] },
+      { term: "single-pass", definition: "한 번 next로 지나간 항목을 동일 iterator에서 다시 얻을 수 없는 소비 계약입니다.", detail: ["generator expression이 대표적입니다.", "재사용에는 새 generator를 만드는 factory가 필요합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "generator-laziness-single-pass",
+        title: "호출 추적으로 확인하는 지연 평가와 단일 소비",
+        language: "python",
+        filename: "generator_laziness.py",
+        purpose: "generator 생성, 첫 next, 나머지 materialize, 재소비 시점마다 실제 계산된 항목을 추적합니다.",
+        code: "calls = []\n\ndef square(value):\n    calls.append(value)\n    return value * value\n\ngenerator = (square(value) for value in range(5) if value % 2 == 0)\nprint(f'after-create={calls}')\nprint(f'first={next(generator)}')\nprint(f'after-first={calls}')\nprint(f'rest={list(generator)}')\nprint(f'after-rest={calls}')\nprint(f'again={list(generator)}')",
+        walkthrough: [
+          { lines: "1-5", explanation: "계산될 때마다 입력을 기록하는 순수 결과+관찰용 함수를 정의합니다." },
+          { lines: "7-8", explanation: "generator 객체를 만들었지만 body의 square는 아직 한 번도 호출되지 않습니다." },
+          { lines: "9-10", explanation: "첫 next가 filter를 통과한 0 한 항목만 계산합니다." },
+          { lines: "11-13", explanation: "나머지를 list로 소비하면 2와 4가 계산되고, 완전히 고갈된 같은 generator의 재소비는 빈 list입니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "generator_laziness.py를 UTF-8로 저장"], command: "python -I -X utf8 generator_laziness.py" },
+        output: { value: "after-create=[]\nfirst=0\nafter-first=[0]\nrest=[4, 16]\nafter-rest=[0, 2, 4]\nagain=[]", explanation: ["생성 시 body 계산은 없습니다.", "소비자가 요구한 만큼만 계산됩니다.", "같은 generator는 고갈 뒤 다시 시작하지 않습니다."] },
+        experiments: [
+          { change: "괄호를 대괄호로 바꿔 list comprehension을 만듭니다.", prediction: "after-create 전에 0, 2, 4 계산이 모두 끝나고 next(list)는 TypeError입니다.", result: "eager container와 lazy iterator의 API 차이를 확인합니다." },
+          { change: "`any(square(value) > 3 for value in range(5))`를 추적합니다.", prediction: "0, 1, 2까지만 계산하고 True에서 중단합니다.", result: "short-circuit 소비자가 계산량을 줄이는 방식을 확인합니다." },
+        ],
+        sourceRefs: ["python-expression-reference", "python-functional-howto", "python-iterator-datamodel", "python-tracemalloc-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "generator를 로그로 출력한 뒤 실제 처리 결과가 비었다.", likelyCause: "디버깅용 list()나 for가 single-pass iterator를 먼저 고갈시켰습니다.", checks: ["generator를 소비하는 모든 호출 지점을 찾습니다.", "iter(obj) is obj와 next의 진행 상태를 확인합니다.", "두 소비자가 같은 객체를 공유하는지 추적합니다."], fix: "생성 factory를 각 소비자에게 주거나 제한된 입력만 명시적으로 한 번 materialize해 공유합니다.", prevention: "iterator를 출력하기 위해 소비하지 않고 생성·소비 소유권을 API에 문서화합니다." },
+      { symptom: "generator로 바꿨는데도 peak memory가 줄지 않는다.", likelyCause: "downstream의 list·sorted·join 또는 캐시가 전체 결과를 결국 materialize하거나 입력 자체가 이미 큰 list입니다.", checks: ["pipeline 각 단계의 반환 type을 확인합니다.", "tracemalloc로 구간별 peak를 측정합니다.", "입력과 출력이 동시에 메모리에 남는 참조를 찾습니다."], fix: "끝까지 streaming 가능한 소비자를 사용하고 batch 크기·정렬 요구·캐시 수명을 재설계합니다.", prevention: "메모리 최적화는 문법 교체가 아니라 end-to-end peak 측정으로 검증합니다." },
+    ],
+    expertNotes: ["generator expression의 가장 왼쪽 iterable 표현식이 즉시 평가된다는 규칙은 오류를 generator 생성 지점에 보고하려는 설계입니다.", "generator의 finalization 시점에 자원 정리를 기대하지 말고 파일·cursor 수명은 명시적 context manager 안에서 소비를 완료합니다."],
+  },
+  {
+    id: "comprehension-scope-walrus-nesting-readability",
+    title: "comprehension scope·walrus 바인딩·중첩 순서를 명시하고 가독성 한계를 정합니다",
+    lead: "comprehension의 for target은 바깥 scope로 새지 않지만 assignment expression의 target은 특별히 containing scope에 바인딩될 수 있습니다. 짧은 문법의 이름 수명과 평가 순서를 정확히 알아야 우연한 상태 결합을 피할 수 있습니다.",
+    explanations: [
+      "Python 3에서 comprehension의 반복 변수는 암시적 내부 scope에 있으며 바깥 같은 이름을 덮어쓰지 않습니다. `[x for x in data]` 뒤 x를 새로 사용할 수 있다고 기대하면 NameError이거나 기존 외부 x가 그대로 남습니다. generator expression도 비슷한 내부 scope를 사용합니다.",
+      "PEP 572의 특별 규칙에 따라 comprehension 안 assignment expression `:=`의 target은 containing scope에 바인딩됩니다. 이는 비용 큰 변환 결과를 filter와 output에서 재사용하게 해주지만 comprehension 실행 뒤 마지막 값이 바깥에 남을 수 있습니다. 이름 누출이 의도인지 문서화하지 못한다면 평범한 for loop나 helper 함수가 더 명확합니다.",
+      "walrus는 comprehension의 `for ... in` iterable 부분에서 사용할 수 없고 class scope를 대상으로 하는 일부 경우도 SyntaxError입니다. 문법 제약을 우회하려 복잡한 lambda를 넣기보다 계산 단계를 이름 있는 함수로 분리합니다. 한 줄에 assignment·filter·transform이 모두 있으면 디버깅과 타입 추론이 오히려 어려워집니다.",
+      "중첩 comprehension의 clause 순서는 같은 순서의 중첩 for 문으로 펼쳐 읽습니다. `[(x,y) for x in xs for y in ys if predicate(x,y)]`는 x마다 y 전체를 순회합니다. 행렬 transpose처럼 index 경계를 요구하는 문제는 모든 행 길이가 같은지 먼저 검증하거나 zip을 사용합니다.",
+      "권장 가독성 경계는 transform 하나, filter 하나, for clause 한두 개 정도이지 절대 문법 제한은 아닙니다. 여러 side effect, 예외 처리, 세 개 이상 nesting, 복잡한 walrus, 중복 계산이 섞이면 이름 있는 loop/helper로 전환합니다. 짧음보다 입력→필터→변환 순서가 한 번에 보이는지가 기준입니다.",
+      "set comprehension은 중복을 제거해 순서 계약을 제공하지 않고, dict comprehension은 중복 key에서 나중 값이 앞 값을 덮습니다. 충돌이 오류여야 한다면 comprehension 뒤 길이 비교만으로는 원인을 잃을 수 있으므로 명시 loop에서 key 존재를 검사하고 충돌 정보를 수집합니다.",
+    ],
+    concepts: [
+      { term: "comprehension scope", definition: "for target을 바깥 이름과 분리하기 위해 comprehension이 사용하는 암시적 내부 실행 scope입니다.", detail: ["반복 변수는 바깥으로 누출되지 않습니다.", "외부 immutable 설정값은 읽을 수 있습니다."] },
+      { term: "assignment expression", definition: "`NAME := expression`으로 표현식 결과를 이름에 바인딩하고 그 값을 동시에 반환하는 문법입니다.", detail: ["Python 3.8부터 지원합니다.", "comprehension에서는 target이 containing scope에 바인딩되는 특별 규칙이 있습니다."], caveat: "복잡한 상태 누출을 만들면 평범한 문장이 더 낫습니다." },
+      { term: "clause expansion", definition: "comprehension의 for·if clause를 왼쪽부터 같은 순서의 중첩 loop로 펼쳐 평가 순서를 해석하는 방법입니다.", detail: ["첫 for가 바깥 loop입니다.", "각 if는 앞에서 바인딩된 이름을 사용합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "comprehension-scope-and-walrus",
+        title: "반복 변수 격리와 walrus containing-scope 바인딩",
+        language: "python",
+        filename: "comprehension_scope.py",
+        purpose: "일반 for target과 assignment expression target의 서로 다른 scope 규칙, 중첩 clause 순서를 정확한 출력으로 확인합니다.",
+        code: "raw = ['  A  ', '   ', 'bb']\ncleaned = [text for item in raw if (text := item.strip())]\nprint(f'cleaned={cleaned}')\nprint(f'last-text={text}')\n\ntry:\n    print(item)\nexcept NameError:\n    print('item-is-local')\n\npairs = [(left, right) for left in [1, 2] for right in ['a', 'b'] if left == 2 or right == 'a']\nprint(f'pairs={pairs}')",
+        walkthrough: [
+          { lines: "1-4", explanation: "strip 결과를 text에 한 번 계산해 filter와 output에 재사용하며, text는 containing module scope에 마지막 값으로 남습니다." },
+          { lines: "6-9", explanation: "일반 comprehension target item은 내부 scope에만 있어 바깥 접근이 NameError입니다." },
+          { lines: "11-12", explanation: "left 바깥 loop, right 안쪽 loop, 마지막 filter 순서로 펼쳐지는 결과를 확인합니다." },
+        ],
+        run: { environment: ["Python 3.8 이상", "comprehension_scope.py를 UTF-8로 저장"], command: "python -I -X utf8 comprehension_scope.py" },
+        output: { value: "cleaned=['A', 'bb']\nlast-text=bb\nitem-is-local\npairs=[(1, 'a'), (2, 'a'), (2, 'b')]", explanation: ["공백 문자열은 walrus 결과가 falsy라 제외됩니다.", "text는 마지막 평가값 bb로 바깥에 남고 item은 누출되지 않습니다.", "중첩 clause는 왼쪽 for부터 순서대로 펼쳐집니다."] },
+        experiments: [
+          { change: "walrus 없이 `item.strip()`을 filter와 output에 각각 호출합니다.", prediction: "결과는 같지만 비싼 변환이라면 항목당 중복 계산됩니다.", result: "walrus의 재사용 이점과 scope 비용을 함께 비교합니다." },
+          { change: "pairs의 두 for clause 순서를 바꿉니다.", prediction: "포함되는 pair 집합은 같아도 생성 순서가 달라집니다.", result: "clause 순서가 출력 순서 계약에 영향을 줌을 확인합니다." },
+        ],
+        sourceRefs: ["pep-572-walrus", "python-expression-reference", "python-functional-howto", "python-style-programming-faq"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "comprehension 뒤 반복 변수 값이 바뀌었다고 예상했지만 이전 외부 값이 남는다.", likelyCause: "Python 3 comprehension target은 내부 scope에 있어 바깥 이름을 재바인딩하지 않습니다.", checks: ["같은 이름이 바깥에 이미 정의됐는지 확인합니다.", "for target과 walrus target을 구분합니다.", "함수·module·class 중 어느 containing scope인지 최소 예제로 봅니다."], fix: "comprehension 결과에서 필요한 값을 명시적으로 반환하거나 평범한 loop 상태 변수로 작성합니다.", prevention: "comprehension의 내부 반복 이름을 바깥 상태 전달 수단으로 사용하지 않습니다." },
+      { symptom: "한 줄 comprehension을 수정할 때마다 중복 계산·순서 버그가 생긴다.", likelyCause: "여러 for·if·walrus·side effect가 한 표현식에 결합되어 clause expansion이 보이지 않습니다.", checks: ["동등한 중첩 for 문으로 펼쳐 봅니다.", "함수 호출별 횟수와 예외 지점을 기록합니다.", "filter와 conditional expression 위치를 구분합니다."], fix: "단계를 이름 있는 helper와 명시 loop로 분리하고 중간값을 테스트합니다.", prevention: "팀이 합의한 nesting·filter 복잡도 경계를 넘으면 자동이 아니라 리뷰로 loop 전환합니다." },
+    ],
+    expertNotes: ["dict comprehension은 Python 3.8부터 key expression을 value보다 먼저 평가하도록 명확해졌으며 중복 key는 마지막 값이 남습니다.", "walrus가 이름을 바깥에 남기는 규칙은 witness를 보존하는 any/all 패턴에 유용하지만 API 함수에서는 명시적 반환값이 더 읽기 좋을 때가 많습니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "generator expression을 만들면 body expression이 즉시 실행되나요?", answer: "body와 filter는 항목 소비 시 실행됩니다. 다만 가장 왼쪽 for의 iterable 표현식은 generator 생성 시 즉시 평가되어 iterator가 만들어집니다." },
+  { question: "generator를 list로 바꾸면 laziness의 메모리 이점이 완전히 유지되나요?", answer: "아닙니다. 최종 결과 전체는 materialize되므로 그 메모리는 필요합니다. 중간 컬렉션을 줄일 수 있을 뿐 peak는 실제 pipeline으로 측정해야 합니다." },
+  { question: "comprehension의 for target은 바깥 scope에 남나요?", answer: "Python 3에서는 암시적 내부 scope에 있어 누출되지 않으며 같은 이름의 바깥 변수도 재바인딩하지 않습니다." },
+  { question: "comprehension 안 walrus target은 어디에 바인딩되나요?", answer: "PEP 572 특별 규칙에 따라 보통 comprehension을 감싼 containing scope에 바인딩됩니다." },
+  { question: "중첩 comprehension의 실행 순서는 어떻게 읽나요?", answer: "for와 if clause를 왼쪽부터 같은 순서의 중첩 for 문으로 펼치며 첫 for가 가장 바깥 loop입니다." },
+  { question: "어떤 경우 comprehension을 명시 loop로 바꿔야 하나요?", answer: "여러 side effect·예외 처리·깊은 nesting·복잡한 walrus로 입력→필터→변환 흐름이 한눈에 보이지 않을 때입니다." },
+);
+
+expertSession.completionChecklist.push(
+  "list comprehension과 generator expression의 생성·계산·소비 시점을 구분할 수 있다.",
+  "single-pass iterator의 소비 소유권과 재생성 factory를 설계할 수 있다.",
+  "tracemalloc 기반 peak 측정으로 메모리 최적화를 검증할 수 있다.",
+  "comprehension target과 walrus target의 scope 차이를 설명할 수 있다.",
+  "중첩 clause를 명시 loop로 펼쳐 순서·복잡도·가독성을 검토할 수 있다.",
+  "set 중복 제거와 dict key 충돌의 정보 손실 정책을 선택할 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "python-expression-reference", repository: "Python", path: "reference/expressions.html", publicUrl: "https://docs.python.org/3/reference/expressions.html", usedFor: ["comprehension", "generator expression", "평가 순서", "scope"], evidence: "언어 레퍼런스에서 list·set·dict display와 generator expression의 생성·평가 규칙을 확인했습니다." },
+  { id: "pep-572-walrus", repository: "Python", path: "PEP 572", publicUrl: "https://peps.python.org/pep-0572/", usedFor: ["assignment expression", "comprehension scope", "dict 평가 순서"], evidence: "comprehension 안 named expression target의 containing-scope 규칙과 제한을 확인했습니다." },
+  { id: "python-functional-howto", repository: "Python", path: "howto/functional.html", publicUrl: "https://docs.python.org/3/howto/functional.html", usedFor: ["list comprehension", "generator expression", "iterator pipeline"], evidence: "공식 HOWTO의 eager list와 lazy generator 비교를 학습 흐름에 반영했습니다." },
+  { id: "python-iterator-datamodel", repository: "Python", path: "reference/datamodel.html#object.__next__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__next__", usedFor: ["single-pass", "StopIteration", "iterator 소비"], evidence: "generator expression이 제공하는 iterator의 소비·고갈 계약을 데이터 모델과 교차 확인했습니다." },
+  { id: "python-tracemalloc-doc", repository: "Python", path: "library/tracemalloc.html", publicUrl: "https://docs.python.org/3/library/tracemalloc.html", usedFor: ["메모리 측정", "peak 비교"], evidence: "문법만으로 메모리 개선을 주장하지 않고 allocation trace와 peak로 검증하는 도구 근거를 추가했습니다." },
+  { id: "python-style-programming-faq", repository: "Python", path: "faq/programming.html", publicUrl: "https://docs.python.org/3/faq/programming.html", usedFor: ["scope", "late binding과 이름", "가독성 선택"], evidence: "이름 binding과 표현식 설계 관련 공식 FAQ를 보조 근거로 사용했습니다." },
+);

@@ -109,7 +109,7 @@ const session = {
             { lines: "11-12", explanation: "길이·타입 구조가 맞지 않는 나머지를 명시합니다." },
             { lines: "14-15", explanation: "네 정상 좌표, 길이 3 tuple과 str 경계를 실행합니다." },
           ],
-          run: { environment: ["Python 3.10 이상", "match_points.py를 저장"], command: "python match_points.py" },
+          run: { environment: ["Python 3.10 이상", "match_points.py를 저장"], command: "python -I -X utf8 match_points.py" },
           output: { value: "(0, 0) -> 원점\n(0, 5) -> y축 위 (y=5)\n(3, 0) -> x축 위 (x=3)\n(2, 4) -> 일반 좌표 (2, 4)\n(1, 2, 3) -> 좌표 아님\n'xy' -> 좌표 아님", explanation: ["case 순서가 원점·축·일반 좌표 포함 관계를 해결합니다.", "길이 3은 고정 길이 2 패턴과 일치하지 않습니다.", "문자열 'xy'는 두 문자 sequence로 구조 매칭되지 않습니다."] },
           experiments: [
             { change: "case (0,y)를 case (0,*rest)로 바꿉니다.", prediction: "원점 뒤 x=0인 길이 1 이상 다양한 tuple이 일치하고 rest는 list입니다.", result: "가변 구조 허용이 넓어져 사전 schema 검증 필요성이 커집니다." },
@@ -149,7 +149,7 @@ const session = {
             { lines: "11-12", explanation: "mapping 구조조차 아닌 입력을 기본 오류로 처리합니다." },
             { lines: "14-20", explanation: "정상 두 개, 범위 밖 score, list 구조를 실행합니다." },
           ],
-          run: { environment: ["Python 3.10 이상", "match_events.py를 저장"], command: "python match_events.py" },
+          run: { environment: ["Python 3.10 이상", "match_events.py를 저장"], command: "python -I -X utf8 match_events.py" },
           output: { value: "메시지: 안녕\n멤버 이벤트: 둘리\n지원하지 않는 이벤트: score, fields=['value']\n잘못된 이벤트 구조", explanation: ["score 패턴 구조는 맞지만 guard 101 범위가 거짓이라 다음 generic type case로 이동합니다.", "mapping pattern은 id 추가 key가 있어도 message와 일치합니다.", "list는 mapping case 전체에 실패해 wildcard로 갑니다."] },
           experiments: [
             { change: "score value를 True로 바꿉니다.", prediction: "bool은 int의 하위 타입이라 int(value) class pattern과 범위 guard를 통과할 수 있습니다.", result: "정확히 int만 허용하려면 type(value) is int guard 같은 도메인 검증이 필요합니다." },
@@ -243,3 +243,171 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const expertSession = session as DetailedSession;
+expertSession.level = "전문가";
+expertSession.estimatedMinutes = 300;
+expertSession.chapters.push(
+  {
+    id: "subject-evaluation-and-binding-lifecycle",
+    title: "subject는 정확히 한 번 평가되고 바인딩 수명은 case 설계의 일부입니다",
+    lead: "패턴을 여러 개 적어도 match 뒤 표현식은 한 번만 평가됩니다. 반면 각 패턴의 구조 검사와 guard는 위에서 아래로 진행되므로 비용·부작용·이름 바인딩을 서로 다른 단계로 추적해야 합니다.",
+    explanations: [
+      "PEP 634의 실행 모델에서 subject expression은 match 진입 시 한 번 평가됩니다. subject가 함수 호출이라면 case 수만큼 재호출되지 않습니다. 이 보장은 네트워크 조회나 상태 변경 함수를 subject에 넣어도 좋다는 권고가 아니라, 평가 횟수를 예측할 수 있다는 의미입니다. 외부 I/O는 match 전에 이름 있는 변수로 받아 실패와 재시도를 분리하는 편이 관찰 가능성과 테스트성이 좋습니다.",
+      "패턴 성공 뒤 guard가 평가됩니다. guard가 거짓이면 다음 case로 이동하지만, 실패한 매칭 과정에서 만들어졌던 일부 이름이 구현 세부에 따라 남을 수 있는지에 의존해서는 안 됩니다. PEP 634는 실패 중 부분 바인딩을 이용하거나 가정하지 말라고 경계를 둡니다. 실무에서는 캡처 이름을 해당 case 블록 안에서만 사용하는 규칙이 가장 안전합니다.",
+      "`case pattern as whole`은 세부 값을 분해하면서 동시에 일치한 전체 객체를 보존합니다. 원본 이벤트를 감사 로그에 그대로 남기기보다는 whole에서 허용된 식별자만 골라 기록해야 합니다. as는 복사하지 않고 같은 객체를 바인딩하므로, 가변 객체를 변경하면 원본 subject도 바뀐다는 점을 기억합니다.",
+      "subject에 쉼표가 포함된 표현식은 튜플을 만들 수 있습니다. `match x, y:`는 두 값을 평가해 튜플 subject를 구성한 뒤 하나의 sequence pattern과 비교합니다. 평가 순서와 예외 지점을 명확히 해야 한다면 `subject = (x, y)`를 먼저 적어 디버거에서 확인합니다.",
+    ],
+    concepts: [
+      { term: "single subject evaluation", definition: "match가 시작될 때 subject 표현식을 한 번 평가해 결과 객체를 모든 case 검사에 공유하는 규칙입니다.", detail: ["case마다 subject 함수를 다시 호출하지 않습니다.", "guard 함수는 도달한 case마다 별도로 호출될 수 있습니다."], caveat: "평가 횟수 보장이 외부 I/O를 subject에 숨기는 설계를 정당화하지는 않습니다." },
+      { term: "partial binding boundary", definition: "패턴이 끝내 실패했을 때 중간에 만들어진 capture 이름의 상태를 프로그램 로직이 사용하지 않는 경계입니다.", detail: ["성공한 case 블록 안에서만 캡처를 소비합니다.", "guard 실패 뒤 바깥 이름 존재 여부를 검사하는 코드를 만들지 않습니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "subject-evaluated-once",
+        title: "함수 subject의 단일 평가와 as 전체 캡처 확인",
+        language: "python",
+        filename: "subject_once.py",
+        purpose: "case가 여러 개여도 subject 생성 함수는 한 번만 호출되고, mapping을 분해하면서 전체 객체를 함께 참조할 수 있음을 검증합니다.",
+        code: "calls = 0\n\ndef load_event():\n    global calls\n    calls += 1\n    return {'kind': 'score', 'value': 87, 'trace': 'T-01'}\n\nmatch load_event():\n    case {'kind': 'score', 'value': int(value), **rest} as whole if 0 <= value <= 100:\n        print(f'score={value}, extra={sorted(rest)}, same={whole[\"value\"] == value}')\n    case {'kind': kind} as whole:\n        print(f'unsupported={kind}, keys={sorted(whole)}')\n    case _:\n        print('invalid')\n\nprint(f'calls={calls}')",
+        walkthrough: [
+          { lines: "1-6", explanation: "호출 횟수를 기록하는 합성 subject 생성 함수를 정의합니다. 실제 서비스에서는 I/O 대신 이미 얻은 값을 넘기는 편이 좋습니다." },
+          { lines: "8-10", explanation: "mapping 구조, int class pattern, 범위 guard를 통과한 뒤 **rest와 as whole을 동시에 사용합니다." },
+          { lines: "11-14", explanation: "구조가 더 넓은 fallback과 최종 irrefutable wildcard를 뒤에 둡니다." },
+          { lines: "16", explanation: "case가 세 개여도 load_event 호출은 한 번임을 출력으로 고정합니다." },
+        ],
+        run: { environment: ["Python 3.10 이상", "subject_once.py를 UTF-8로 저장"], command: "python -I -X utf8 subject_once.py" },
+        output: { value: "score=87, extra=['trace'], same=True\ncalls=1", explanation: ["첫 case에서 구조와 guard가 모두 성공합니다.", "rest에는 명시하지 않은 trace만 남습니다.", "whole은 같은 mapping을 가리키며 subject 생성 함수는 정확히 한 번 호출됩니다."] },
+        experiments: [
+          { change: "value를 120으로 바꿉니다.", prediction: "첫 패턴은 구조적으로 맞지만 guard가 거짓이라 두 번째 case가 실행됩니다.", result: "guard 실패가 match 종료가 아니라 다음 case 진행이라는 점을 확인합니다." },
+          { change: "load_event()를 각 if 조건에서 직접 반복 호출하는 구현과 비교합니다.", prediction: "호출 횟수와 상태 일관성 관리가 더 어려워집니다.", result: "subject 단일 평가와 사전 변수화의 설계 가치를 구분합니다." },
+        ],
+        sourceRefs: ["pep-634-spec", "python-match-reference", "pep-636-tutorial"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "subject 함수가 한 번인데도 외부 API가 여러 번 호출된다.", likelyCause: "subject가 아니라 여러 guard 또는 case 블록에서 API 함수를 반복 호출했습니다.", checks: ["subject 생성 함수와 guard 함수에 별도 호출 카운터를 둡니다.", "각 guard가 어느 패턴 성공 뒤 평가되는지 로그 대신 합성 테스트로 추적합니다.", "property 접근자나 __match_args__ 대상 속성 자체에 부작용이 있는지 확인합니다."], fix: "외부 값을 match 전에 한 번 취득하고 guard는 이미 얻은 순수 데이터만 검사하도록 바꿉니다.", prevention: "패턴·guard는 순수 판별로 제한하고 I/O 경계를 별도 함수로 리뷰합니다." },
+      { symptom: "guard 실패 뒤 캡처 이름을 읽을 때 환경별로 결과가 다르거나 UnboundLocalError가 난다.", likelyCause: "실패한 패턴의 부분 바인딩 상태에 의존했습니다.", checks: ["캡처 이름이 case 블록 밖에서 사용되는지 검색합니다.", "성공 case마다 명시 return 또는 결과 변수 할당이 있는지 확인합니다.", "wildcard에서 기본 결과를 만드는지 확인합니다."], fix: "각 성공 case에서 완성된 결과를 반환하고 캡처 이름은 블록 밖으로 누출하지 않습니다.", prevention: "부분 바인딩은 미정의 경계로 취급하는 테스트·리뷰 규칙을 둡니다." },
+    ],
+    expertNotes: ["속성 패턴은 객체 속성을 읽을 수 있으므로 descriptor나 property에 부작용이 있다면 구조 매칭이 순수하지 않을 수 있습니다.", "guard 평가 순서는 case 순서에 관찰 가능하게 의존하므로 비용 큰 guard를 무조건 앞에 두는 미세 최적화보다 좁고 의미 있는 패턴 순서를 먼저 설계합니다."],
+  },
+  {
+    id: "class-or-as-irrefutable-reachability",
+    title: "class·OR·as 패턴과 irrefutable 도달 가능성을 하나의 문법 계약으로 읽습니다",
+    lead: "class pattern은 타입과 속성 계약을, OR는 대안 계약을, as는 전체 보존을 표현합니다. capture-all과 wildcard는 irrefutable이라 case 블록의 마지막 위치 제약까지 컴파일 단계에서 영향을 줍니다.",
+    explanations: [
+      "class pattern의 위치 인수는 클래스가 제공하는 `__match_args__` 순서에 의존합니다. dataclass가 이를 자동 생성하더라도 공개 API의 필드 순서를 바꾸면 기존 위치 패턴 의미가 달라질 수 있습니다. 도메인 경계에서는 `Point(x=0, y=y)` 같은 keyword class pattern이 이름으로 의도를 고정해 장기 유지보수에 유리합니다.",
+      "OR 패턴의 각 대안은 동일한 이름 집합을 바인딩해야 합니다. `('ok', value) | ('pass', value)`는 허용되지만 한쪽만 value를 캡처하면 case 블록이 어떤 이름을 받을지 정할 수 없어 SyntaxError입니다. 각 대안의 타입 계약까지 같다는 뜻은 아니므로 guard나 class subpattern으로 후속 조건을 명시합니다.",
+      "`P as name`은 P가 성공한 경우 그 부분의 subject를 name에 추가 바인딩합니다. OR 전체를 보존하려면 괄호와 우선순위를 읽기 쉽게 적습니다. 지나치게 중첩된 OR·as는 작은 정규화 함수나 여러 case로 나누는 것이 낫습니다.",
+      "wildcard `_`와 일반 capture `name`은 항상 일치할 수 있는 irrefutable pattern입니다. guard 없는 irrefutable case 뒤에는 어떤 case도 도달할 수 없으므로 컴파일러가 SyntaxError로 막습니다. guard가 붙은 capture case는 guard가 거짓일 수 있어 다음 case가 도달 가능하지만, 지나치게 넓은 캡처가 앞에 있으면 설계 의도를 읽기 어렵습니다.",
+    ],
+    concepts: [
+      { term: "__match_args__", definition: "class pattern의 위치 subpattern을 어떤 속성 이름에 대응할지 선언하는 문자열 튜플입니다.", detail: ["dataclass가 보통 필드 순서로 생성합니다.", "공개 순서 변경은 위치 패턴 소비자에게 호환성 변화가 될 수 있습니다."], caveat: "keyword class pattern은 __match_args__ 순서에 의존하지 않습니다." },
+      { term: "irrefutable pattern", definition: "문법상 어떤 subject에도 반드시 일치할 수 있는 wildcard 또는 capture 같은 패턴입니다.", detail: ["guard 없는 irrefutable case는 마지막이어야 합니다.", "OR 패턴도 최소 한 대안이 irrefutable이면 전체 도달 가능성을 주의합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "dataclass-class-pattern-contract",
+        title: "dataclass 위치 패턴과 keyword 패턴의 API 차이",
+        language: "python",
+        filename: "class_patterns.py",
+        purpose: "__match_args__가 위치 패턴을 연결하는 방식과 keyword class pattern의 명시성을 실행 결과로 비교합니다.",
+        code: "from dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass Point:\n    x: int\n    y: int\n\ndef describe(point):\n    match point:\n        case Point(0, 0) as whole:\n            return f'origin:{whole}'\n        case Point(x=0, y=y):\n            return f'y-axis:{y}'\n        case Point(x=x, y=y) if x == y:\n            return f'diagonal:{x}'\n        case Point(x=x, y=y):\n            return f'point:{x},{y}'\n        case _:\n            return 'not-point'\n\nprint(Point.__match_args__)\nfor item in [Point(0, 0), Point(0, 3), Point(4, 4), Point(2, 5), (1, 2)]:\n    print(describe(item))",
+        walkthrough: [
+          { lines: "1-6", explanation: "frozen dataclass를 만들고 자동 생성된 __match_args__를 관찰합니다." },
+          { lines: "8-12", explanation: "가장 구체적인 위치 class pattern에서 as로 전체 객체를 보존하고, 다음 case는 keyword 속성 이름으로 y축을 표현합니다." },
+          { lines: "13-18", explanation: "속성 간 동등성은 guard로 검사하고 일반 Point와 비 Point fallback을 뒤에 둡니다." },
+          { lines: "21-23", explanation: "위치 계약과 모든 분기 결과를 고정된 합성 데이터로 실행합니다." },
+        ],
+        run: { environment: ["Python 3.10 이상", "class_patterns.py를 UTF-8로 저장"], command: "python -I -X utf8 class_patterns.py" },
+        output: { value: "('x', 'y')\norigin:Point(x=0, y=0)\ny-axis:3\ndiagonal:4\npoint:2,5\nnot-point", explanation: ["dataclass의 위치 패턴 순서는 x, y입니다.", "keyword 패턴은 속성 이름을 문서처럼 드러냅니다.", "tuple은 모양이 비슷해도 Point class pattern과 일치하지 않습니다."] },
+        experiments: [
+          { change: "필드 선언 순서를 y, x로 바꾸고 Point(0, 3)을 다시 봅니다.", prediction: "위치 패턴의 의미가 함께 바뀌지만 keyword 패턴은 이름 기준을 유지합니다.", result: "공개 class pattern API에서 keyword 사용의 호환성 장점을 확인합니다." },
+          { change: "`case Point(x=x, y=x)`로 동등성을 표현하려 합니다.", prediction: "같은 이름을 패턴 안에서 여러 번 바인딩할 수 없어 SyntaxError입니다.", result: "관계 검사는 guard 책임임을 확인합니다." },
+        ],
+        sourceRefs: ["pep-634-spec", "python-dataclasses-doc", "python-match-reference"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "dataclass 필드 순서를 바꾼 뒤 위치 class pattern 분기가 조용히 달라졌다.", likelyCause: "소비자가 자동 __match_args__ 순서에 결합되어 있었습니다.", checks: ["클래스의 __match_args__를 출력합니다.", "저장소에서 `case ClassName(` 위치 패턴을 검색합니다.", "필드 이름 기반 테스트와 이전 버전 객체를 실행합니다."], fix: "외부·장기 계약에는 keyword class pattern을 사용하고 필요한 경우 __match_args__를 명시적으로 안정화합니다.", prevention: "__match_args__ 변경을 API 호환성 리뷰 항목에 넣습니다." },
+      { symptom: "OR pattern에서 alternative patterns bind different names SyntaxError가 발생한다.", likelyCause: "각 OR 대안이 서로 다른 capture 이름 집합을 만들었습니다.", checks: ["각 `|` 대안에서 캡처되는 이름을 집합으로 적습니다.", "literal과 class subpattern이 만드는 이름을 확인합니다.", "공통 처리 블록이 정말 같은 데이터 계약을 요구하는지 검토합니다."], fix: "모든 대안이 같은 이름을 바인딩하도록 고치거나 별도 case로 나눕니다.", prevention: "OR는 단순 표면 차이만 합치고 결과 계약이 다르면 case를 분리합니다." },
+    ],
+    expertNotes: ["class pattern은 isinstance 검사와 속성 추출을 합치지만 생성자 호출이 아니며 새 객체를 만들지 않습니다.", "`case _ if condition`은 문법상 wildcard지만 guard가 거짓일 수 있어 뒤 case가 허용됩니다. 그래도 입력 구조와 무관한 전역 조건을 case 순서에 섞는 설계는 피합니다."],
+  },
+  {
+    id: "version-boundary-and-pattern-contract-testing",
+    title: "Python 3.10 버전 경계와 패턴 도달 가능성을 컴파일·행동 테스트로 고정합니다",
+    lead: "match는 런타임 feature flag가 아니라 parser 문법입니다. 지원 버전, 정적 컴파일, case/guard 경계, unknown 정책을 배포 계약으로 함께 검증해야 합니다.",
+    explanations: [
+      "match 문법은 Python 3.10 parser부터 인식합니다. 3.9에서 해당 파일을 import하면 분기에 도달하지 않아도 전체 파일 parsing 단계에서 SyntaxError가 납니다. 따라서 `if sys.version_info`로 같은 파일 안의 match를 감싸는 방식은 하위 버전 호환책이 아닙니다. 하위 버전을 지원해야 하면 match 코드 자체를 별도 3.10+ 모듈로 격리하거나 if/dispatch로 작성합니다.",
+      "CI에서는 지원하는 최소·최대 Python matrix에 `py_compile` 또는 import 테스트를 둡니다. `python -I -X utf8`은 사용자 site-packages와 `PYTHONPATH` 영향을 줄이고 UTF-8 모드를 고정해 예제가 로컬 환경에 우연히 의존하지 않게 합니다. 이것이 가상환경 의존성까지 제공하는 것은 아니므로 표준 라이브러리 예제와 외부 패키지 예제를 구분합니다.",
+      "컴파일러는 guard 없는 irrefutable case 뒤의 패턴을 unreachable로 거부합니다. 그러나 의미상 중복되는 literal·넓은 class·mapping case를 모두 찾아주지는 않습니다. 순서 테스트는 각 case를 한 번씩 통과하는 대표값뿐 아니라 앞 case와 겹치는 값, guard 경계값, unknown 구조를 포함해야 합니다.",
+      "패턴 매칭 결과를 문자열 하나로만 테스트하면 어떤 case가 선택됐는지 우연히 같은 출력에 가려질 수 있습니다. 도메인 결과를 Enum·dataclass 같은 구조화 값으로 반환하고 표시를 바깥에서 수행하면 분기 계약과 UI 문구를 독립적으로 검증할 수 있습니다.",
+    ],
+    concepts: [
+      { term: "parser boundary", definition: "코드가 실행되기 전에 인터프리터가 파일 문법 전체를 해석할 수 있어야 하는 버전 경계입니다.", detail: ["match는 Python 3.10 미만에서 import 자체가 실패합니다.", "런타임 조건문은 parser가 모르는 문법을 숨기지 못합니다."] },
+      { term: "case coverage", definition: "각 case와 guard의 참·거짓 전이, overlap, unknown 경로를 입력 집합으로 검증하는 행동 계약입니다.", detail: ["문장 coverage만으로 패턴 의미를 보장하지 않습니다.", "경계와 겹침 입력을 명시합니다."] },
+    ],
+    codeExamples: [
+      {
+        id: "or-as-guard-and-unreachable-compile",
+        title: "OR·as·guard 실행과 irrefutable 도달 불가 컴파일 검사",
+        language: "python",
+        filename: "pattern_contracts.py",
+        purpose: "같은 capture 계약을 가진 OR 대안과 전체 캡처를 사용하고, wildcard 뒤 case가 컴파일 단계에서 거부됨을 확인합니다.",
+        code: "def classify(record):\n    match record:\n        case (('ok', int(code)) | ('pass', int(code))) as whole if code >= 200:\n            return f'accepted:{whole[0]}:{code}'\n        case ('ok' | 'pass', int(code)):\n            return f'low:{code}'\n        case _:\n            return 'unknown'\n\nfor record in [('ok', 204), ('pass', 201), ('ok', 99), ('fail', 500)]:\n    print(classify(record))\n\nbad_source = \"match 1:\\n    case _:\\n        pass\\n    case 1:\\n        pass\\n\"\ntry:\n    compile(bad_source, '<unreachable>', 'exec')\nexcept SyntaxError as error:\n    print(type(error).__name__)",
+        walkthrough: [
+          { lines: "1-4", explanation: "두 OR 대안 모두 code를 바인딩하며 as whole은 선택된 tuple 전체를 보존합니다. guard는 capture 뒤 평가됩니다." },
+          { lines: "5-8", explanation: "낮은 코드와 unknown을 분리하고 wildcard를 마지막에 둡니다." },
+          { lines: "10-11", explanation: "OR 두 대안, guard 실패, unknown 경계를 모두 실행합니다." },
+          { lines: "13-17", explanation: "guard 없는 wildcard 뒤 literal case를 문자열로 컴파일해 도달 불가 오류의 타입을 고정합니다." },
+        ],
+        run: { environment: ["Python 3.10 이상", "pattern_contracts.py를 UTF-8로 저장"], command: "python -I -X utf8 pattern_contracts.py" },
+        output: { value: "accepted:ok:204\naccepted:pass:201\nlow:99\nunknown\nSyntaxError", explanation: ["OR 대안은 같은 code 이름 계약을 제공합니다.", "guard 실패는 다음 구조 case로 진행합니다.", "irrefutable wildcard 뒤 case는 실행 이전 컴파일 단계에서 거부됩니다."] },
+        experiments: [
+          { change: "첫 OR의 두 번째 대안에서 code 캡처를 제거합니다.", prediction: "대안의 바인딩 이름 집합이 달라 SyntaxError입니다.", result: "OR case 블록의 이름 계약이 컴파일 단계에 검증됨을 확인합니다." },
+          { change: "bad_source의 wildcard에 `if False` guard를 붙입니다.", prediction: "뒤 case가 문법적으로 도달 가능해져 compile이 성공합니다.", result: "irrefutable pattern과 guard가 도달 가능성에 미치는 차이를 확인합니다." },
+        ],
+        sourceRefs: ["pep-634-spec", "pep-635-rationale", "pep-636-tutorial", "python-match-reference", "python-pycompile-doc"],
+      },
+    ],
+    diagnostics: [
+      { symptom: "Python 3.9에서 version if문으로 감쌌는데도 모듈 import가 실패한다.", likelyCause: "parser가 조건 실행 전에 파일 전체의 match 문법을 읽지 못합니다.", checks: ["최소 인터프리터 버전을 확인합니다.", "match가 들어 있는 모듈의 import 경로를 찾습니다.", "패키지 메타데이터 requires-python과 CI matrix를 비교합니다."], fix: "최소 버전을 3.10+로 올리거나 match 없는 호환 모듈로 구현합니다.", prevention: "지원 최소 버전에서 모든 배포 모듈을 py_compile합니다." },
+      { symptom: "모든 case 줄이 실행됐는데 overlap 버그가 배포 후 발견된다.", likelyCause: "각 case 대표값만 테스트하고 앞뒤 패턴이 동시에 맞는 겹침·guard 경계를 테스트하지 않았습니다.", checks: ["case별 입력 집합의 포함 관계를 표로 만듭니다.", "경계 바로 아래·같음·바로 위 값을 넣습니다.", "unknown과 잘못된 타입, 추가 key 입력을 포함합니다."], fix: "분기 선택 결과를 구조화 값으로 반환하고 overlap 표 기반 테스트를 추가합니다.", prevention: "case coverage를 line coverage와 별도 품질 기준으로 관리합니다." },
+    ],
+    expertNotes: ["패턴 문법의 지원 버전은 라이브러리의 `Requires-Python`과 wheel 분류자, 문서, CI가 동일하게 말해야 합니다.", "정적 타입 검사기는 mapping payload의 런타임 구조를 모두 증명하지 못하므로 pattern 분기 뒤에도 도메인 invariant를 명시적 타입·검증으로 유지합니다."],
+  },
+);
+
+expertSession.reviewQuestions.push(
+  { question: "match subject에 함수 호출을 쓰면 case마다 호출되나요?", answer: "아닙니다. subject 표현식은 match 진입 시 한 번 평가되고 그 결과가 case 검사에 사용됩니다. 다만 guard의 함수 호출은 도달할 때마다 별도로 평가될 수 있습니다." },
+  { question: "패턴이 중간까지 성공했다가 실패했을 때 캡처 이름을 바깥에서 사용해도 되나요?", answer: "안 됩니다. 실패 중 부분 바인딩의 잔존 여부에 의존하지 말고 성공한 case 블록 안에서만 캡처를 소비합니다." },
+  { question: "OR pattern 각 대안이 서로 다른 이름을 캡처할 수 있나요?", answer: "같은 case 블록으로 합쳐지는 OR 대안은 동일한 capture 이름 집합을 바인딩해야 하며 다르면 SyntaxError입니다." },
+  { question: "as pattern은 값을 복사하나요?", answer: "아닙니다. 일치한 전체 또는 부분 subject 객체를 다른 이름으로 바인딩하므로 가변 객체라면 동일 객체를 가리킵니다." },
+  { question: "dataclass 위치 class pattern의 순서는 어디서 오나요?", answer: "주로 dataclass가 생성한 __match_args__ 문자열 튜플 순서를 따릅니다. 필드 순서 변화에 민감하므로 안정적 계약에는 keyword pattern을 선호합니다." },
+  { question: "guard 없는 case name과 case _ 뒤에 다른 case를 둘 수 있나요?", answer: "둘 다 irrefutable pattern이므로 뒤 case가 도달 불가능해 컴파일 오류가 납니다." },
+  { question: "Python 3.9 지원 코드에서 sys.version_info로 match를 감싸면 되나요?", answer: "아닙니다. 3.9 parser가 파일 전체를 실행 전에 읽으므로 match 문법 자체에서 실패합니다. 별도 호환 구현이나 최소 3.10 계약이 필요합니다." },
+  { question: "case coverage는 line coverage와 어떻게 다른가요?", answer: "각 패턴 대표값뿐 아니라 패턴 간 overlap, guard 참·거짓 경계, 구조 오류와 unknown까지 어떤 case가 선택되는지 검증합니다." },
+);
+
+expertSession.completionChecklist.push(
+  "subject 표현식과 guard 표현식의 평가 횟수를 분리해 설명할 수 있다.",
+  "실패한 패턴의 부분 바인딩 상태에 의존하지 않는 코드를 작성할 수 있다.",
+  "OR pattern 모든 대안의 capture 이름 계약을 검토할 수 있다.",
+  "as pattern이 복사가 아니라 동일 객체 바인딩임을 설명할 수 있다.",
+  "__match_args__ 위치 계약과 keyword class pattern의 호환성 차이를 판단할 수 있다.",
+  "irrefutable pattern과 guard가 뒤 case 도달 가능성에 미치는 영향을 예측할 수 있다.",
+  "Python 3.10 parser 경계를 프로젝트 메타데이터·CI·문서에 일치시킬 수 있다.",
+  "대표·overlap·guard 경계·unknown을 포함한 case coverage 표를 만들 수 있다.",
+);
+
+expertSession.sources.push(
+  { id: "pep-634-spec", repository: "Python", path: "PEP 634", publicUrl: "https://peps.python.org/pep-0634/", usedFor: ["subject 단일 평가", "pattern 문법", "바인딩과 guard", "irrefutable 규칙"], evidence: "구조적 패턴 매칭의 규범 명세에서 평가 순서, 패턴 종류, 바인딩과 실패 경계를 확인했습니다." },
+  { id: "pep-635-rationale", repository: "Python", path: "PEP 635", publicUrl: "https://peps.python.org/pep-0635/", usedFor: ["설계 근거", "구조적 분해의 사용 기준"], evidence: "구조적 패턴 매칭이 값 switch를 넘어 데이터 구조를 분해하도록 설계된 이유를 교차 확인했습니다." },
+  { id: "pep-636-tutorial", repository: "Python", path: "PEP 636", publicUrl: "https://peps.python.org/pep-0636/", usedFor: ["sequence", "mapping", "class", "OR와 as", "guard"], evidence: "공식 튜토리얼의 점진적 예제를 전문가 설명과 실행 예제의 학습 순서에 반영했습니다." },
+  { id: "python-match-reference", repository: "Python", path: "reference/compound_stmts.html#the-match-statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-match-statement", usedFor: ["match 실행 의미", "case 순서", "guard", "irrefutable case"], evidence: "현재 언어 레퍼런스에서 match statement의 문법과 실행 순서를 확인했습니다." },
+  { id: "python-dataclasses-doc", repository: "Python", path: "library/dataclasses.html", publicUrl: "https://docs.python.org/3/library/dataclasses.html", usedFor: ["dataclass", "match_args", "frozen 객체"], evidence: "dataclass의 match_args 생성 옵션과 필드 기반 클래스 계약을 확인했습니다." },
+  { id: "python-enum-doc", repository: "Python", path: "library/enum.html", publicUrl: "https://docs.python.org/3/library/enum.html", usedFor: ["qualified value pattern", "상수 분기"], evidence: "bare capture 대신 Enum.Member qualified name을 안정적 값 패턴으로 사용하는 근거를 보강했습니다." },
+  { id: "python-pycompile-doc", repository: "Python", path: "library/py_compile.html", publicUrl: "https://docs.python.org/3/library/py_compile.html", usedFor: ["컴파일 검증", "버전 경계 CI"], evidence: "배포 전 모듈 문법 컴파일 검증 절차를 공식 표준 라이브러리 문서와 맞췄습니다." },
+  { id: "python-sys-version-doc", repository: "Python", path: "library/sys.html#sys.version_info", publicUrl: "https://docs.python.org/3/library/sys.html#sys.version_info", usedFor: ["런타임 버전 정보", "parser 경계 비교"], evidence: "런타임 버전 정보와 parser 문법 호환이 서로 다른 단계임을 설명하는 근거로 사용했습니다." },
+);
