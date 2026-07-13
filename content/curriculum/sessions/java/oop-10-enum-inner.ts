@@ -1182,7 +1182,7 @@ public class NestedCompilerContracts {
     "OS temp GUID direct-child parent boundary와 reverse cleanup·post-delete assertion을 적용했다.",
     "원본11·JLS SE21·JVM/Java SE21 APIs·OpenJDK21 provenance와 보충 범위를 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-01-standard-api"],
   sources: [
     { id: "java-class06-ex18", repository: "javastudy2/classstudy", path: "src/com/java/class06/Ex18_Enum.java", usedFor: ["Lesson constants4", "int constant versus enum object", "Ex18 exact2 output"], evidence: "package-private Lesson의 JAVA·JSP·SPRING·REACT 네 constants, static final int data와 Lesson.JAVA object 비교, main의90/JAVA exact2행을 확인했습니다." },
     { id: "java-class06-ex19", repository: "javastudy2/classstudy", path: "src/com/java/class06/Ex19_MemberType.java", usedFor: ["BASIC/VIP/VVIP enum", "immutable label and level", "enum constructor and accessors"], evidence: "세 membership constants와 private final label·level, accessors, constant arguments를 받는 enum constructor를 확인했습니다." },
