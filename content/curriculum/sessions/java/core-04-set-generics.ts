@@ -1554,7 +1554,7 @@ public class StableDedupConcurrencyLab {
     "모든 public Java examples가 OpenJDK21 -Xlint:all warning0와 exact output을 통과했다.",
     "public target에 absolute local path·credential·private fixture·build residue가 없다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-05-list-stack-queue"],
   sources: [
     { id: "java-class09-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class09/Ex01_Collection.java", usedFor: ["Collection method inventory", "empty-output original"], evidence: "Collection 공통 연산의 원본 주석과 output0 behavior를 감사했습니다." },
     { id: "java-class09-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class09/Ex02_Set.java", usedFor: ["HashSet<Integer>", "enhanced for", "Iterator"], evidence: "원소3·두 traversal3/3을 raw order 없이 numeric multiset으로 확인했습니다." },
