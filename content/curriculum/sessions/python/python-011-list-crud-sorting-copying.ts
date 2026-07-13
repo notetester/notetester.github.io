@@ -248,4 +248,220 @@ const session = {
   sourceCoverage: { filesRead: 3, filesUsed: 3, uncoveredNotes: ["컴프리헨션 기반 필터는 py-020, 함수의 mutable 기본값은 py-022에서 실습합니다.", "deque·동시성·deepcopy 정책은 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "crud-return-failure-cardinality",
+    title: "CRUD 메서드의 반환·실패·cardinality 계약을 먼저 고정합니다",
+    lead: "append·extend·insert·remove·pop·clear는 비슷한 변경처럼 보여도 추가 단위, 삭제 기준, 누락 처리와 반환값이 서로 다릅니다.",
+    explanations: [
+      "append(value)는 value 하나를 끝에 넣고 None을 반환합니다. value가 list여도 중첩된 한 요소가 되며, extend(iterable)는 iterable의 각 항목을 현재 list 끝에 펼칩니다.",
+      "extend('abc')는 문자열도 iterable이므로 'a','b','c' 세 요소를 추가합니다. 문자열 하나를 추가하려면 append를 사용하거나 입력 schema에서 iterable-of-items와 scalar를 구분해야 합니다.",
+      "insert(index, value)는 범위를 벗어난 index도 양끝으로 clamp하며 예외를 내지 않습니다. 위치가 반드시 유효해야 한다면 대입/사전 검증과 다른 계약이 필요합니다.",
+      "remove(value)는 처음 같은 값 하나만 삭제하고 없으면 ValueError, pop(index)는 삭제한 값을 반환하고 범위를 벗어나면 IndexError입니다. discard 같은 조용한 삭제를 기대하면 안 됩니다.",
+      "변경 메서드가 None을 반환하는 관례는 in-place mutation을 드러냅니다. items = items.sort()처럼 재바인딩하지 말고 mutation 전후 state와 반환값을 각각 검증합니다.",
+    ],
+    concepts: [
+      { term: "mutation return contract", definition: "객체를 직접 바꾸는 메서드가 반환하는 값과 실패 방식에 대한 약속입니다.", detail: ["list 메서드는 대개 None입니다.", "pop은 제거된 값을 반환합니다."] },
+      { term: "cardinality", definition: "한 호출이 하나의 요소를 추가하는지 iterable의 여러 요소를 펼치는지에 대한 계약입니다.", detail: ["append와 extend를 구분합니다.", "문자열 iterable 함정을 포함합니다."] },
+    ],
+    codeExamples: [{
+      id: "list-crud-contract-matrix",
+      title: "append·extend·insert·remove·pop의 상태와 오류를 비교합니다",
+      language: "python",
+      filename: "list_crud_contracts.py",
+      purpose: "각 CRUD operation의 cardinality, 반환값과 exception type을 exact output으로 고정합니다.",
+      code: String.raw`items = ["python"]
+append_result = items.append(["java", "jsp"])
+print("after_append:", items, "return:", append_result)
+
+extend_result = items.extend("AI")
+print("after_extend_string:", items, "return:", extend_result)
+
+items.insert(999, "tail")
+items.insert(-999, "head")
+print("after_insert_clamp:", items)
+
+try:
+    items.remove("missing")
+except ValueError as error:
+    print("remove_error:", type(error).__name__)
+
+removed = items.pop()
+print("popped:", removed, "remaining:", items)
+try:
+    [].pop()
+except IndexError as error:
+    print("pop_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-7", explanation: "append가 list 하나를 중첩하고 extend가 문자열 characters를 펼치며 둘 다 None을 반환하는 것을 봅니다." },
+        { lines: "9-11", explanation: "insert가 아주 큰/작은 index를 양끝으로 clamp하는 계약을 확인합니다." },
+        { lines: "13-22", explanation: "remove의 ValueError와 pop의 반환값·IndexError를 type 수준으로 분류합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B list_crud_contracts.py" },
+      output: { value: "after_append: ['python', ['java', 'jsp']] return: None\nafter_extend_string: ['python', ['java', 'jsp'], 'A', 'I'] return: None\nafter_insert_clamp: ['head', 'python', ['java', 'jsp'], 'A', 'I', 'tail']\nremove_error: ValueError\npopped: tail remaining: ['head', 'python', ['java', 'jsp'], 'A', 'I']\npop_error: IndexError", explanation: ["상태와 반환값을 분리해 출력합니다.", "예외 message 대신 안정된 exception type을 검증합니다."] },
+      experiments: [
+        { change: "append('AI')를 사용합니다.", prediction: "문자열 전체가 한 요소로 추가됩니다.", result: "cardinality 선택이 데이터 shape를 바꿉니다." },
+        { change: "remove가 여러 번 존재하는 값을 삭제합니다.", prediction: "첫 번째 같은 요소만 삭제됩니다.", result: "전체 필터가 필요하면 comprehension/slice assignment를 씁니다." },
+        { change: "insert 전에 index 범위를 강제합니다.", prediction: "clamp 대신 업무 오류를 반환할 수 있습니다.", result: "builtin contract 위에 domain policy를 둡니다." },
+      ],
+      sourceRefs: ["py-list-methods", "py-list-tutorial", "py-mutable-sequence"],
+    }],
+    diagnostics: [
+      { symptom: "리스트에 문자열 한 개 대신 문자들이 각각 들어간다.", likelyCause: "scalar string에 extend를 호출했습니다.", checks: ["argument type과 append/extend 호출을 봅니다.", "expected element schema를 확인합니다."], fix: "한 문자열은 append하고 여러 strings만 extend합니다.", prevention: "scalar/list inputs를 구분하는 type hint와 tests를 둡니다." },
+      { symptom: "sort나 append 뒤 변수가 None이 된다.", likelyCause: "in-place method의 None 반환값으로 같은 이름을 재바인딩했습니다.", checks: ["assignment 오른쪽의 mutation method를 찾습니다.", "mutation 전 object id와 반환값을 봅니다."], fix: "mutation method는 별도 statement로 호출하거나 새 값이 필요하면 sorted/연결을 씁니다.", prevention: "lint rule과 return-contract review checklist를 둡니다." },
+    ],
+  },
+  {
+    id: "stable-sort-key-policy",
+    title: "stable sort와 key 함수를 이용해 다중 정렬 정책을 재현 가능하게 만듭니다",
+    lead: "정렬은 단순한 오름차순이 아니라 key 추출, tie 순서, None·대소문자·locale와 원본 보존 정책의 조합입니다.",
+    explanations: [
+      "Python sort와 sorted는 stable합니다. key가 같은 records는 입력에서의 상대 순서를 유지하므로 기존 우선순위를 보존하거나 다중 pass 정렬을 구성할 수 있습니다.",
+      "key 함수는 각 요소에 한 번 호출되고 반환 key끼리 비교됩니다. comparator 안에서 parsing·network·mutable state를 읽는 대신 사전에 검증된 값으로 pure key를 만듭니다.",
+      "reverse=True도 stability를 유지합니다. 숫자 하나에 음수를 붙이는 방식은 여러 field와 non-numeric keys에서 의도를 흐릴 수 있으므로 tuple key 또는 stable passes를 사용합니다.",
+      "str.lower보다 casefold가 Unicode caseless ordering key에 적합하지만 인간 언어의 collation과는 다릅니다. locale/ICU 정렬은 별도 제품 요구입니다.",
+      "None과 str 같은 서로 직접 비교할 수 없는 값은 key가 (is_missing, normalized_value) 같은 일관된 comparable shape를 반환하도록 정책을 명시합니다.",
+    ],
+    concepts: [
+      { term: "stable sort", definition: "정렬 key가 같은 요소의 입력 상대 순서를 보존하는 정렬입니다.", detail: ["tie-breaking을 예측할 수 있습니다.", "다중 pass 정렬이 가능합니다."] },
+      { term: "key function", definition: "각 원소에서 정렬에 사용할 비교 가능 값을 한 번 추출하는 함수입니다.", detail: ["pure하고 cheap해야 합니다.", "tuple key로 여러 기준을 표현합니다."] },
+    ],
+    codeExamples: [{
+      id: "stable-sort-key-evidence",
+      title: "tie stability·복합 key·None policy를 검증합니다",
+      language: "python",
+      filename: "stable_sort_keys.py",
+      purpose: "입력 순서 보존과 명시적 tie-break/None 정렬 정책을 deterministic records로 확인합니다.",
+      code: String.raw`records = [
+    {"seq": 1, "name": "Straße", "score": 90},
+    {"seq": 2, "name": "alpha", "score": 90},
+    {"seq": 3, "name": "Beta", "score": 80},
+    {"seq": 4, "name": None, "score": 90},
+]
+
+by_score = sorted(records, key=lambda row: row["score"], reverse=True)
+print("stable_tie:", [row["seq"] for row in by_score])
+
+def name_key(row):
+    name = row["name"]
+    return (name is None, "" if name is None else name.casefold())
+
+by_name = sorted(records, key=name_key)
+print("name_policy:", [(row["seq"], row["name"]) for row in by_name])
+
+by_score_then_name = sorted(records, key=lambda row: (-row["score"], name_key(row)))
+print("compound:", [row["seq"] for row in by_score_then_name])
+print("original:", [row["seq"] for row in records])`,
+      walkthrough: [
+        { lines: "1-8", explanation: "동점 records의 입력 seq를 포함해 안정성을 관찰할 fixture를 만듭니다." },
+        { lines: "9-16", explanation: "score 동점 순서와 None-last/casefold name key 정책을 각각 적용합니다." },
+        { lines: "18-20", explanation: "tuple key로 score descending/name ascending을 결합하고 sorted가 원본을 보존함을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "locale/network 불필요"], command: "python -I -B stable_sort_keys.py" },
+      output: { value: "stable_tie: [1, 2, 4, 3]\nname_policy: [(2, 'alpha'), (3, 'Beta'), (1, 'Straße'), (4, None)]\ncompound: [2, 1, 4, 3]\noriginal: [1, 2, 3, 4]", explanation: ["동점 score의 입력 순서는 유지됩니다.", "복합 key가 전체 tie 정책을 명시합니다."] },
+      experiments: [
+        { change: "seq를 최종 tuple key에 추가합니다.", prediction: "입력 순서와 독립된 명시적 deterministic tie-break가 됩니다.", result: "pagination용 total order를 만들 수 있습니다." },
+        { change: "name.lower를 casefold로 바꿉니다.", prediction: "Unicode 특수 case의 비교 key가 더 넓게 정규화됩니다.", result: "locale collation과는 여전히 다릅니다." },
+        { change: "key 안에서 int 변환을 시도합니다.", prediction: "잘못된 한 record가 전체 sort를 중단합니다.", result: "정렬 전 validation/parsing을 수행합니다." },
+      ],
+      sourceRefs: ["py-sorting-howto", "py-list-sort-api", "py-operator-itemgetter"],
+    }],
+    diagnostics: [
+      { symptom: "동점 records의 페이지 순서가 실행마다 흔들린다.", likelyCause: "입력 source 순서가 불안정하고 total tie-break key가 없습니다.", checks: ["sort key가 unique total order인지 봅니다.", "DB/query/source iteration order를 확인합니다."], fix: "stable source order를 보장하거나 immutable unique id를 최종 key에 추가합니다.", prevention: "동점·pagination·재실행 determinism tests를 둡니다." },
+      { symptom: "None이 섞인 정렬에서 TypeError가 난다.", likelyCause: "key가 일부 records에는 None, 다른 records에는 str을 반환해 직접 비교할 수 없습니다.", checks: ["모든 key 결과의 type/shape를 수집합니다.", "missing policy를 확인합니다."], fix: "(is_missing, normalized_value)처럼 항상 비교 가능한 동일 tuple shape를 반환합니다.", prevention: "None·empty·Unicode·동점 cases를 key contract test에 포함합니다." },
+    ],
+  },
+  {
+    id: "copy-and-iteration-mutation-safety",
+    title: "복사 깊이와 순회 중 변경을 별도 위험으로 다룹니다",
+    lead: "얕은 복사가 nested mutation을 격리하지 못하는 문제와, 같은 list를 순회하며 구조를 바꿔 요소를 건너뛰는 문제는 서로 다른 계약 위반입니다.",
+    explanations: [
+      "list.copy와 slice는 새 바깥 list를 만들지만 nested mutable elements를 공유합니다. snapshot이 nested state까지 고정돼야 하면 immutable value 또는 명시적 deep/domain copy가 필요합니다.",
+      "for loop는 내부 index를 앞으로 이동합니다. 같은 list에서 remove/insert하면 뒤 요소 위치가 당겨지거나 밀려 일부 요소를 건너뛰거나 다시 볼 수 있습니다.",
+      "필터링은 새 list comprehension을 만들어 이름을 재바인딩하는 방식이 가장 명확합니다. 기존 list identity를 다른 소비자가 공유한다면 items[:] = filtered처럼 slice assignment로 contents만 원자적 단계에서 교체합니다.",
+      "삭제 대상을 먼저 수집하거나 reversed indices로 삭제하는 방법도 있지만 duplicate values와 index drift를 고려해야 합니다.",
+      "multi-thread safety는 별도입니다. GIL에 기대어 여러 단계 CRUD invariant를 보호하지 말고 ownership, queue 또는 lock을 설계합니다.",
+    ],
+    concepts: [
+      { term: "structural mutation", definition: "순회 중 컨테이너 길이 또는 요소 위치를 바꾸는 추가·삭제 연산입니다.", detail: ["iteration cursor와 충돌합니다.", "새 collection 생성이 안전합니다."] },
+      { term: "identity-preserving replacement", definition: "list 객체 자체는 유지하면서 slice assignment로 전체 내용을 새 결과로 교체하는 방식입니다.", detail: ["aliases가 새 contents를 봅니다.", "필터 계산과 교체를 분리합니다."] },
+    ],
+    codeExamples: [{
+      id: "list-copy-iteration-mutation",
+      title: "얕은 copy 공유와 순회 삭제 skip을 재현하고 수정합니다",
+      language: "python",
+      filename: "list_copy_iteration.py",
+      purpose: "두 종류의 mutation bug를 exact state transition으로 분리합니다.",
+      code: String.raw`original = [["a"], ["b"]]
+snapshot = original.copy()
+original[0].append("shared")
+print("shallow_original:", original)
+print("shallow_snapshot:", snapshot)
+
+broken = [2, 4, 6, 7]
+for value in broken:
+    if value % 2 == 0:
+        broken.remove(value)
+print("broken_filter:", broken)
+
+shared = [2, 4, 6, 7]
+alias = shared
+filtered = [value for value in shared if value % 2 != 0]
+shared[:] = filtered
+print("safe_filter:", shared)
+print("identity_preserved:", shared is alias, alias)`,
+      walkthrough: [
+        { lines: "1-5", explanation: "얕은 copy가 nested row를 공유해 snapshot도 변경되는 것을 확인합니다." },
+        { lines: "7-11", explanation: "같은 list 순회 중 remove가 인접한4를 건너뛰는 broken 결과를 재현합니다." },
+        { lines: "13-18", explanation: "새 필터 결과를 계산한 뒤 slice assignment해 aliases와 identity를 유지합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "thread/network 불필요"], command: "python -I -B list_copy_iteration.py" },
+      output: { value: "shallow_original: [['a', 'shared'], ['b']]\nshallow_snapshot: [['a', 'shared'], ['b']]\nbroken_filter: [4, 7]\nsafe_filter: [7]\nidentity_preserved: True [7]", explanation: ["얕은 copy와 iteration mutation의 결과를 별도로 관찰합니다.", "slice assignment는 list identity를 보존합니다."] },
+      experiments: [
+        { change: "for value in broken[:]로 순회합니다.", prediction: "복사본을 순회하므로 원본에서 모든 짝수를 제거합니다.", result: "작은 list에는 유효하지만 추가 O(n) memory가 듭니다." },
+        { change: "shared = filtered로 재바인딩합니다.", prediction: "alias는 이전 list contents를 계속 봅니다.", result: "identity 유지 요구가 있을 때 slice assignment가 필요합니다." },
+        { change: "nested row를 tuple로 저장합니다.", prediction: "얕은 snapshot에서 내부 mutation 경로가 사라집니다.", result: "immutable values가 copy policy를 단순화합니다." },
+      ],
+      sourceRefs: ["py-copy-module", "py-for-statement", "py-deque-choice"],
+    }],
+    diagnostics: [
+      { symptom: "조건에 맞는 요소를 삭제했는데 일부가 남는다.", likelyCause: "같은 list를 순회하면서 remove해 iteration index와 요소 위치가 어긋났습니다.", checks: ["loop 대상과 변경 대상이 같은 identity인지 확인합니다.", "인접한 matching values로 재현합니다."], fix: "comprehension으로 새 결과를 만들거나 copy를 순회하고 원본을 변경합니다.", prevention: "adjacent duplicates와 all-match cases를 test합니다." },
+      { symptom: "새 list로 필터했더니 다른 component는 이전 내용을 본다.", likelyCause: "공유 list 이름만 새 객체로 재바인딩해 aliases가 분리됐습니다.", checks: ["is 관계와 object owner를 확인합니다.", "API가 identity preservation을 약속하는지 봅니다."], fix: "공유 identity가 계약이면 slice assignment로 contents를 교체하거나 공유 mutable state 자체를 제거합니다.", prevention: "ownership과 identity contract를 명시합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "append와 extend의 추가 단위 차이는 무엇인가요?", answer: "append는 인수 하나를 요소 하나로 넣고 extend는 iterable의 각 항목을 펼칩니다." },
+  { question: "insert가 범위 밖 index에서 항상 오류를 내나요?", answer: "아닙니다. 아주 작거나 큰 index를 list 양끝으로 clamp합니다." },
+  { question: "remove와 pop의 누락 예외는 무엇인가요?", answer: "remove는 ValueError, pop의 잘못된 index나 빈 list는 IndexError입니다." },
+  { question: "Python 정렬의 stable 의미는 무엇인가요?", answer: "key가 같은 요소들의 입력 상대 순서를 유지한다는 뜻입니다." },
+  { question: "key 함수는 comparator와 어떻게 다른가요?", answer: "각 요소에서 비교 key를 한 번 추출하고 sort는 그 key들을 비교합니다." },
+  { question: "None과 str을 함께 정렬하려면 어떻게 하나요?", answer: "missing 여부와 normalized value를 담은 동일한 tuple shape의 key를 반환합니다." },
+  { question: "순회 중 remove가 요소를 건너뛰는 이유는 무엇인가요?", answer: "삭제로 뒤 요소가 당겨져도 loop index는 다음 위치로 이동하기 때문입니다." },
+  { question: "slice assignment의 장점은 무엇인가요?", answer: "list identity를 유지하면서 contents를 새 결과로 교체해 기존 aliases도 같은 내용을 보게 합니다." },
+);
+session.completionChecklist.push(
+  "append와 extend의 cardinality를 구분한다.",
+  "in-place 메서드의 None 반환값으로 재바인딩하지 않는다.",
+  "remove·pop의 반환과 예외 계약을 설명한다.",
+  "stable sort의 tie 순서 보존을 검증한다.",
+  "pure하고 comparable한 tuple key를 설계한다.",
+  "None·Unicode·동점 정렬 정책을 명시한다.",
+  "순회 중 structural mutation을 피한다.",
+  "재바인딩과 identity-preserving slice assignment를 구분한다.",
+);
+session.sources.push(
+  { id: "py-list-methods", repository: "Python 3 Library Reference", path: "Mutable Sequence Types", publicUrl: "https://docs.python.org/3/library/stdtypes.html#mutable-sequence-types", usedFor: ["append/extend/insert/remove/pop", "mutation contracts"], evidence: "list CRUD의 공식 API 계약입니다." },
+  { id: "py-list-tutorial", repository: "Python 3 Tutorial", path: "More on Lists", publicUrl: "https://docs.python.org/3/tutorial/datastructures.html#more-on-lists", usedFor: ["list method behavior", "stack/queue cautions"], evidence: "list methods의 Python 공식 학습 자료입니다." },
+  { id: "py-mutable-sequence", repository: "Python 3 Library Reference", path: "Mutable Sequence operations", publicUrl: "https://docs.python.org/3/library/stdtypes.html#mutable-sequence-types", usedFor: ["slice assignment", "index deletion"], evidence: "mutable sequence 공통 operation의 공식 근거입니다." },
+  { id: "py-sorting-howto", repository: "Python 3 HOWTO", path: "Sorting Techniques", publicUrl: "https://docs.python.org/3/howto/sorting.html", usedFor: ["stability", "key functions", "multiple sorts"], evidence: "Python 정렬의 공식 HOWTO입니다." },
+  { id: "py-list-sort-api", repository: "Python 3 Library Reference", path: "list.sort", publicUrl: "https://docs.python.org/3/library/stdtypes.html#list.sort", usedFor: ["in-place stable sort", "key once"], evidence: "list.sort의 공식 계약입니다." },
+  { id: "py-operator-itemgetter", repository: "Python 3 Library Reference", path: "operator.itemgetter", publicUrl: "https://docs.python.org/3/library/operator.html#operator.itemgetter", usedFor: ["declarative record sort keys"], evidence: "field key helper의 공식 API입니다." },
+  { id: "py-copy-module", repository: "Python 3 Library Reference", path: "copy", publicUrl: "https://docs.python.org/3/library/copy.html", usedFor: ["shallow/deep copy boundary"], evidence: "copy depth의 공식 근거입니다." },
+  { id: "py-for-statement", repository: "Python 3 Language Reference", path: "The for statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-for-statement", usedFor: ["iteration progression", "mutation hazard"], evidence: "for statement의 primary language reference입니다." },
+  { id: "py-deque-choice", repository: "Python 3 Tutorial", path: "Using Lists as Queues", publicUrl: "https://docs.python.org/3/tutorial/datastructures.html#using-lists-as-queues", usedFor: ["queue container choice"], evidence: "front mutation 대신 deque를 권하는 공식 자료입니다." },
+);
+
 export default session;

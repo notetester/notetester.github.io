@@ -241,4 +241,223 @@ const session = {
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["set 집합 연산은 py-014에서 별도 학습합니다.", "TypedDict·검증 모델·설정 병합 보안은 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "dict-hash-insertion-order-equal-keys",
+    title: "hash lookup과 insertion order를 서로 다른 계약으로 이해합니다",
+    lead: "dict는 hash table 기반의 빠른 key lookup과 삽입 순서 보존을 동시에 제공하지만, 정렬된 mapping도 아니고 equality가 같은 key를 별개로 보관하지도 않습니다.",
+    explanations: [
+      "dict key는 hashable해야 하며 hash와 equality를 사용해 같은 key인지 판정합니다. list/dict/set처럼 mutable한 표준 containers는 key가 될 수 없습니다.",
+      "Python language는 dict iteration이 insertion order를 보존한다고 보장합니다. 이는 key 정렬이 아니며 입력·merge·삭제 순서에 따라 결과가 달라집니다.",
+      "기존 key의 value를 update해도 그 key 위치는 유지됩니다. key를 삭제한 뒤 다시 삽입하면 마지막 위치로 이동합니다.",
+      "1 == True이고 hash도 같으므로 {1: 'int', True: 'bool'}은 key 하나만 가집니다. domain에서 bool과 int를 구분해야 하면 key validation이 필요합니다.",
+      "평균 lookup/update는 O(1)에 가깝지만 collision과 resize, adversarial custom hash behavior가 있어 worst-case와 input budget을 무시하면 안 됩니다.",
+    ],
+    concepts: [
+      { term: "insertion order", definition: "key가 mapping에 처음 들어온 순서를 iteration에서 보존하는 계약입니다.", detail: ["update는 위치를 유지합니다.", "삭제 후 재삽입은 마지막으로 이동합니다."] },
+      { term: "equal keys", definition: "hash가 같고 == 비교가 True라 dict가 동일 key로 취급하는 객체들입니다.", detail: ["type이 달라도 같을 수 있습니다.", "later assignment가 value를 덮습니다."] },
+      { term: "hash table", definition: "hash를 이용해 key가 있을 bucket 후보를 빠르게 찾는 mapping 구현 전략입니다.", detail: ["평균 O(1) lookup을 제공합니다.", "순서 계약과 별개입니다."] },
+    ],
+    codeExamples: [{
+      id: "dict-order-hash-equality-evidence",
+      title: "update·삭제/재삽입과 bool/int equal key를 관찰합니다",
+      language: "python",
+      filename: "dict_order_hash.py",
+      purpose: "dict insertion order 변화와 equality 기반 key identity를 exact output으로 검증합니다.",
+      code: String.raw`settings = {"theme": "dark", "locale": "ko", "page_size": 20}
+print("initial:", list(settings))
+
+settings["locale"] = "en"
+print("after_update:", list(settings), settings)
+
+del settings["theme"]
+settings["theme"] = "light"
+print("after_reinsert:", list(settings), settings)
+
+equal_keys = {1: "integer", True: "boolean"}
+print("equal_length:", len(equal_keys))
+print("equal_keys:", equal_keys)
+print("lookup:", equal_keys[1], equal_keys[True])
+
+try:
+    {["mutable"]: "value"}
+except TypeError as error:
+    print("unhashable:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-9", explanation: "기존 key update는 순서를 유지하고 삭제 후 재삽입은 마지막으로 이동함을 확인합니다." },
+        { lines: "11-14", explanation: "int1과 bool True가 equal key로 한 slot/value를 공유하는 결과를 봅니다." },
+        { lines: "16-19", explanation: "mutable list key가 hashability 경계에서 TypeError가 되는 것을 분류합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "PYTHONHASHSEED에 무관한 출력"], command: "python -I -B dict_order_hash.py" },
+      output: { value: "initial: ['theme', 'locale', 'page_size']\nafter_update: ['theme', 'locale', 'page_size'] {'theme': 'dark', 'locale': 'en', 'page_size': 20}\nafter_reinsert: ['locale', 'page_size', 'theme'] {'locale': 'en', 'page_size': 20, 'theme': 'light'}\nequal_length: 1\nequal_keys: {1: 'boolean'}\nlookup: boolean boolean\nunhashable: TypeError", explanation: ["dict repr도 insertion order를 보여 줍니다.", "hash 값 자체는 출력하지 않아 hash randomization에 독립적입니다."] },
+      experiments: [
+        { change: "처음부터 sorted(settings)을 순회합니다.", prediction: "insertion order가 아니라 key lexical order가 됩니다.", result: "정렬 필요를 명시적으로 표현합니다." },
+        { change: "1.0을 같은 dict key로 추가합니다.", prediction: "1, True와 equality/hash가 같아 같은 slot을 update합니다.", result: "domain key type validation 필요성을 확인합니다." },
+        { change: "custom key의 hash 참여 field를 삽입 후 바꿉니다.", prediction: "lookup invariant가 깨질 수 있습니다.", result: "key는 lifetime 동안 hash/equality가 안정돼야 합니다." },
+      ],
+      sourceRefs: ["py-mapping-types", "py-dict-displays", "py-hashable-glossary", "py-datamodel-hash"],
+    }],
+    diagnostics: [
+      { symptom: "설정 key 출력 순서가 기대한 alphabetic order가 아니다.", likelyCause: "insertion order 보장을 sorted order로 오해했습니다.", checks: ["key가 삽입·삭제·merge된 순서를 추적합니다.", "정렬 요구가 UI인지 storage인지 확인합니다."], fix: "정렬이 필요하면 sorted(mapping) 또는 명시적 order key를 사용합니다.", prevention: "insertion과 presentation order를 API 문서에서 분리합니다." },
+      { symptom: "True key를 넣었더니 기존1 key 값이 바뀐다.", likelyCause: "bool이 int subclass이고 True == 1이며 hash도 같아 equal key입니다.", checks: ["type, equality와 hash equality를 확인합니다.", "입력 key schema를 봅니다."], fix: "domain key type을 strict하게 검증하거나 type tag를 key에 포함합니다.", prevention: "bool/int/float equal-key cases를 tests에 포함합니다." },
+    ],
+  },
+  {
+    id: "dict-live-views-iteration-mutation",
+    title: "keys·values·items live view와 순회 중 구조 변경을 구분합니다",
+    lead: "dict views는 snapshot list가 아니라 원본 mapping에 연결된 동적 객체이므로, 이후 update를 반영하고 size-changing mutation 중 iteration은 실패할 수 있습니다.",
+    explanations: [
+      "d.keys(), d.values(), d.items()는 lightweight view입니다. view를 만든 뒤 key/value를 변경해도 다시 호출하지 않고 최신 mapping을 관찰합니다.",
+      "keys view와 items view는 set-like 연산을 일부 지원하지만 values view의 equality semantics를 set처럼 가정하면 안 됩니다.",
+      "dict size가 바뀌는 insert/delete를 같은 iteration 중 수행하면 RuntimeError가 발생하거나 모든 항목 방문을 보장할 수 없습니다.",
+      "value-only update는 size를 바꾸지 않아 동작할 수 있지만 mutation과 observation을 섞으면 reasoning이 어려워집니다. 변환 결과를 새 dict로 만드는 편이 명확합니다.",
+      "snapshot이 필요하면 list(d.items()) 또는 d.copy()를 사용하되 nested values는 얕게 공유한다는 copy-depth 계약을 유지합니다.",
+    ],
+    concepts: [
+      { term: "dictionary view", definition: "원본 dict의 keys·values·items를 동적으로 보여 주는 iterable 객체입니다.", detail: ["이후 변경을 반영합니다.", "snapshot이 아닙니다."] },
+      { term: "size-changing mutation", definition: "mapping iteration 중 key 수를 늘리거나 줄이는 구조 변경입니다.", detail: ["RuntimeError 위험이 있습니다.", "snapshot/새 mapping을 사용합니다."] },
+    ],
+    codeExamples: [{
+      id: "dict-live-view-mutation-evidence",
+      title: "live view 갱신과 iteration mutation 오류를 재현합니다",
+      language: "python",
+      filename: "dict_live_views.py",
+      purpose: "view와 snapshot의 시간 의미, size mutation 실패를 결정적 상태로 보여 줍니다.",
+      code: String.raw`inventory = {"python": 3, "java": 2}
+keys_view = inventory.keys()
+items_view = inventory.items()
+keys_snapshot = list(keys_view)
+
+inventory["jsp"] = 1
+inventory["python"] = 4
+print("keys_view:", list(keys_view))
+print("items_view:", list(items_view))
+print("keys_snapshot:", keys_snapshot)
+
+try:
+    for key in inventory:
+        if key == "java":
+            del inventory[key]
+except RuntimeError as error:
+    print("mutation_error:", type(error).__name__)
+
+print("after_failed_loop:", inventory)
+safe = {key: value for key, value in inventory.items() if key != "jsp"}
+print("safe_filtered:", safe)`,
+      walkthrough: [
+        { lines: "1-10", explanation: "view와 list snapshot을 만든 뒤 insert/value update가 각각 어디에 반영되는지 확인합니다." },
+        { lines: "12-17", explanation: "iteration 중 delete가 RuntimeError를 내며 deletion 자체는 이미 적용됐을 수 있음을 봅니다." },
+        { lines: "19-21", explanation: "새 dict comprehension으로 안전한 필터 결과를 만듭니다." },
+      ],
+      run: { environment: ["Python 3.13+", "network/filesystem 불필요"], command: "python -I -B dict_live_views.py" },
+      output: { value: "keys_view: ['python', 'java', 'jsp']\nitems_view: [('python', 4), ('java', 2), ('jsp', 1)]\nkeys_snapshot: ['python', 'java']\nmutation_error: RuntimeError\nafter_failed_loop: {'python': 4, 'jsp': 1}\nsafe_filtered: {'python': 4}", explanation: ["예외 전에 delete side effect가 이미 발생했음을 숨기지 않습니다.", "새 mapping 변환이 partial mutation을 피합니다."] },
+      experiments: [
+        { change: "for key in list(inventory)로 바꿉니다.", prediction: "key snapshot을 순회하므로 원본 delete가 안전하게 완료됩니다.", result: "O(n) snapshot 비용을 지불합니다." },
+        { change: "iteration 중 기존 key value만 변경합니다.", prediction: "size는 같아 RuntimeError가 없을 수 있지만 view에는 새 값이 보입니다.", result: "여전히 observation/mutation 분리를 권장합니다." },
+        { change: "snapshot = inventory.copy()를 만듭니다.", prediction: "key/value bindings는 고정되지만 nested mutable values는 공유됩니다.", result: "copy depth 계약이 필요합니다." },
+      ],
+      sourceRefs: ["py-dict-view-objects", "py-dict-iteration", "py-copy-module"],
+    }],
+    diagnostics: [
+      { symptom: "저장해 둔 keys 변수가 나중에 새 key까지 포함한다.", likelyCause: "keys view를 snapshot으로 오해했습니다.", checks: ["type이 dict_keys인지 봅니다.", "view 생성 뒤 mapping mutation을 추적합니다."], fix: "시간 고정 snapshot이 필요하면 list/tuple/frozenset으로 명시적 materialize합니다.", prevention: "live-view와 snapshot 이름·type을 구분합니다." },
+      { symptom: "dict 순회 삭제 중 RuntimeError 뒤 일부만 삭제됐다.", likelyCause: "size-changing mutation이 예외 전에 일부 적용됐습니다.", checks: ["exception 뒤 실제 mapping state를 확인합니다.", "loop 중 insert/delete calls를 찾습니다."], fix: "삭제 keys를 먼저 수집하거나 snapshot을 순회하고 원본을 변경합니다.", prevention: "all-match/first-match/empty mutation cases를 test합니다." },
+    ],
+  },
+  {
+    id: "dict-missing-merge-precedence-complexity",
+    title: "missing·None·default 생성과 merge precedence를 명시합니다",
+    lead: "get의 기본 None으로 key 부재와 저장된 None을 합치지 않고, default 생성 side effect와 여러 설정 source의 우선순위를 코드와 tests로 드러냅니다.",
+    explanations: [
+      "mapping[key]는 필수 key에 KeyError를 내고 get은 선택 key에 default를 반환합니다. get(key)만 쓰면 missing과 stored None을 구분할 수 없어 unique sentinel이 필요합니다.",
+      "setdefault는 key가 없을 때 default를 저장하고 value를 반환합니다. default expression은 호출 전에 평가되므로 expensive factory에는 defaultdict 또는 명시적 branch가 적합합니다.",
+      "collections.defaultdict의 factory는 __getitem__ missing access에서만 호출되고 get에는 호출되지 않습니다. 읽기가 state를 생성한다는 side effect를 API에서 드러내야 합니다.",
+      "d1 | d2는 새 dict를 만들고 겹치는 key는 오른쪽 값이 이깁니다. 기존 left key 위치는 유지되고 오른쪽의 새 keys가 뒤에 붙습니다. |=는 왼쪽을 변경합니다.",
+      "평균 get/set은 O(1)이지만 merge/copy는 모든 bindings를 방문해 O(n+m) 시간·memory를 사용합니다. 큰 untrusted mapping에는 key count/depth/value size budget을 둡니다.",
+    ],
+    concepts: [
+      { term: "sentinel", definition: "정상 domain 값과 겹치지 않게 missing 상태를 나타내는 고유 객체입니다.", detail: ["None과 부재를 구분합니다.", "identity is로 검사합니다."] },
+      { term: "merge precedence", definition: "여러 mappings에 같은 key가 있을 때 어느 source 값이 이기는지 정한 규칙입니다.", detail: ["dict union은 right wins입니다.", "보안 설정 allowlist가 필요합니다."] },
+      { term: "default factory", definition: "missing key 접근 시 새 기본값을 생성하는 callable입니다.", detail: ["state 생성 side effect가 있습니다.", "get과 __getitem__ behavior가 다릅니다."] },
+    ],
+    codeExamples: [{
+      id: "dict-missing-merge-contracts",
+      title: "sentinel·defaultdict·union의 부재와 우선순위를 검증합니다",
+      language: "python",
+      filename: "dict_missing_merge.py",
+      purpose: "stored None, missing, lazy default 생성과 right-wins union을 분리합니다.",
+      code: String.raw`from collections import defaultdict
+
+MISSING = object()
+profile = {"nickname": None, "locale": "ko"}
+for key in ["nickname", "timezone"]:
+    value = profile.get(key, MISSING)
+    print(key, "missing=" + str(value is MISSING), "value=" + repr(None if value is MISSING else value))
+
+groups = defaultdict(list)
+print("before_default:", dict(groups))
+groups["python"].append("alice")
+print("after_default:", dict(groups))
+print("get_missing:", groups.get("java"), dict(groups))
+
+defaults = {"theme": "light", "page_size": 20, "safe": True}
+user = {"theme": "dark", "page_size": 50}
+merged = defaults | user
+print("merged:", merged)
+print("defaults_unchanged:", defaults)`,
+      walkthrough: [
+        { lines: "1-7", explanation: "고유 sentinel로 stored None과 missing key를 분리합니다." },
+        { lines: "9-13", explanation: "defaultdict __getitem__은 list를 생성하지만 get은 missing entry를 만들지 않음을 확인합니다." },
+        { lines: "15-19", explanation: "dict union의 right-wins precedence와 원본 보존을 봅니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdlib only"], command: "python -I -B dict_missing_merge.py" },
+      output: { value: "nickname missing=False value=None\ntimezone missing=True value=None\nbefore_default: {}\nafter_default: {'python': ['alice']}\nget_missing: None {'python': ['alice']}\nmerged: {'theme': 'dark', 'page_size': 50, 'safe': True}\ndefaults_unchanged: {'theme': 'light', 'page_size': 20, 'safe': True}", explanation: ["표시 value가 None이어도 missing flag로 상태를 분리합니다.", "union은 defaults를 변경하지 않습니다."] },
+      experiments: [
+        { change: "profile.get(key) is None만 검사합니다.", prediction: "stored None과 missing을 구분하지 못합니다.", result: "sentinel 또는 key in mapping이 필요합니다." },
+        { change: "groups.get('java').append(...)를 호출합니다.", prediction: "get은 factory를 호출하지 않아 NoneType 오류가 납니다.", result: "default 생성 API를 명시적으로 선택합니다." },
+        { change: "user가 safe=False를 포함하게 합니다.", prediction: "right-wins union이 보안 default를 덮습니다.", result: "외부 override keys에 allowlist를 적용해야 합니다." },
+      ],
+      sourceRefs: ["py-dict-get", "py-defaultdict", "pep584-dict-union", "py-dict-complexity-note"],
+    }],
+    diagnostics: [
+      { symptom: "설정값 None과 설정 누락이 같은 분기로 간다.", likelyCause: "dict.get 기본값 None을 사용해 두 상태를 합쳤습니다.", checks: ["key in mapping과 mapping.get을 비교합니다.", "None이 유효 domain 값인지 확인합니다."], fix: "고유 sentinel 또는 explicit membership 검사로 상태를 분리합니다.", prevention: "missing/stored-None/normal-value table tests를 둡니다." },
+      { symptom: "사용자 설정 merge가 보안 옵션을 꺼 버린다.", likelyCause: "오른쪽 우선 union에 untrusted mapping 전체를 전달했습니다.", checks: ["각 key provenance와 precedence order를 기록합니다.", "override allowlist를 봅니다."], fix: "허용된 keys만 validate/copy한 뒤 merge하고 security invariants를 재검사합니다.", prevention: "forbidden override와 precedence tests를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "dict가 보존하는 순서는 무엇인가요?", answer: "key의 insertion order이며 자동 key 정렬 순서는 아닙니다." },
+  { question: "기존 key value update가 key 위치를 바꾸나요?", answer: "아닙니다. 삭제 후 재삽입해야 마지막 위치로 이동합니다." },
+  { question: "1과 True가 dict에서 같은 key가 될 수 있는 이유는?", answer: "둘이 equality True이고 hash도 같아 mapping이 동일 key로 취급하기 때문입니다." },
+  { question: "dict.keys는 snapshot인가요?", answer: "아닙니다. 원본 변경을 반영하는 live view입니다." },
+  { question: "dict iteration 중 key를 삭제하면 안전한가요?", answer: "아닙니다. size 변경으로 RuntimeError와 partial mutation이 생길 수 있습니다." },
+  { question: "get(key)만으로 missing과 stored None을 구분할 수 있나요?", answer: "아닙니다. sentinel 또는 membership 검사가 필요합니다." },
+  { question: "defaultdict.get이 factory를 호출하나요?", answer: "아닙니다. 보통 __getitem__ missing access에서 factory가 호출됩니다." },
+  { question: "d1 | d2에서 겹치는 key는 누가 이기나요?", answer: "오른쪽 d2의 value가 이기며 새 dict가 만들어집니다." },
+);
+session.completionChecklist.push(
+  "hashability와 key equality 계약을 설명한다.",
+  "insertion order와 sorted order를 구분한다.",
+  "update와 삭제 후 재삽입의 순서 차이를 검증한다.",
+  "dict view와 materialized snapshot을 구분한다.",
+  "iteration 중 size-changing mutation을 피한다.",
+  "sentinel로 missing과 stored None을 분리한다.",
+  "defaultdict factory 호출 경계를 설명한다.",
+  "dict union의 right-wins precedence와 보안 allowlist를 적용한다.",
+);
+session.sources.push(
+  { id: "py-mapping-types", repository: "Python 3 Library Reference", path: "Mapping Types — dict", publicUrl: "https://docs.python.org/3/library/stdtypes.html#mapping-types-dict", usedFor: ["hashable keys", "insertion order", "lookup/update"], evidence: "dict mapping contract의 공식 근거입니다." },
+  { id: "py-dict-displays", repository: "Python 3 Language Reference", path: "Dictionary displays", publicUrl: "https://docs.python.org/3/reference/expressions.html#dictionary-displays", usedFor: ["duplicate key evaluation", "display construction"], evidence: "dict literal의 primary language reference입니다." },
+  { id: "py-hashable-glossary", repository: "Python 3 Glossary", path: "hashable", publicUrl: "https://docs.python.org/3/glossary.html#term-hashable", usedFor: ["dict key requirements"], evidence: "hashable의 공식 정의입니다." },
+  { id: "py-datamodel-hash", repository: "Python 3 Language Reference", path: "object.__hash__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__hash__", usedFor: ["hash/equality invariant"], evidence: "custom key hash protocol의 primary reference입니다." },
+  { id: "py-dict-view-objects", repository: "Python 3 Library Reference", path: "Dictionary view objects", publicUrl: "https://docs.python.org/3/library/stdtypes.html#dictionary-view-objects", usedFor: ["live keys/values/items views"], evidence: "dict view의 공식 계약입니다." },
+  { id: "py-dict-iteration", repository: "Python 3 Tutorial", path: "Looping Techniques", publicUrl: "https://docs.python.org/3/tutorial/datastructures.html#looping-techniques", usedFor: ["items iteration", "snapshot choices"], evidence: "mapping iteration의 Python 공식 학습 근거입니다." },
+  { id: "py-copy-module", repository: "Python 3 Library Reference", path: "copy", publicUrl: "https://docs.python.org/3/library/copy.html", usedFor: ["shallow dict copy"], evidence: "mapping snapshot copy depth의 공식 근거입니다." },
+  { id: "py-dict-get", repository: "Python 3 Library Reference", path: "dict.get", publicUrl: "https://docs.python.org/3/library/stdtypes.html#dict.get", usedFor: ["missing/default contract"], evidence: "dict.get의 공식 API 계약입니다." },
+  { id: "py-defaultdict", repository: "Python 3 Library Reference", path: "collections.defaultdict", publicUrl: "https://docs.python.org/3/library/collections.html#collections.defaultdict", usedFor: ["default factory", "__missing__ behavior"], evidence: "defaultdict의 공식 계약입니다." },
+  { id: "pep584-dict-union", repository: "Python Enhancement Proposals", path: "PEP 584 — Add Union Operators To dict", publicUrl: "https://peps.python.org/pep-0584/", usedFor: ["dict union precedence"], evidence: "dict | and |=의 primary design source입니다." },
+  { id: "py-dict-complexity-note", repository: "Python 3 Library Reference", path: "Dictionary operations", publicUrl: "https://docs.python.org/3/library/stdtypes.html#mapping-types-dict", usedFor: ["average lookup and merge cost model"], evidence: "dict operation semantics를 성능 모델과 연결한 공식 reference입니다." },
+);
+
 export default session;

@@ -247,4 +247,212 @@ const session = {
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["정규식 기반 검증은 py-038에서 별도로 다룹니다.", "Unicode 계정 정규화·업로드 보안·구조화 로그는 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "unicode-normalization-casefold",
+    title: "Unicode 정규화와 casefold를 identifier 정책으로 설계합니다",
+    lead: "사람에게 같아 보이는 문자열이 서로 다른 code point 배열일 수 있으므로, 비교 목적과 표시 목적을 분리한 뒤 normalization·casefold 순서를 고정합니다.",
+    explanations: [
+      "Python str은 Unicode code points의 불변 시퀀스입니다. 화면에 é 하나로 보여도 U+00E9 또는 U+0065와 combining acute U+0301 두 code points일 수 있어 단순 ==는 False가 될 수 있습니다.",
+      "unicodedata.normalize('NFC', value)는 canonical equivalents를 안정된 composed form으로 맞춥니다. NFKC는 전각 문자와 compatibility forms까지 접어 의미를 더 크게 바꾸므로 로그인 identifier처럼 명시된 경계에서만 사용합니다.",
+      "lower는 표시용 소문자 변환에 가깝고 casefold는 caseless comparison을 위해 더 공격적인 변환을 수행합니다. 독일어 Straße와 STRASSE는 lower만으로 같지 않지만 casefold 결과는 같습니다.",
+      "정규화·casefold는 모든 visually confusable 문자를 같게 만들지 않습니다. 라틴 a와 키릴 а 같은 spoofing 문제에는 별도의 script/confusable 정책과 사용자 확인이 필요합니다.",
+      "원본 display value와 canonical comparison key를 별도 필드로 두고, 정책 version을 기록해야 normalization 변경 뒤 기존 계정과 신규 계정의 uniqueness를 일관되게 유지할 수 있습니다.",
+    ],
+    concepts: [
+      { term: "canonical equivalence", definition: "Unicode에서 서로 다른 code point sequence가 같은 추상 문자를 표현하는 관계입니다.", detail: ["NFC/NFD가 이 관계를 다룹니다.", "문자열 ==가 자동으로 적용하지 않습니다."] },
+      { term: "casefold", definition: "대소문자를 무시하는 비교를 위해 문자열을 공격적으로 정규화하는 Unicode 연산입니다.", detail: ["lower보다 비교 목적에 적합합니다.", "표시 문자열을 대체하지 않습니다."] },
+      { term: "canonical key", definition: "검색·중복 판정을 위해 정책에 따라 만든 비교용 문자열입니다.", detail: ["원본 표시값과 분리합니다.", "정책 version과 함께 관리합니다."] },
+    ],
+    codeExamples: [{
+      id: "unicode-normalization-casefold-evidence",
+      title: "NFC·NFKC·casefold 차이를 code point와 함께 관찰합니다",
+      language: "python",
+      filename: "unicode_normalization_casefold.py",
+      purpose: "canonical equivalent, compatibility form과 caseless comparison을 결정적으로 구분합니다.",
+      code: String.raw`import unicodedata
+
+composed = "é"
+decomposed = "e\u0301"
+print("raw_equal:", composed == decomposed)
+print("nfc_equal:", unicodedata.normalize("NFC", composed) == unicodedata.normalize("NFC", decomposed))
+print("lengths:", len(composed), len(decomposed))
+
+wide = "ＡＢＣ"
+print("nfc_wide:", unicodedata.normalize("NFC", wide))
+print("nfkc_wide:", unicodedata.normalize("NFKC", wide))
+
+left = "Straße"
+right = "STRASSE"
+print("lower_equal:", left.lower() == right.lower())
+print("casefold_equal:", left.casefold() == right.casefold())`,
+      walkthrough: [
+        { lines: "1-7", explanation: "같아 보이는 composed/decomposed 문자열의 raw equality, NFC equality와 길이를 비교합니다." },
+        { lines: "9-11", explanation: "NFC는 전각 문자를 유지하지만 NFKC는 compatibility form ABC로 접습니다." },
+        { lines: "13-16", explanation: "lower와 casefold가 Straße의 ß를 다르게 처리한다는 사실을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "locale/network 불필요"], command: "python -I -B unicode_normalization_casefold.py" },
+      output: { value: "raw_equal: False\nnfc_equal: True\nlengths: 1 2\nnfc_wide: ＡＢＣ\nnfkc_wide: ABC\nlower_equal: False\ncasefold_equal: True", explanation: ["Unicode normalization은 명시적으로 호출해야 합니다.", "NFKC와 casefold는 정보 손실 가능성이 있어 비교 key에만 적용합니다."] },
+      experiments: [
+        { change: "NFC 대신 NFD를 적용합니다.", prediction: "두 입력 모두 decomposed form이 되어 equality는 여전히 True입니다.", result: "저장 정책은 한 form을 일관되게 선택해야 합니다." },
+        { change: "라틴 a와 키릴 а를 비교합니다.", prediction: "NFKC/casefold 뒤에도 서로 다릅니다.", result: "confusable 방어가 normalization과 별도임을 확인합니다." },
+        { change: "canonical key만 저장하고 원본을 버립니다.", prediction: "사용자가 입력한 표시 형태를 복구하지 못합니다.", result: "display value와 comparison key를 분리합니다." },
+      ],
+      sourceRefs: ["py-unicode-normalization", "py-unicodedata", "unicode-tr15", "unicode-casefold-data"],
+    }],
+    diagnostics: [
+      { symptom: "화면상 같은 사용자명이 중복 등록된다.", likelyCause: "canonical equivalent sequences를 equality/unique 검사 전에 normalize하지 않았습니다.", checks: ["각 code point를 ord로 출력합니다.", "DB와 application의 normalization·collation 정책을 비교합니다.", "기존 데이터 canonical key를 확인합니다."], fix: "versioned NFC 또는 명시적 identifier canonicalization을 uniqueness 경계에 적용합니다.", prevention: "composed/decomposed property tests와 migration 검증을 둡니다." },
+      { symptom: "표시명이 사용자가 입력한 형태와 달라진다.", likelyCause: "NFKC·casefold 결과를 display value로 덮어썼습니다.", checks: ["raw/display/canonical 저장 필드를 봅니다.", "변환 순서와 정책 목적을 확인합니다."], fix: "원본 표시값을 보존하고 canonical key는 비교에만 사용합니다.", prevention: "display round-trip과 canonical uniqueness tests를 분리합니다." },
+    ],
+    expertNotes: ["Normalization is a domain policy, not a universal sanitation step. Apply it once at a named boundary and version the policy."],
+  },
+  {
+    id: "strip-split-join-boundaries",
+    title: "strip·split·join의 정보 손실과 구분자 계약을 추적합니다",
+    lead: "문자열 정제 메서드는 편리하지만 공백 collapse, 빈 field 보존, prefix 제거와 타입 오류를 서로 다른 계약으로 다뤄야 합니다.",
+    explanations: [
+      "strip()은 양끝의 Unicode whitespace를 제거하고 내부 공백은 유지합니다. strip(chars)는 고정 접두사를 제거하는 함수가 아니라 양끝에서 chars 집합에 속한 문자를 반복 제거합니다.",
+      "removeprefix와 removesuffix는 정확히 한 접두·접미 문자열을 조건부로 제거하므로 파일 확장자·protocol marker처럼 토큰 단위 의미에 적합합니다.",
+      "split()처럼 separator를 생략하면 연속 whitespace를 하나의 경계처럼 처리하고 양끝 empty field를 만들지 않습니다. split(',')는 연속 comma와 끝 comma의 empty field를 보존합니다.",
+      "maxsplit은 앞에서 허용할 분할 횟수이며 config의 key=value처럼 value 안에 delimiter가 있을 수 있을 때 split('=', 1)로 구조를 보호합니다.",
+      "separator.join(iterable)은 모든 항목이 str이어야 합니다. 숫자를 무조건 map(str)로 바꾸기 전에 serialization 형식, None 정책과 escaping 책임을 정해야 합니다.",
+    ],
+    concepts: [
+      { term: "delimiter contract", definition: "구분자의 의미, 빈 field, escape와 최대 분할 횟수를 정의한 파싱 규칙입니다.", detail: ["split 호출 하나보다 넓습니다.", "producer와 consumer가 공유해야 합니다."] },
+      { term: "information loss", definition: "정규화·분해 과정에서 원래 공백, empty field 또는 문자 구분을 복구할 수 없게 되는 변화입니다.", detail: ["업무상 허용 여부를 정합니다.", "원본 보존으로 audit할 수 있습니다."] },
+    ],
+    codeExamples: [{
+      id: "strip-split-join-contracts",
+      title: "chars 집합·빈 field·maxsplit·join 타입 경계를 비교합니다",
+      language: "python",
+      filename: "strip_split_join_contracts.py",
+      purpose: "비슷해 보이는 문자열 메서드가 보존하거나 잃는 정보를 exact output으로 확인합니다.",
+      code: String.raw`text = "txt.report.txt"
+print("strip_chars:", text.strip("txt."))
+print("remove_prefix:", text.removeprefix("txt."))
+print("remove_suffix:", text.removesuffix(".txt"))
+
+whitespace = "  alpha\t beta  "
+print("split_none:", whitespace.split())
+csv_like = "a,,b,"
+print("split_comma:", csv_like.split(","))
+
+setting = "path=/srv/data=a"
+print("maxsplit:", setting.split("=", 1))
+print("join:", " | ".join(["alpha", "beta", "gamma"]))
+try:
+    ",".join(["age", 27])
+except TypeError as error:
+    print("join_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-4", explanation: "strip(chars)가 문자 집합을 제거하고 removeprefix/removesuffix가 정확한 token을 제거하는 차이를 확인합니다." },
+        { lines: "6-10", explanation: "separator 생략 split과 명시 comma split의 empty field 보존 차이를 봅니다." },
+        { lines: "12-17", explanation: "maxsplit으로 value 구조를 보존하고 join의 all-str 계약 실패를 예외 type으로 분류합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B strip_split_join_contracts.py" },
+      output: { value: "strip_chars: repor\nremove_prefix: report.txt\nremove_suffix: txt.report\nsplit_none: ['alpha', 'beta']\nsplit_comma: ['a', '', 'b', '']\nmaxsplit: ['path', '/srv/data=a']\njoin: alpha | beta | gamma\njoin_error: TypeError", explanation: ["strip(chars)의 surprising result는 bug가 아니라 문자 집합 계약입니다.", "명시 separator는 빈 field를 보존합니다."] },
+      experiments: [
+        { change: "split(',', 1)로 바꿉니다.", prediction: "첫 comma 뒤 나머지 ',b,'가 하나의 field로 남습니다.", result: "maxsplit이 grammar 일부임을 확인합니다." },
+        { change: "csv module 없이 quoted comma를 split합니다.", prediction: "따옴표 내부 comma도 잘못 분리됩니다.", result: "CSV는 csv parser를 사용해야 합니다." },
+        { change: "join 전에 None을 str로 바꿉니다.", prediction: "문자 'None'이 조용히 serialization됩니다.", result: "missing policy를 명시해야 합니다." },
+      ],
+      sourceRefs: ["py-str-strip", "py-str-split", "py-str-join"],
+    }],
+    diagnostics: [
+      { symptom: "확장자를 제거했더니 파일명 끝 문자까지 사라진다.", likelyCause: "strip('.txt')를 고정 suffix 제거로 오해했습니다.", checks: ["strip 인수의 각 문자를 집합으로 펼쳐 봅니다.", "removesuffix 결과와 비교합니다."], fix: "정확한 suffix에는 removesuffix를 사용하고 확장자 parser 요구에는 pathlib를 검토합니다.", prevention: "반복 문자·점으로 끝나는 이름 경계 tests를 둡니다." },
+      { symptom: "CSV의 빈 열 개수가 줄어든다.", likelyCause: "split() whitespace collapse 또는 filter(None, ...)로 empty field를 제거했습니다.", checks: ["separator 인수와 원본 delimiters를 확인합니다.", "quoted/escaped delimiter가 있는지 봅니다."], fix: "형식에 맞는 csv parser와 explicit empty-field schema를 사용합니다.", prevention: "leading/trailing/consecutive/quoted delimiter cases를 test합니다." },
+    ],
+  },
+  {
+    id: "is-methods-validation-policy",
+    title: "is* 메서드를 문자 속성 질문으로 사용하고 도메인 검증과 분리합니다",
+    lead: "isdigit·isdecimal·isnumeric·isidentifier는 Unicode 속성을 묻는 도구이지 나이·금액·Python 변수 같은 도메인 값을 자동으로 보장하지 않습니다.",
+    explanations: [
+      "isdecimal은 10진 digit으로 직접 사용할 문자에 가장 좁고, isdigit은 superscript 같은 digits를 더 포함하며 isnumeric은 분수·로마 숫자 같은 numeric characters까지 포함합니다.",
+      "세 메서드는 빈 문자열에 False를 반환하고 부호, decimal point, grouping separator가 있는 숫자 문자열에도 False입니다. 실제 int/Decimal 문법은 parser가 최종 권위입니다.",
+      "isalpha·isalnum은 ASCII에 한정되지 않습니다. 영문 사용자명 정책이라면 isascii와 범위/allowlist를 함께 명시해야 합니다.",
+      "isidentifier는 Python identifier 모양을 확인하지만 keyword를 제외하지 않습니다. keyword.iskeyword를 함께 검사해야 실제 binding name 후보가 됩니다.",
+      "검증 pipeline은 길이·control budget, normalization, 문자 정책, parser와 domain range를 단계별 error code로 분리하고 rejected raw secret을 로그에 echo하지 않습니다.",
+    ],
+    concepts: [
+      { term: "Unicode predicate", definition: "문자열 전체가 특정 Unicode 문자 속성을 만족하는지 묻는 bool 메서드입니다.", detail: ["빈 문자열은 False입니다.", "도메인 grammar보다 넓거나 좁을 수 있습니다."] },
+      { term: "parse authority", definition: "허용 문법을 실제 typed value로 변환하며 최종적으로 판정하는 parser입니다.", detail: ["is* 사전 검사와 구분합니다.", "예외를 field error로 변환합니다."] },
+    ],
+    codeExamples: [{
+      id: "unicode-is-predicates-boundary",
+      title: "decimal·digit·numeric과 identifier 경계를 표로 검증합니다",
+      language: "python",
+      filename: "unicode_predicates.py",
+      purpose: "Unicode predicate의 포함 관계와 Python identifier의 keyword 예외를 결정적으로 보여 줍니다.",
+      code: String.raw`import keyword
+
+samples = ["42", "²", "Ⅳ", "-3", ""]
+for value in samples:
+    print(repr(value), value.isdecimal(), value.isdigit(), value.isnumeric())
+
+names = ["score_1", "변수", "class", "1st", "user-name"]
+for name in names:
+    valid = name.isidentifier() and not keyword.iskeyword(name)
+    print(name, "identifier=", name.isidentifier(), "binding=", valid)
+
+ascii_policy = "Cafe42"
+unicode_policy = "카페42"
+print("ascii_alnum:", ascii_policy.isascii() and ascii_policy.isalnum())
+print("unicode_alnum:", unicode_policy.isalnum(), unicode_policy.isascii())`,
+      walkthrough: [
+        { lines: "1-5", explanation: "일반 decimal, superscript, Roman numeral, sign과 empty의 세 predicates를 비교합니다." },
+        { lines: "7-10", explanation: "identifier 문법과 keyword 제외를 조합해 실제 binding 후보를 판정합니다." },
+        { lines: "12-15", explanation: "isalnum의 Unicode 범위와 별도의 ASCII 정책을 구분합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "locale/network 불필요"], command: "python -I -B unicode_predicates.py" },
+      output: { value: "'42' True True True\n'²' False True True\n'Ⅳ' False False True\n'-3' False False False\n'' False False False\nscore_1 identifier= True binding= True\n변수 identifier= True binding= True\nclass identifier= True binding= False\n1st identifier= False binding= False\nuser-name identifier= False binding= False\nascii_alnum: True\nunicode_alnum: True False", explanation: ["predicate 포함 관계는 입력 예제로 직접 확인해야 합니다.", "identifier와 keyword 검사는 별도입니다."] },
+      experiments: [
+        { change: "int('²')를 시도합니다.", prediction: "isdigit True와 달리 ValueError가 납니다.", result: "parser가 문법의 최종 권위임을 확인합니다." },
+        { change: "공백을 strip한 뒤 empty를 검사하지 않습니다.", prediction: "모든 is*가 False라 required와 format 오류가 섞입니다.", result: "presence와 format error를 분리합니다." },
+        { change: "사용자명에 combining mark를 넣습니다.", prediction: "normalization 전후 predicate 결과와 길이가 달라질 수 있습니다.", result: "normalization 순서를 정책에 고정합니다." },
+      ],
+      sourceRefs: ["py-str-is-methods", "py-keyword", "unicode-properties"],
+    }],
+    diagnostics: [
+      { symptom: "isdigit가 True인데 int 변환이 실패한다.", likelyCause: "Unicode digit predicate를 Python int literal grammar와 동일시했습니다.", checks: ["repr와 code points를 출력합니다.", "isdecimal/isdigit/isnumeric을 비교합니다.", "실제 parser exception을 확인합니다."], fix: "업무 문법을 정한 parser를 호출하고 ValueError를 typed validation error로 처리합니다.", prevention: "superscript·sign·whitespace·locale separators를 포함한 table tests를 둡니다." },
+      { symptom: "class라는 동적 변수명이 뒤 단계에서 SyntaxError를 만든다.", likelyCause: "isidentifier만 확인하고 Python keyword를 제외하지 않았습니다.", checks: ["keyword.iskeyword 결과를 봅니다.", "동적 code 생성을 하고 있는지 검토합니다."], fix: "identifier와 keyword를 함께 검사하고 가능하면 동적 code 생성 대신 mapping을 사용합니다.", prevention: "keywords와 soft-keyword 정책을 test하고 eval/exec를 피합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "NFC와 NFKC의 차이는 무엇인가요?", answer: "NFC는 canonical equivalents를 맞추고 NFKC는 compatibility characters까지 접어 더 많은 정보를 잃을 수 있습니다." },
+  { question: "case-insensitive 비교에 lower보다 casefold가 적합한 이유는 무엇인가요?", answer: "casefold는 ß 같은 Unicode 특수 case까지 비교용으로 변환하기 때문입니다." },
+  { question: "normalization이 confusable spoofing까지 해결하나요?", answer: "아닙니다. 서로 다른 scripts의 visually similar characters는 별도 정책이 필요합니다." },
+  { question: "strip('.txt')가 확장자 제거가 아닌 이유는 무엇인가요?", answer: "인수를 문자열 token이 아니라 양끝에서 제거할 문자 집합으로 해석하기 때문입니다." },
+  { question: "split()과 split(',')의 빈 값 계약은 어떻게 다른가요?", answer: "split()은 whitespace를 collapse하지만 명시 separator는 연속·끝 delimiter의 empty fields를 보존합니다." },
+  { question: "isdigit True가 int 변환 성공을 보장하나요?", answer: "아닙니다. superscript처럼 digit 속성은 있지만 int 문법이 아닌 문자가 있습니다." },
+  { question: "isidentifier True면 Python binding 이름으로 충분한가요?", answer: "아닙니다. keyword.iskeyword가 True인 예약어를 추가로 제외해야 합니다." },
+  { question: "검증된 문자열도 출력 시 escaping이 필요한가요?", answer: "네. 업무 검증과 HTML·SQL·shell 등 sink별 안전한 encoding/parameterization은 별도 책임입니다." },
+);
+session.completionChecklist.push(
+  "composed/decomposed Unicode 문자열을 NFC로 비교할 수 있다.",
+  "NFC와 NFKC의 정보 손실 범위를 구분한다.",
+  "lower와 casefold의 비교 목적 차이를 설명한다.",
+  "display value와 canonical comparison key를 분리한다.",
+  "strip(chars)와 removeprefix/removesuffix를 올바르게 선택한다.",
+  "split(None)과 명시 separator의 empty-field 계약을 재현한다.",
+  "maxsplit을 입력 grammar 일부로 설계한다.",
+  "isdecimal·isdigit·isnumeric의 포함 관계를 설명한다.",
+  "isidentifier와 keyword 검사를 조합한다.",
+);
+session.sources.push(
+  { id: "py-unicode-normalization", repository: "Python 3 Library Reference", path: "Unicode HOWTO", publicUrl: "https://docs.python.org/3/howto/unicode.html", usedFor: ["code points", "normalization context"], evidence: "Python 공식 Unicode model을 근거로 원본 문자열 메서드 학습을 확장했습니다." },
+  { id: "py-unicodedata", repository: "Python 3 Library Reference", path: "unicodedata", publicUrl: "https://docs.python.org/3/library/unicodedata.html", usedFor: ["unicodedata.normalize", "Unicode database"], evidence: "NFC/NFKC example의 공식 API 근거입니다." },
+  { id: "unicode-tr15", repository: "Unicode Consortium", path: "UAX #15 Unicode Normalization Forms", publicUrl: "https://unicode.org/reports/tr15/", usedFor: ["canonical/compatibility normalization"], evidence: "Unicode normalization의 primary standard입니다." },
+  { id: "unicode-casefold-data", repository: "Unicode Consortium", path: "CaseFolding.txt", publicUrl: "https://www.unicode.org/Public/UCD/latest/ucd/CaseFolding.txt", usedFor: ["default case folding mappings"], evidence: "casefold mapping의 primary data source입니다." },
+  { id: "py-str-strip", repository: "Python 3 Library Reference", path: "str.strip/removeprefix/removesuffix", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.strip", usedFor: ["strip chars-set contract", "exact prefix/suffix removal"], evidence: "문자열 제거 메서드의 공식 계약입니다." },
+  { id: "py-str-split", repository: "Python 3 Library Reference", path: "str.split", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.split", usedFor: ["separator", "maxsplit", "empty fields"], evidence: "split 동작의 공식 계약입니다." },
+  { id: "py-str-join", repository: "Python 3 Library Reference", path: "str.join", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.join", usedFor: ["all-str iterable contract"], evidence: "join TypeError 경계의 공식 근거입니다." },
+  { id: "py-str-is-methods", repository: "Python 3 Library Reference", path: "str.isdecimal and related methods", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.isdecimal", usedFor: ["decimal/digit/numeric predicates", "Unicode character tests"], evidence: "is* predicate 포함 관계의 공식 근거입니다." },
+  { id: "py-keyword", repository: "Python 3 Library Reference", path: "keyword", publicUrl: "https://docs.python.org/3/library/keyword.html", usedFor: ["keyword.iskeyword"], evidence: "identifier와 keyword 분리의 공식 API입니다." },
+  { id: "unicode-properties", repository: "Unicode Consortium", path: "UAX #44 Unicode Character Database", publicUrl: "https://unicode.org/reports/tr44/", usedFor: ["numeric and identifier properties"], evidence: "Unicode predicates가 참조하는 character property의 primary standard입니다." },
+);
+
 export default session;

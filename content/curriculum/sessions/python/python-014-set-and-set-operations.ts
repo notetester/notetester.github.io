@@ -64,20 +64,20 @@ const session = {
           language: "python",
           filename: "set_dedup.py",
           purpose: "set 변환이 어떤 정보를 보존·손실하는지 list와 dict.fromkeys 결과로 비교합니다.",
-          code: "values = ['Python', 'Java', 'Python', 'React', 'Java']\nunique_set = set(values)\nunique_in_order = list(dict.fromkeys(values))\n\nprint(len(values), len(unique_set))\nprint(sorted(unique_set))\nprint(unique_in_order)\nprint('Python' in unique_set)\n\nempty_braces = {}\nempty_set = set()\nprint(type(empty_braces).__name__, type(empty_set).__name__)\nprint(set('hello'))",
+          code: "values = ['Python', 'Java', 'Python', 'React', 'Java']\nunique_set = set(values)\nunique_in_order = list(dict.fromkeys(values))\n\nprint(len(values), len(unique_set))\nprint(sorted(unique_set))\nprint(unique_in_order)\nprint('Python' in unique_set)\n\nempty_braces = {}\nempty_set = set()\nprint(type(empty_braces).__name__, type(empty_set).__name__)\nprint(sorted(set('hello')))",
           walkthrough: [
             { lines: "1", explanation: "중복과 첫 등장 순서를 가진 원본 list를 준비합니다." },
             { lines: "2", explanation: "set이 고유 값만 유지하고 순서 의미를 버립니다." },
             { lines: "3", explanation: "dict.fromkeys가 첫 삽입 key 순서를 유지해 고유 list를 만듭니다." },
             { lines: "5-8", explanation: "원본 5개가 고유 3개가 되고, 출력 결정성을 위해 set은 sorted합니다." },
             { lines: "10-12", explanation: "{}와 set()의 타입 차이를 확인합니다." },
-            { lines: "13", explanation: "문자열 iterable이 고유 문자를 요소로 제공하며 출력 순서는 보장하지 않습니다." },
+            { lines: "13", explanation: "문자열 iterable이 제공한 고유 문자를 sorted list로 투영해 출력 순서를 결정적으로 고정합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "set_dedup.py를 저장"], command: "python set_dedup.py" },
-          output: { value: "5 3\n['Java', 'Python', 'React']\n['Python', 'Java', 'React']\nTrue\ndict set\n{'h', 'e', 'l', 'o'}  # 마지막 set 표시 순서는 달라질 수 있음", explanation: ["sorted set은 사전식 결정 순서, dict 방식은 첫 등장 순서입니다.", "중복 제거 후 횟수 2라는 정보는 두 결과 모두 보존하지 않습니다.", "마지막 출력 순서는 실행 환경에 따라 달라질 수 있어 정답 비교 시 그대로 고정하지 않습니다."] },
+          output: { value: "5 3\n['Java', 'Python', 'React']\n['Python', 'Java', 'React']\nTrue\ndict set\n['e', 'h', 'l', 'o']", explanation: ["sorted set은 사전식 결정 순서, dict 방식은 첫 등장 순서입니다.", "중복 제거 후 횟수 2라는 정보는 두 결과 모두 보존하지 않습니다.", "마지막 문자열 set도 sorted list로 바꿔 어떤 hash seed에서도 exact output을 유지합니다."] },
           experiments: [
             { change: "values에 ['A'] 같은 unhashable list를 요소로 넣습니다.", prediction: "set과 dict.fromkeys 모두 TypeError입니다.", result: "고유 key 방식은 요소가 hashable이어야 합니다." },
-            { change: "print(sorted(set('hello')))로 바꿉니다.", prediction: "['e','h','l','o']처럼 결정적 list가 됩니다.", result: "저장 의미와 표시 순서를 분리합니다." },
+            { change: "마지막 줄을 print(set('hello'))로 되돌립니다.", prediction: "표현 순서가 실행별 hash seed에 따라 달라질 수 있습니다.", result: "저장 의미와 표시 순서를 분리해야 하는 이유를 확인합니다." },
           ],
           sourceRefs: ["py-set-basic", "py-day03-note"],
         },
@@ -244,5 +244,224 @@ const session = {
   ],
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["Counter 빈도 분석은 py-034에서 다룹니다.", "frozenset·권한 모델·hash 계약과 자원 제한은 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "set-hashability-frozenset-nested-keys",
+    title: "hashability와 frozenset으로 불변 집합 값을 모델링합니다",
+    lead: "set 요소는 hash table 안에서 lifetime 동안 위치를 다시 찾을 수 있어야 하므로 hashable해야 하며, 집합 자체를 요소·dict key로 쓰려면 frozenset이 필요합니다.",
+    explanations: [
+      "list, dict, set은 내용이 바뀌어 equality/hash 의미가 달라질 수 있으므로 표준적으로 unhashable입니다. set에 list를 add하면 TypeError입니다.",
+      "tuple은 모든 요소가 hashable할 때만 hashable합니다. tuple 안에 list가 있으면 바깥이 불변이어도 set 요소가 될 수 없습니다.",
+      "frozenset은 mutation API가 없는 hashable set variant입니다. frozenset을 set 요소나 dict key로 사용해 권한 조합·undirected edge처럼 순서 없는 값을 표현할 수 있습니다.",
+      "set과 frozenset equality는 요소 기준이며 insertion order와 무관합니다. 같은 요소면 생성 순서가 달라도 같습니다.",
+      "hash 가능하다는 사실이 안전한 cache key라는 뜻은 아닙니다. domain equality, namespace/version과 process 간 serialization representation을 함께 정의해야 합니다.",
+    ],
+    concepts: [
+      { term: "frozenset", definition: "요소를 변경할 수 없고 자신도 hashable할 수 있는 불변 set type입니다.", detail: ["nested set/key에 사용합니다.", "요소 자체도 hashable해야 합니다."] },
+      { term: "hash stability", definition: "객체가 hash table에 있는 동안 hash와 equality 결과가 변하지 않는 불변식입니다.", detail: ["mutable key를 금지합니다.", "lookup 정확성의 기반입니다."] },
+    ],
+    codeExamples: [{
+      id: "set-hashability-frozenset-evidence",
+      title: "mutable 요소 실패와 nested frozenset 성공을 검증합니다",
+      language: "python",
+      filename: "set_hashability.py",
+      purpose: "set/list/frozenset의 hashability 경계와 순서 없는 equality를 exact output으로 확인합니다.",
+      code: String.raw`for value in (["python"], {"python"}, {"course": "python"}):
+    try:
+        {value}
+    except TypeError as error:
+        print("unhashable:", type(value).__name__, type(error).__name__)
+
+roles = frozenset({"reader", "editor"})
+cache = {roles: "policy-v1"}
+print("lookup:", cache[frozenset({"editor", "reader"})])
+
+groups = {frozenset({"alice", "bob"}), frozenset({"cara"})}
+print("groups:", sorted((sorted(group) for group in groups), key=lambda group: (len(group), group)))
+print("order_independent:", frozenset([1, 2, 3]) == frozenset([3, 2, 1]))
+
+try:
+    hash(("course", ["python"]))
+except TypeError as error:
+    print("tuple_hash_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-5", explanation: "list/set/dict를 set element로 만들 때 각각 TypeError가 나는 것을 type 수준으로 분류합니다." },
+        { lines: "7-9", explanation: "frozenset key는 생성 순서가 달라도 같은 policy를 조회합니다." },
+        { lines: "11-13", explanation: "nested frozensets는 raw set 순서 대신 정렬된 projection으로 결정적으로 출력합니다." },
+        { lines: "15-18", explanation: "list를 포함한 tuple도 hashability를 얻지 못함을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "hash seed와 무관한 정렬 출력"], command: "python -I -B set_hashability.py" },
+      output: { value: "unhashable: list TypeError\nunhashable: set TypeError\nunhashable: dict TypeError\nlookup: policy-v1\ngroups: [['cara'], ['alice', 'bob']]\norder_independent: True\ntuple_hash_error: TypeError", explanation: ["raw set repr를 golden output으로 사용하지 않습니다.", "frozenset equality는 요소와 hash 계약에 기반합니다."] },
+      experiments: [
+        { change: "roles를 mutable set으로 cache key에 넣습니다.", prediction: "TypeError가 납니다.", result: "frozenset으로 불변 key 의도를 표현합니다." },
+        { change: "frozenset 요소에 list를 넣습니다.", prediction: "요소 list가 unhashable이라 여전히 TypeError입니다.", result: "불변성은 object graph 전체를 봐야 합니다." },
+        { change: "hash(roles) 숫자를 exact output으로 검증합니다.", prediction: "process/hash seed에 따라 달라질 수 있습니다.", result: "lookup/equality behavior만 결정적으로 검증합니다." },
+      ],
+      sourceRefs: ["py-set-frozenset", "py-hashable-glossary", "py-datamodel-hash"],
+    }],
+    diagnostics: [
+      { symptom: "set에 list를 추가할 때 unhashable type 오류가 난다.", likelyCause: "mutable list를 hash table element로 사용했습니다.", checks: ["element type과 nested mutable fields를 봅니다.", "순서·중복이 domain에서 필요한지 확인합니다."], fix: "순서가 의미 있으면 tuple, 순서 없는 집합 값이면 frozenset으로 검증·변환합니다.", prevention: "container boundary에 hashability/type tests를 둡니다." },
+      { symptom: "frozenset을 썼는데도 nested value에서 TypeError가 난다.", likelyCause: "frozenset 내부 요소 자체가 unhashable입니다.", checks: ["각 nested element에 hash를 시도합니다.", "deep value graph를 inventory합니다."], fix: "모든 nested values를 domain에 맞는 immutable/hashable representation으로 바꿉니다.", prevention: "deep hashability와 equality contract tests를 둡니다." },
+    ],
+  },
+  {
+    id: "set-algebra-laws-permission-policy",
+    title: "집합 대수와 관계 연산을 권한·태그 정책으로 해석합니다",
+    lead: "&·|·-·^를 기호 암기에서 끝내지 않고 요청·허용·누락·초과 집합의 의미와 subset/disjoint 불변식으로 연결합니다.",
+    explanations: [
+      "intersection requested & allowed는 실제 허용 가능한 항목, difference requested - allowed는 금지된 초과 요청, allowed - requested는 아직 요청하지 않은 가능 항목입니다.",
+      "union은 어느 쪽에든 있는 요소, symmetric difference는 한쪽에만 있는 요소입니다. 두 집합 변화의 전체 delta를 볼 때 ^가 유용합니다.",
+      "requested <= allowed는 모든 요청 권한이 허용 범위 안인지 한 번에 묻고, isdisjoint는 금지 집합과 하나도 겹치지 않는지 확인합니다.",
+      "operator forms는 보통 set-like operands를 요구하고 method forms는 arbitrary iterable을 받을 수 있습니다. API에서 type coercion을 숨기지 않습니다.",
+      "권한 판정은 set 연산만으로 끝나지 않습니다. principal·resource·tenant·시간 context와 default-deny, audit를 결합해야 합니다.",
+    ],
+    concepts: [
+      { term: "symmetric difference", definition: "두 집합 중 정확히 한쪽에만 존재하는 요소 집합입니다.", detail: ["변경 delta에 적합합니다.", "A ^ B로 표현합니다."] },
+      { term: "subset invariant", definition: "요청 집합의 모든 요소가 허용 집합 안에 있어야 한다는 관계 조건입니다.", detail: ["requested <= allowed입니다.", "초과분은 requested - allowed입니다."] },
+      { term: "disjoint", definition: "두 집합의 교집합이 비어 서로 겹치지 않는 관계입니다.", detail: ["forbidden overlap 검사에 씁니다.", "isdisjoint가 short-circuit할 수 있습니다."] },
+    ],
+    codeExamples: [{
+      id: "permission-set-algebra-policy",
+      title: "허용·거부·누락·delta 집합과 관계를 계산합니다",
+      language: "python",
+      filename: "permission_set_algebra.py",
+      purpose: "집합 연산 결과를 정렬해 결정적으로 출력하고 default-deny 판정을 검증합니다.",
+      code: String.raw`allowed = {"course:read", "course:write", "profile:read"}
+requested = {"course:read", "course:delete", "profile:read"}
+forbidden = {"admin:grant", "course:delete"}
+
+granted = requested & allowed
+denied = requested - allowed
+unused = allowed - requested
+delta = requested ^ allowed
+
+print("granted:", sorted(granted))
+print("denied:", sorted(denied))
+print("unused:", sorted(unused))
+print("delta:", sorted(delta))
+print("subset:", requested <= allowed)
+print("forbidden_disjoint:", requested.isdisjoint(forbidden))
+print("decision:", "allow" if not denied and requested.isdisjoint(forbidden) else "deny")
+
+print("method_iterable:", sorted(allowed.intersection(["course:read", "missing"])))
+try:
+    allowed & ["course:read"]
+except TypeError as error:
+    print("operator_type_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-8", explanation: "허용·요청·금지 집합에서 granted, denied, unused와 symmetric delta를 계산합니다." },
+        { lines: "10-16", explanation: "정렬된 결과와 subset/disjoint 관계로 default-deny 결정을 만듭니다." },
+        { lines: "18-22", explanation: "intersection method는 list iterable을 받지만 & operator는 TypeError라는 operand 계약을 비교합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "set 출력은 모두 sorted"], command: "python -I -B permission_set_algebra.py" },
+      output: { value: "granted: ['course:read', 'profile:read']\ndenied: ['course:delete']\nunused: ['course:write']\ndelta: ['course:delete', 'course:write']\nsubset: False\nforbidden_disjoint: False\ndecision: deny\nmethod_iterable: ['course:read']\noperator_type_error: TypeError", explanation: ["정렬은 표현을 결정적으로 만들 뿐 set 의미를 바꾸지 않습니다.", "denied 또는 forbidden overlap이 있으면 deny합니다."] },
+      experiments: [
+        { change: "requested를 allowed의 부분집합으로 바꿉니다.", prediction: "denied는 empty이고 subset True입니다.", result: "forbidden overlap도 별도로 확인합니다." },
+        { change: "difference 방향을 allowed - requested로 바꿉니다.", prediction: "거부된 요청이 아니라 사용하지 않은 허용 권한이 나옵니다.", result: "연산 방향에 domain 이름을 붙입니다." },
+        { change: "권한 strings를 검증 없이 받습니다.", prediction: "오타·case 차이가 새로운 권한처럼 취급됩니다.", result: "canonical enum/registry allowlist가 필요합니다." },
+      ],
+      sourceRefs: ["py-set-operations", "py-set-relations", "py-operator-set"],
+    }],
+    diagnostics: [
+      { symptom: "허용되지 않은 권한이 granted로 계산된다.", likelyCause: "difference 방향을 뒤집거나 union을 grant 계산에 사용했습니다.", checks: ["requested/allowed operand 이름과 방향을 표로 씁니다.", "denied = requested - allowed를 별도 확인합니다."], fix: "granted는 intersection, denied는 requested difference allowed로 명시합니다.", prevention: "empty/subset/overlap/disjoint decision table을 test합니다." },
+      { symptom: "set operator에 list를 넣자 TypeError가 난다.", likelyCause: "operator와 method의 operand 수용 범위를 혼동했습니다.", checks: ["&인지 intersection인지 봅니다.", "입력 type coercion 의도를 확인합니다."], fix: "strict set operands를 유지하거나 method로 iterable 수용을 명시합니다.", prevention: "API type annotations와 operator/method tests를 둡니다." },
+    ],
+  },
+  {
+    id: "deduplication-order-frequency-boundary",
+    title: "중복 제거에서 순서·빈도·canonicalization 정보 보존을 선택합니다",
+    lead: "set으로 중복을 없애는 한 줄은 원래 순서와 발생 횟수를 잃습니다. 어떤 정보를 보존해야 하는지 먼저 결정한 뒤 구조를 선택합니다.",
+    explanations: [
+      "set(items)는 equality/hash 기준 고유값만 남기고 iteration order는 입력 order contract가 아닙니다. raw set repr를 파일·API·golden output에 사용하지 않습니다.",
+      "첫 등장 순서를 보존한 dedup은 list(dict.fromkeys(items))로 표현할 수 있습니다. dict insertion order를 이용하며 hashable elements가 필요합니다.",
+      "unhashable elements나 custom equivalence가 필요하면 seen keys와 output list를 분리하고 canonical key function을 사용합니다.",
+      "빈도가 필요하면 set으로 가기 전에 Counter 또는 dict counts를 만들고 first index도 저장합니다. dedup 뒤에는 횟수를 복구할 수 없습니다.",
+      "casefold/NFC 같은 canonicalization 기준으로 dedup하면 서로 다른 원본 표시가 하나로 합쳐집니다. 대표값을 first/last/preferred 중 무엇으로 선택할지 정책을 둡니다.",
+    ],
+    concepts: [
+      { term: "order-preserving deduplication", definition: "동등한 항목의 첫 등장만 남기면서 입력 상대 순서를 유지하는 변환입니다.", detail: ["dict.fromkeys로 구현할 수 있습니다.", "hashable key가 필요합니다."] },
+      { term: "representative selection", definition: "canonical key가 같은 여러 원본 중 결과에 남길 표시값을 고르는 정책입니다.", detail: ["first/last/preferred를 명시합니다.", "정보 손실을 기록합니다."] },
+    ],
+    codeExamples: [{
+      id: "ordered-dedup-canonical-policy",
+      title: "set dedup·첫 등장 보존·canonical 대표값을 비교합니다",
+      language: "python",
+      filename: "ordered_dedup.py",
+      purpose: "고유값, 순서와 casefold 대표값 정책을 separate outputs로 검증합니다.",
+      code: String.raw`items = ["Python", "java", "Python", "JSP", "java"]
+print("set_sorted:", sorted(set(items)))
+print("first_order:", list(dict.fromkeys(items)))
+
+def dedup_by(values, key):
+    seen = set()
+    result = []
+    for value in values:
+        marker = key(value)
+        if marker not in seen:
+            seen.add(marker)
+            result.append(value)
+    return result
+
+variants = ["Straße", "STRASSE", "Python", "PYTHON", "파이썬"]
+print("casefold_first:", dedup_by(variants, str.casefold))
+
+counts = {}
+for item in items:
+    counts[item] = counts.get(item, 0) + 1
+print("counts:", counts)`,
+      walkthrough: [
+        { lines: "1-3", explanation: "set 결과는 정렬해 표시하고 dict.fromkeys 결과는 첫 등장 순서를 보존합니다." },
+        { lines: "5-13", explanation: "seen canonical keys와 output values를 분리한 reusable order-preserving dedup을 구현합니다." },
+        { lines: "15-21", explanation: "casefold 기준 first representative와 dedup 전 counts를 각각 출력합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "hash seed에 무관한 출력"], command: "python -I -B ordered_dedup.py" },
+      output: { value: "set_sorted: ['JSP', 'Python', 'java']\nfirst_order: ['Python', 'java', 'JSP']\ncasefold_first: ['Straße', 'Python', '파이썬']\ncounts: {'Python': 2, 'java': 2, 'JSP': 1}", explanation: ["set은 sorted projection으로만 출력합니다.", "casefold 중복에서는 첫 원본 spelling을 보존합니다."] },
+      experiments: [
+        { change: "대표값을 last로 선택합니다.", prediction: "STRASSE와 PYTHON이 결과에 남습니다.", result: "대표값 policy가 user-visible output을 바꿉니다." },
+        { change: "NFC+casefold key를 사용합니다.", prediction: "canonical equivalent와 case variants가 함께 합쳐집니다.", result: "normalization policy version이 필요합니다." },
+        { change: "nested list elements를 dict.fromkeys에 넣습니다.", prediction: "unhashable TypeError가 납니다.", result: "domain key 추출 또는 linear equality scan을 선택합니다." },
+      ],
+      sourceRefs: ["py-dict-fromkeys", "py-counter", "py-unicode-casefold"],
+    }],
+    diagnostics: [
+      { symptom: "중복 제거 후 사용자 입력 순서가 바뀐다.", likelyCause: "set iteration을 입력 순서로 사용했습니다.", checks: ["set 변환과 raw repr/iteration을 찾습니다.", "first/last order 요구를 확인합니다."], fix: "first-order dedup에는 dict.fromkeys 또는 explicit seen/result를 사용합니다.", prevention: "order-sensitive repeated inputs를 test합니다." },
+      { symptom: "dedup 뒤 occurrence count를 알 수 없다.", likelyCause: "빈도를 집계하기 전에 set으로 정보를 버렸습니다.", checks: ["pipeline에서 set 변환 위치를 찾습니다.", "count/first-index 요구를 확인합니다."], fix: "Counter/dict로 frequency metadata를 먼저 수집하고 필요하면 고유 projection을 만듭니다.", prevention: "pipeline별 정보 보존 표를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "set 요소가 hashable해야 하는 이유는 무엇인가요?", answer: "hash table에서 lifetime 동안 같은 bucket/equality로 다시 찾을 수 있어야 하기 때문입니다." },
+  { question: "frozenset은 언제 사용하나요?", answer: "순서 없는 불변 집합 값을 다른 set 요소나 dict key로 사용할 때 적합합니다." },
+  { question: "tuple이면 항상 set 요소가 될 수 있나요?", answer: "아닙니다. tuple 안의 모든 요소도 hashable해야 합니다." },
+  { question: "requested - allowed의 의미는 무엇인가요?", answer: "요청했지만 허용 집합에 없는 거부 대상입니다." },
+  { question: "symmetric difference는 무엇을 반환하나요?", answer: "두 집합 중 정확히 한쪽에만 있는 요소 전체를 반환합니다." },
+  { question: "isdisjoint는 무엇을 묻나요?", answer: "두 집합이 하나의 공통 요소도 갖지 않는지 묻습니다." },
+  { question: "set으로 dedup하면 어떤 정보를 잃나요?", answer: "입력 순서 contract와 occurrence frequency를 잃습니다." },
+  { question: "첫 등장 순서를 보존하는 hashable dedup 방법은?", answer: "list(dict.fromkeys(items)) 또는 explicit seen/result pattern입니다." },
+);
+session.completionChecklist.push(
+  "set 요소의 deep hashability를 확인한다.",
+  "frozenset을 불변 집합 key로 사용할 수 있다.",
+  "hash 값 자체를 golden output으로 쓰지 않는다.",
+  "intersection·union·difference·symmetric difference를 domain 의미로 설명한다.",
+  "subset·disjoint 관계로 default-deny 정책을 검증한다.",
+  "operator와 method operand 계약을 구분한다.",
+  "중복 제거 전 순서·빈도 보존 요구를 정한다.",
+  "canonical dedup의 representative selection을 명시한다.",
+);
+session.sources.push(
+  { id: "py-set-frozenset", repository: "Python 3 Library Reference", path: "Set Types — set, frozenset", publicUrl: "https://docs.python.org/3/library/stdtypes.html#set-types-set-frozenset", usedFor: ["hashable elements", "frozenset", "set operations"], evidence: "set/frozenset의 공식 type 계약입니다." },
+  { id: "py-hashable-glossary", repository: "Python 3 Glossary", path: "hashable", publicUrl: "https://docs.python.org/3/glossary.html#term-hashable", usedFor: ["hash stability requirement"], evidence: "hashable의 공식 정의입니다." },
+  { id: "py-datamodel-hash", repository: "Python 3 Language Reference", path: "object.__hash__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__hash__", usedFor: ["hash/equality invariant"], evidence: "hash protocol primary reference입니다." },
+  { id: "py-set-operations", repository: "Python 3 Library Reference", path: "Set operations", publicUrl: "https://docs.python.org/3/library/stdtypes.html#set", usedFor: ["intersection/union/difference/symmetric difference"], evidence: "집합 연산 공식 계약입니다." },
+  { id: "py-set-relations", repository: "Python 3 Library Reference", path: "Set comparisons and isdisjoint", publicUrl: "https://docs.python.org/3/library/stdtypes.html#set-types-set-frozenset", usedFor: ["subset/superset/disjoint"], evidence: "set 관계 연산의 공식 근거입니다." },
+  { id: "py-operator-set", repository: "Python 3 Language Reference", path: "Binary bitwise operations", publicUrl: "https://docs.python.org/3/reference/expressions.html#binary-bitwise-operations", usedFor: ["&, |, ^ operator syntax"], evidence: "set에 overload되는 operator 문법의 primary reference입니다." },
+  { id: "py-dict-fromkeys", repository: "Python 3 Library Reference", path: "dict.fromkeys", publicUrl: "https://docs.python.org/3/library/stdtypes.html#dict.fromkeys", usedFor: ["order-preserving dedup"], evidence: "dict.fromkeys 공식 API입니다." },
+  { id: "py-counter", repository: "Python 3 Library Reference", path: "collections.Counter", publicUrl: "https://docs.python.org/3/library/collections.html#collections.Counter", usedFor: ["frequency preservation"], evidence: "빈도 mapping의 공식 API입니다." },
+  { id: "py-unicode-casefold", repository: "Python 3 Library Reference", path: "str.casefold", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.casefold", usedFor: ["canonical dedup key"], evidence: "casefold의 공식 문자열 API입니다." },
+);
 
 export default session;

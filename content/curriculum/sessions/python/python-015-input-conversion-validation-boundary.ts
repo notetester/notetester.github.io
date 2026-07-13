@@ -110,7 +110,7 @@ const session = {
             { lines: "1-2", explanation: "원본과 양끝 공백을 제거한 문자열을 분리합니다." },
             { lines: "4-7", explanation: "int 문법 오류만 ValueError로 잡습니다. try/except 자세한 의미는 예외 세션에서 다시 다룹니다." },
             { lines: "8-12", explanation: "파싱이 성공한 else에서 범위를 검사해 문법·도메인 오류를 구분합니다." },
-            { lines: "13", explanation: "두 경계를 모두 통과한 int만 내부 검증 값으로 사용합니다." },
+            { lines: "12", explanation: "두 경계를 모두 통과한 int만 내부 검증 값으로 사용합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "validated_score.py를 저장"], command: "python validated_score.py", input: "101" },
           output: { value: "점수(0~100) : 101\n오류: 점수는 0~100이어야 합니다.", explanation: ["101은 정수 파싱에 성공하므로 ‘정수를 입력’ 오류가 아닙니다.", "입력을 abc로 바꾸면 ValueError 경로의 문법 오류가 출력됩니다.", "입력 100은 포함 경계라 검증 성공입니다."] },
@@ -239,5 +239,273 @@ const session = {
   ],
   sourceCoverage: { filesRead: 2, filesUsed: 2, uncoveredNotes: ["if 상세는 py-016, 반복 재입력은 py-018, 예외 설계는 py-035~036에서 확장합니다.", "getpass·CLI adapter·자원 제한·주입 경계는 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
+
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "input-adapter-eof-cancel-state-machine",
+    title: "입력값·빈 줄·EOF·사용자 취소를 서로 다른 상태로 모델링합니다",
+    lead: "input 성공 문자열만 생각하지 않고 stream 종료, interactive interrupt와 재시도 예산을 adapter result로 표현해야 batch·pipe·테스트 환경에서도 종료할 수 있습니다.",
+    explanations: [
+      "input(prompt)는 prompt를 stdout에 쓰고 한 줄을 읽어 trailing newline을 제거한 str을 반환합니다. 사용자가 Enter만 누르면 빈 문자열이며 EOF와 다릅니다.",
+      "표준입력 끝에서는 input이 EOFError를 냅니다. pipe/file의 정상 종료일 수 있으므로 무조건 '잘못된 값' 재시도로 처리하면 무한 loop가 됩니다.",
+      "interactive Ctrl+C는 KeyboardInterrupt입니다. 사용자 취소와 parser ValueError를 분리해 cleanup 후 명시적 exit status로 끝냅니다.",
+      "readline adapter를 주입하면 input I/O와 normalize/parse/domain logic을 분리해 EOF·취소·empty를 실제 terminal 없이 결정적으로 test할 수 있습니다.",
+      "재시도에는 최대 횟수·deadline과 cancellation propagation을 두고, secret prompt에는 input 대신 getpass를 사용해 화면 echo를 줄입니다.",
+    ],
+    concepts: [
+      { term: "EOF", definition: "입력 stream에서 더 읽을 data가 없다는 상태입니다.", detail: ["빈 줄과 다릅니다.", "input은 EOFError를 냅니다."] },
+      { term: "input adapter", definition: "terminal/stream I/O를 application의 typed read result로 변환하는 경계입니다.", detail: ["테스트에서 주입할 수 있습니다.", "EOF·취소·value를 분류합니다."] },
+      { term: "retry budget", definition: "입력 재시도에 허용된 횟수 또는 시간 상한입니다.", detail: ["무한 loop를 막습니다.", "EOF·cancel은 보통 즉시 종료합니다."] },
+    ],
+    codeExamples: [{
+      id: "input-state-machine-injected-adapter",
+      title: "value·empty·EOF·cancel을 terminal 없이 검증합니다",
+      language: "python",
+      filename: "input_state_machine.py",
+      purpose: "대화형 상태를 주입 가능한 callable과 stable result tuple로 분류합니다.",
+      code: String.raw`def read_once(reader):
+    try:
+        raw = reader()
+    except EOFError:
+        return ("eof", None)
+    except KeyboardInterrupt:
+        return ("cancelled", None)
+    if raw == "":
+        return ("empty", "")
+    return ("value", raw)
+
+def returning(value):
+    return lambda: value
+
+def raising(error):
+    def reader():
+        raise error
+    return reader
+
+cases = [
+    returning(" 42 "),
+    returning(""),
+    raising(EOFError()),
+    raising(KeyboardInterrupt()),
+]
+for reader in cases:
+    print(read_once(reader))
+
+def collect(reader, attempts):
+    errors = 0
+    for _ in range(attempts):
+        state, raw = read_once(reader)
+        if state in {"eof", "cancelled"}:
+            return state
+        if state == "value" and raw.strip():
+            return "accepted:" + raw.strip()
+        errors += 1
+    return "retry-exhausted:" + str(errors)
+
+values = iter(["", "  ", "Python"])
+print(collect(lambda: next(values), 3))
+print(collect(returning(""), 2))`,
+      walkthrough: [
+        { lines: "1-10", explanation: "reader의 EOFError/KeyboardInterrupt와 정상 empty/value를 네 상태로 분류합니다." },
+        { lines: "12-24", explanation: "고정 반환·예외 reader를 만들어 terminal 없이 모든 상태를 실행합니다." },
+        { lines: "26-38", explanation: "EOF/cancel은 즉시 종료하고 empty에는 bounded retry를 적용하는 collect state machine을 구현합니다." },
+        { lines: "40-42", explanation: "세 번째 유효 입력 성공과 retry budget 소진을 exact output으로 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "실제 stdin/terminal 불필요"], command: "python -I -B input_state_machine.py" },
+      output: { value: "('value', ' 42 ')\n('empty', '')\n('eof', None)\n('cancelled', None)\naccepted:Python\nretry-exhausted:2", explanation: ["empty string과 EOF는 별도 결과입니다.", "모든 retry path는 유한하게 종료합니다."] },
+      experiments: [
+        { change: "EOF를 empty로 바꿔 계속 retry합니다.", prediction: "pipe 종료 뒤 영원히 input을 반복할 수 있습니다.", result: "EOF는 terminal state로 유지합니다." },
+        { change: "KeyboardInterrupt를 broad Exception으로 잡습니다.", prediction: "KeyboardInterrupt는 Exception이 아니라 BaseException 계열이라 잡히지 않습니다.", result: "취소를 명시적으로 처리하거나 상위로 전파합니다." },
+        { change: "password를 input으로 읽습니다.", prediction: "terminal에 그대로 echo될 수 있습니다.", result: "getpass와 non-interactive secret channel을 사용합니다." },
+      ],
+      sourceRefs: ["py-input-builtin", "py-eoferror", "py-keyboardinterrupt", "py-getpass"],
+    }],
+    diagnostics: [
+      { symptom: "파일/pipe 입력이 끝난 뒤 프로그램이 계속 오류를 출력한다.", likelyCause: "EOFError를 일반 invalid value로 처리해 무한 재시도합니다.", checks: ["stdin source가 terminal인지 pipe/file인지 봅니다.", "EOF handler와 retry counter를 확인합니다."], fix: "EOF를 명시적 terminal result로 반환하고 cleanup 후 종료합니다.", prevention: "empty line과 EOF를 별도 integration tests로 둡니다." },
+      { symptom: "Ctrl+C를 눌러도 프로그램이 다시 prompt를 띄운다.", likelyCause: "취소를 validation error와 같은 retry branch로 합쳤습니다.", checks: ["KeyboardInterrupt handler와 broad BaseException catch를 봅니다.", "cleanup/exit policy를 확인합니다."], fix: "cancelled 상태를 즉시 상위에 전파하거나 명시적 종료로 처리합니다.", prevention: "cancel acceptance test와 bounded retry invariant를 둡니다." },
+      { symptom: "자동 테스트가 input 호출에서 멈춘다.", likelyCause: "I/O와 parser/business logic이 한 함수에 hard-code됐습니다.", checks: ["input을 직접 호출하는 깊은 functions를 찾습니다.", "reader injection seam을 봅니다."], fix: "가장 바깥 adapter만 input을 호출하고 내부에는 reader 또는 raw string을 전달합니다.", prevention: "순수 parser unit tests와 adapter integration tests를 분리합니다." },
+    ],
+  },
+  {
+    id: "conversion-exception-domain-validation",
+    title: "문법 parsing·type misuse·domain range 오류를 exception taxonomy로 분리합니다",
+    lead: "int/Decimal 변환 실패를 모두 '숫자가 아님'으로 뭉개지 않고 presence, Unicode/ASCII 문법, ValueError, TypeError와 범위 규칙을 단계별 error code로 만듭니다.",
+    explanations: [
+      "int(text, 10)는 leading/trailing whitespace와 sign, Unicode decimal digits 일부를 허용합니다. 제품이 ASCII score만 받는다면 parser 호출 전 isascii와 explicit grammar를 검증합니다.",
+      "ValueError는 올바른 input type이지만 값 문법이 맞지 않는 사용자 오류 후보입니다. TypeError는 None/list 같은 잘못된 객체 type을 넘긴 programmer/integration 오류일 수 있어 같은 메시지로 숨기지 않습니다.",
+      "bool은 int subclass라 isinstance(True, int)가 True입니다. 외부 JSON bool이 score로 들어오지 않게 raw adapter type과 parsed domain type을 strict하게 검사합니다.",
+      "float는 NaN/Infinity와 binary rounding을 포함합니다. 성적 평균에 finite check가 필요하고 돈·정확한 decimal 입력에는 decimal.Decimal과 scale/rounding policy가 적합합니다.",
+      "parse 성공 뒤에도 0..100 range, 단위, cross-field invariant를 검증해야 합니다. 오류 응답에는 raw secret/value 전체 대신 field와 stable code를 둡니다.",
+    ],
+    concepts: [
+      { term: "syntax validation", definition: "문자열이 parser가 허용한 표기 규칙에 맞는지 확인하는 단계입니다.", detail: ["typed value conversion 전입니다.", "domain range와 다릅니다."] },
+      { term: "domain validation", definition: "변환된 값이 업무 범위·단위·관계 조건을 만족하는지 확인하는 단계입니다.", detail: ["parse 성공을 전제로 합니다.", "0..100 같은 invariant입니다."] },
+      { term: "exception taxonomy", definition: "사용자 값 오류, integration type 오류, 취소와 system failure를 의미별로 분류하는 체계입니다.", detail: ["retry/alert를 결정합니다.", "broad except를 피합니다."] },
+    ],
+    codeExamples: [{
+      id: "score-parser-error-taxonomy",
+      title: "ASCII 문법·ValueError·TypeError·range를 stable result로 분리합니다",
+      language: "python",
+      filename: "score_parser_taxonomy.py",
+      purpose: "외부 raw object를 score로 바꾸는 각 실패 경계를 예외 message에 의존하지 않고 검증합니다.",
+      code: String.raw`def parse_score(raw):
+    if type(raw) is not str:
+        return (False, "type")
+    text = raw.strip()
+    if not text:
+        return (False, "required")
+    unsigned = text[1:] if text[:1] in {"+", "-"} else text
+    if not unsigned or not unsigned.isascii() or not unsigned.isdecimal():
+        return (False, "ascii-integer")
+    try:
+        value = int(text, 10)
+    except ValueError:
+        return (False, "integer")
+    if not 0 <= value <= 100:
+        return (False, "range")
+    return (True, value)
+
+cases = [" 90 ", "+7", "-1", "101", "９０", "9.5", "", None, True]
+for raw in cases:
+    print(repr(raw), "->", parse_score(raw))
+
+def unsafe_convert(raw):
+    try:
+        return (True, int(raw))
+    except ValueError:
+        return (False, "value")
+    except TypeError:
+        return (False, "type")
+
+print("exception_types:", unsafe_convert("x"), unsafe_convert(None))`,
+      walkthrough: [
+        { lines: "1-15", explanation: "strict str/presence/ASCII decimal grammar, int conversion과 domain range를 순서대로 검사합니다." },
+        { lines: "17-19", explanation: "정상·sign·range·Unicode digits·decimal·empty·wrong type cases를 table로 실행합니다." },
+        { lines: "21-30", explanation: "builtin int가 내는 ValueError와 TypeError를 별도 stable code로 매핑합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "locale/network 불필요"], command: "python -I -B score_parser_taxonomy.py" },
+      output: { value: "' 90 ' -> (True, 90)\n'+7' -> (True, 7)\n'-1' -> (False, 'range')\n'101' -> (False, 'range')\n'９０' -> (False, 'ascii-integer')\n'9.5' -> (False, 'ascii-integer')\n'' -> (False, 'required')\nNone -> (False, 'type')\nTrue -> (False, 'type')\nexception_types: (False, 'value') (False, 'type')", explanation: ["Unicode decimal digits를 명시적 ASCII policy로 거부합니다.", "TypeError와 ValueError를 다른 integration/user categories로 유지합니다."] },
+      experiments: [
+        { change: "isascii 검사를 제거합니다.", prediction: "int('９０')가90으로 성공할 수 있습니다.", result: "parser의 넓은 Unicode 문법과 제품 grammar를 구분합니다." },
+        { change: "except Exception 하나로 합칩니다.", prediction: "programmer type bug와 사용자 문법 오류가 같은 retry 메시지가 됩니다.", result: "taxonomy와 observability가 사라집니다." },
+        { change: "float('nan')을 범위 검사 없이 받습니다.", prediction: "parse는 성공하지만 비교/집계 의미가 깨질 수 있습니다.", result: "math.isfinite와 domain policy가 필요합니다." },
+      ],
+      sourceRefs: ["py-int-builtin", "py-exceptions", "py-decimal", "py-float-info"],
+    }],
+    diagnostics: [
+      { symptom: "전각９０이 어떤 화면에서는 통과하고 다른 validator에서는 거부된다.", likelyCause: "Unicode digit parser와 ASCII-only UI 정책이 정렬되지 않았습니다.", checks: ["repr/code points와 isascii/isdecimal을 봅니다.", "client/server grammar를 비교합니다."], fix: "허용 문자 grammar를 명시하고 모든 boundary에서 같은 parser를 사용합니다.", prevention: "ASCII/Unicode digits와 normalization cases를 contract test합니다." },
+      { symptom: "None 입력이 사용자 숫자 오류로 반복 재시도된다.", likelyCause: "TypeError를 ValueError와 같은 사용자 branch로 합쳤습니다.", checks: ["raw adapter type과 exception class를 확인합니다.", "integration schema를 봅니다."], fix: "wrong object type은 integration/programmer error로 분류하고 사용자 retry와 분리합니다.", prevention: "type contract와 telemetry error code를 둡니다." },
+      { symptom: "숫자 parsing은 성공했는데 성적101이 저장된다.", likelyCause: "syntax conversion 뒤 domain range 검증이 없습니다.", checks: ["parse와 business validation 단계가 분리됐는지 봅니다.", "DB constraint를 확인합니다."], fix: "0..100 invariant를 service와 persistence boundary에도 적용합니다.", prevention: "boundary-1/boundary/boundary+1 tests와 DB constraint를 둡니다." },
+    ],
+  },
+  {
+    id: "locale-explicit-number-grammar-formatting",
+    title: "locale 의존 parsing과 표시 formatting을 explicit grammar로 분리합니다",
+    lead: "쉼표와 점의 의미는 locale에 따라 decimal 또는 grouping separator가 될 수 있으므로 global locale에 기대지 않고 source별 형식 계약을 명시합니다.",
+    explanations: [
+      "'1,234'는 en-style에서는 천이백삼십사, 일부 locale에서는 소수1.234일 수 있습니다. 문자열만 보고 사용자의 의도를 유일하게 복원할 수 없습니다.",
+      "locale.setlocale은 process-global 상태에 영향을 주며 library/thread에서 임의 변경하면 다른 parsing/formatting과 race를 만들 수 있습니다. 애플리케이션 core에는 locale-neutral typed value를 전달합니다.",
+      "외부 machine protocol은 decimal point와 no-grouping 같은 locale-neutral grammar를 사용하는 편이 안전합니다. 인간 UI adapter는 선택된 locale의 separator/grouping을 검증해 canonical Decimal로 변환합니다.",
+      "group separator를 단순 replace하면 잘못된 '12,34'도1234로 통과합니다. 첫 group1~3 digits, 이후 groups3 digits와 decimal part digits를 검사합니다.",
+      "format(value, ',.2f') 같은 출력 정책은 parsing과 별도입니다. currency symbol, rounding, negative와 locale display는 UI/i18n layer가 소유합니다.",
+    ],
+    concepts: [
+      { term: "locale-neutral core", definition: "locale-specific text를 boundary에서 typed value로 바꾼 뒤 내부 계산은 locale에 의존하지 않는 설계입니다.", detail: ["Decimal/int를 전달합니다.", "표시는 adapter가 담당합니다."] },
+      { term: "grouping grammar", definition: "천 단위 separator 위치와 각 digit group 길이를 정의한 문법입니다.", detail: ["단순 replace보다 엄격합니다.", "locale별 규칙일 수 있습니다."] },
+    ],
+    codeExamples: [{
+      id: "explicit-locale-decimal-parser",
+      title: "명시적 decimal/group separators로 금액을 canonical Decimal로 바꿉니다",
+      language: "python",
+      filename: "explicit_locale_number.py",
+      purpose: "global locale 없이 en/de-style 형식과 잘못된 grouping을 결정적으로 검증합니다.",
+      code: String.raw`from decimal import Decimal, InvalidOperation
+
+def parse_number(raw, *, group, decimal):
+    text = raw.strip()
+    if not text or group == decimal or text.count(decimal) > 1:
+        return (False, "format")
+    integer, separator, fraction = text.partition(decimal)
+    sign = ""
+    if integer[:1] in {"+", "-"}:
+        sign, integer = integer[0], integer[1:]
+    groups = integer.split(group) if group else [integer]
+    if not groups or not 1 <= len(groups[0]) <= 3:
+        return (False, "grouping")
+    if len(groups) > 1 and any(len(part) != 3 for part in groups[1:]):
+        return (False, "grouping")
+    if any(not part.isascii() or not part.isdecimal() for part in groups):
+        return (False, "digits")
+    if separator and (not fraction or not fraction.isascii() or not fraction.isdecimal()):
+        return (False, "fraction")
+    canonical = sign + "".join(groups) + ("." + fraction if separator else "")
+    try:
+        return (True, Decimal(canonical))
+    except InvalidOperation:
+        return (False, "decimal")
+
+print("en:", parse_number("1,234.50", group=",", decimal="."))
+print("de:", parse_number("1.234,50", group=".", decimal=","))
+print("bad_group:", parse_number("12,34.50", group=",", decimal="."))
+print("ambiguous_en:", parse_number("1,234", group=",", decimal="."))
+print("ambiguous_de:", parse_number("1,234", group=".", decimal=","))
+value = Decimal("1234.5")
+print("display_en:", format(value, ",.2f"))`,
+      walkthrough: [
+        { lines: "1-9", explanation: "빈 값, separator 설정과 sign/decimal partition을 명시적으로 처리합니다." },
+        { lines: "10-19", explanation: "첫/후속 grouping 길이와 ASCII digits/fraction grammar를 검증합니다." },
+        { lines: "20-24", explanation: "canonical dot-decimal 문자열을 Decimal로 변환하고 InvalidOperation을 stable code로 분류합니다." },
+        { lines: "26-32", explanation: "en/de 형식, 잘못된 group와 같은 raw text의 locale별 ambiguity, 별도 display formatting을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "system locale 변경 없음"], command: "python -I -B explicit_locale_number.py" },
+      output: { value: "en: (True, Decimal('1234.50'))\nde: (True, Decimal('1234.50'))\nbad_group: (False, 'grouping')\nambiguous_en: (True, Decimal('1234'))\nambiguous_de: (True, Decimal('1.234'))\ndisplay_en: 1,234.50", explanation: ["같은 '1,234'가 grammar 선택에 따라 다른 typed value가 됩니다.", "core Decimal은 locale-neutral합니다."] },
+      experiments: [
+        { change: "group separator를 단순 replace합니다.", prediction: "12,34 같은 invalid grouping도 통과합니다.", result: "위치 grammar 검증이 필요합니다." },
+        { change: "library 안에서 setlocale을 바꿉니다.", prediction: "다른 threads/components의 parsing/formatting 결과가 영향을 받을 수 있습니다.", result: "locale state ownership을 process edge로 제한합니다." },
+        { change: "float로 돈을 저장합니다.", prediction: "일부 decimal fractions가 binary로 정확히 표현되지 않습니다.", result: "Decimal과 rounding/scale policy를 사용합니다." },
+      ],
+      sourceRefs: ["py-locale-module", "py-decimal", "py-format-spec", "py-text-io"],
+    }],
+    diagnostics: [
+      { symptom: "1,234가 사용자마다1234 또는1.234로 저장된다.", likelyCause: "입력 locale/grammar를 명시하지 않고 separator를 추측했습니다.", checks: ["입력 source의 locale metadata와 separator policy를 확인합니다.", "raw text와 canonical value를 분리해 봅니다."], fix: "UI에서 locale을 명시하고 해당 grammar로 검증하거나 machine-neutral format을 요구합니다.", prevention: "locale별 ambiguous/boundary examples를 contract test합니다." },
+      { symptom: "동시 요청의 숫자 formatting 언어가 간헐적으로 바뀐다.", likelyCause: "request마다 process-global locale.setlocale을 변경했습니다.", checks: ["setlocale 호출과 thread/request trace를 찾습니다.", "formatter ownership을 봅니다."], fix: "global locale 변경을 피하고 locale-aware formatter 또는 explicit grammar/format spec을 adapter에 사용합니다.", prevention: "parallel locale requests와 no-global-mutation architecture rule을 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "빈 줄과 EOF는 같은가요?", answer: "아닙니다. 빈 줄은 정상적으로 읽은 empty str이고 EOF는 더 읽을 data가 없어 input이 EOFError를 내는 상태입니다." },
+  { question: "Ctrl+C는 보통 어떤 예외인가요?", answer: "KeyboardInterrupt이며 Exception이 아니라 BaseException 계열입니다." },
+  { question: "재시도 budget이 필요한 이유는 무엇인가요?", answer: "영원한 invalid input·EOF loop와 자원 점유를 막고 종료 조건을 명확히 하기 위해서입니다." },
+  { question: "ValueError와 TypeError를 왜 구분하나요?", answer: "값 문법 오류와 잘못된 객체 type/integration bug의 책임·retry 정책이 다르기 때문입니다." },
+  { question: "int가 허용하는 Unicode digits와 제품 ASCII 정책은 같나요?", answer: "아닙니다. 제품 grammar가 더 좁으면 isascii 등으로 명시적으로 제한해야 합니다." },
+  { question: "parse 성공만으로 domain validation이 끝나나요?", answer: "아닙니다. 범위·단위·cross-field invariant를 추가로 확인해야 합니다." },
+  { question: "locale.setlocale을 request마다 바꾸면 왜 위험한가요?", answer: "process-global state라 동시 components의 parsing/formatting에 영향을 줄 수 있기 때문입니다." },
+  { question: "돈 입력에 Decimal을 검토하는 이유는 무엇인가요?", answer: "decimal fractions와 rounding/scale 정책을 binary float보다 명시적으로 다룰 수 있기 때문입니다." },
+);
+session.completionChecklist.push(
+  "empty input과 EOF를 별도 상태로 처리한다.",
+  "KeyboardInterrupt 취소를 validation retry와 분리한다.",
+  "input adapter와 순수 parser를 분리한다.",
+  "모든 retry loop에 횟수 또는 deadline을 둔다.",
+  "ValueError·TypeError·domain range 오류를 구분한다.",
+  "ASCII/Unicode 숫자 grammar를 명시한다.",
+  "global locale 변경 없이 explicit parser를 사용한다.",
+  "parse와 locale별 display formatting을 분리한다.",
+);
+session.sources.push(
+  { id: "py-input-builtin", repository: "Python 3 Library Reference", path: "input", publicUrl: "https://docs.python.org/3/library/functions.html#input", usedFor: ["prompt/read/EOF contract"], evidence: "input builtin의 공식 계약입니다." },
+  { id: "py-eoferror", repository: "Python 3 Library Reference", path: "EOFError", publicUrl: "https://docs.python.org/3/library/exceptions.html#EOFError", usedFor: ["stream end classification"], evidence: "EOFError의 공식 exception 정의입니다." },
+  { id: "py-keyboardinterrupt", repository: "Python 3 Library Reference", path: "KeyboardInterrupt", publicUrl: "https://docs.python.org/3/library/exceptions.html#KeyboardInterrupt", usedFor: ["interactive cancellation"], evidence: "KeyboardInterrupt와 BaseException 계층의 공식 근거입니다." },
+  { id: "py-getpass", repository: "Python 3 Library Reference", path: "getpass", publicUrl: "https://docs.python.org/3/library/getpass.html", usedFor: ["non-echo secret input"], evidence: "secret prompt adapter의 공식 API입니다." },
+  { id: "py-int-builtin", repository: "Python 3 Library Reference", path: "int", publicUrl: "https://docs.python.org/3/library/functions.html#int", usedFor: ["integer parsing grammar"], evidence: "int conversion의 공식 계약입니다." },
+  { id: "py-exceptions", repository: "Python 3 Library Reference", path: "Built-in Exceptions", publicUrl: "https://docs.python.org/3/library/exceptions.html", usedFor: ["ValueError/TypeError taxonomy"], evidence: "builtin exception hierarchy의 공식 reference입니다." },
+  { id: "py-decimal", repository: "Python 3 Library Reference", path: "decimal", publicUrl: "https://docs.python.org/3/library/decimal.html", usedFor: ["exact decimal parsing", "InvalidOperation"], evidence: "Decimal arithmetic의 공식 API입니다." },
+  { id: "py-float-info", repository: "Python 3 Tutorial", path: "Floating-Point Arithmetic", publicUrl: "https://docs.python.org/3/tutorial/floatingpoint.html", usedFor: ["binary float limits"], evidence: "Python float representation의 공식 설명입니다." },
+  { id: "py-locale-module", repository: "Python 3 Library Reference", path: "locale", publicUrl: "https://docs.python.org/3/library/locale.html", usedFor: ["process-wide locale caveat", "locale parsing context"], evidence: "locale module의 공식 계약과 주의사항입니다." },
+  { id: "py-format-spec", repository: "Python 3 Language Reference", path: "Format Specification Mini-Language", publicUrl: "https://docs.python.org/3/library/string.html#format-specification-mini-language", usedFor: ["display grouping/precision"], evidence: "숫자 표시 formatting의 공식 문법입니다." },
+  { id: "py-text-io", repository: "Python 3 Library Reference", path: "Text I/O", publicUrl: "https://docs.python.org/3/library/io.html#text-i-o", usedFor: ["text stream boundary"], evidence: "stdin을 포함한 text stream model의 공식 근거입니다." },
+);
 
 export default session;

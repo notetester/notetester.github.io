@@ -241,4 +241,229 @@ const session = {
   sourceCoverage: { filesRead: 3, filesUsed: 3, uncoveredNotes: ["함수 인수·반환의 상세 계약은 py-021~022에서 확장합니다.", "NamedTuple·dataclass·hash 안정성은 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "extended-unpacking-star-call-boundaries",
+    title: "패킹·확장 언패킹·star 호출의 arity 경계를 명시합니다",
+    lead: "쉼표 기반 패킹과 구조 언패킹은 간결하지만 요소 개수, starred target의 list 반환과 호출 시 positional 확장의 책임을 정확히 알아야 합니다.",
+    explanations: [
+      "x, y = iterable은 오른쪽을 순회해 정확히 두 값을 요구합니다. 적거나 많으면 ValueError이며 왼쪽 이름에 부분적으로 성공한 상태를 남기지 않습니다.",
+      "head, *middle, tail은 최소 두 요소를 요구하고 middle은 원본이 tuple이어도 새 list가 됩니다. starred target은 assignment list에서 하나만 허용됩니다.",
+      "중첩 언패킹은 오른쪽 구조와 왼쪽 pattern이 정확히 맞아야 합니다. dict를 직접 언패킹하면 values가 아니라 iteration keys가 나온다는 점도 구분합니다.",
+      "함수 호출의 *iterable은 positional arguments로 펼치고 **mapping은 keyword arguments로 펼칩니다. 중복 keyword나 signature arity 불일치는 호출 시 TypeError입니다.",
+      "가변 길이 protocol에는 무조건 tuple unpacking을 강요하지 말고 dataclass/NamedTuple, mapping 또는 명시적 parser로 schema version을 표현합니다.",
+    ],
+    concepts: [
+      { term: "arity", definition: "구조나 호출이 요구하는 요소·인수의 개수입니다.", detail: ["fixed unpacking은 exact arity입니다.", "starred target이 가변 구간을 흡수합니다."] },
+      { term: "starred target", definition: "assignment에서 남는 여러 요소를 새 list로 수집하는 *name 위치입니다.", detail: ["한 pattern에 하나만 허용됩니다.", "최소 고정 요소 수는 유지됩니다."] },
+      { term: "argument expansion", definition: "호출 시 iterable 또는 mapping을 positional/keyword arguments로 펼치는 *와 ** 문법입니다.", detail: ["assignment star와 맥락이 다릅니다.", "signature 검사가 뒤따릅니다."] },
+    ],
+    codeExamples: [{
+      id: "tuple-star-unpacking-contracts",
+      title: "고정·별표·중첩 언패킹과 호출 확장을 검증합니다",
+      language: "python",
+      filename: "tuple_star_unpacking.py",
+      purpose: "arity 성공/실패와 starred target의 list type을 exact output으로 확인합니다.",
+      code: String.raw`packed = 10, 20
+left, right = packed
+print("packed:", packed, "unpacked:", left, right)
+
+head, *middle, tail = (1, 2, 3, 4, 5)
+print("extended:", head, middle, tail, type(middle).__name__)
+
+name, (x, y) = ("point", (3, 4))
+print("nested:", name, x, y)
+
+def describe(prefix, first, second, *, unit):
+    return f"{prefix}:{first + second}{unit}"
+
+positional = ("sum", 7, 5)
+keywords = {"unit": "점"}
+print("call:", describe(*positional, **keywords))
+
+for value in [(1,), (1, 2, 3)]:
+    try:
+        a, b = value
+    except ValueError as error:
+        print("arity_error:", len(value), type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-6", explanation: "쉼표 패킹과 fixed/extended unpacking을 비교하고 middle의 list type을 확인합니다." },
+        { lines: "8-9", explanation: "중첩 tuple 구조를 동일한 nested target pattern으로 분해합니다." },
+        { lines: "11-17", explanation: "*와 **가 함수 signature의 positional/keyword arguments로 펼쳐지는 것을 봅니다." },
+        { lines: "19-22", explanation: "요소가 부족하거나 많은 fixed unpacking을 안정된 ValueError type으로 분류합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B tuple_star_unpacking.py" },
+      output: { value: "packed: (10, 20) unpacked: 10 20\nextended: 1 [2, 3, 4] 5 list\nnested: point 3 4\ncall: sum:12점\narity_error: 1 ValueError\narity_error: 3 ValueError", explanation: ["starred target은 tuple 입력에서도 list를 만듭니다.", "고정 arity mismatch는 ValueError입니다."] },
+      experiments: [
+        { change: "head, *middle = (1,)을 사용합니다.", prediction: "middle은 빈 list가 됩니다.", result: "고정 target 하나만 만족하면 성공합니다." },
+        { change: "두 starred targets를 assignment에 둡니다.", prediction: "실행 전 SyntaxError입니다.", result: "가변 구간은 pattern당 하나입니다." },
+        { change: "dict를 a, b로 언패킹합니다.", prediction: "삽입 순서의 keys 두 개가 들어갑니다.", result: "items/values 의도를 명시해야 합니다." },
+      ],
+      sourceRefs: ["py-assignment-statements", "py-expression-lists", "py-call-star"],
+    }],
+    diagnostics: [
+      { symptom: "언패킹에서 too many/not enough values 오류가 난다.", likelyCause: "producer sequence arity와 consumer target pattern이 달라졌습니다.", checks: ["len과 repr을 경계에서 기록합니다.", "schema/version과 starred target 위치를 봅니다."], fix: "fixed schema를 versioned record로 표현하거나 필요한 가변 구간 하나에만 starred target을 사용합니다.", prevention: "최소·정상·초과 arity contract tests를 둡니다." },
+      { symptom: "tuple을 star 언패킹했는데 middle이 tuple이 아니다.", likelyCause: "assignment starred target은 항상 list로 수집한다는 계약을 놓쳤습니다.", checks: ["type(middle)을 확인합니다.", "불변 결과가 필요한지 봅니다."], fix: "필요하면 middle = tuple(middle)로 명시적으로 고정합니다.", prevention: "API 반환 type을 annotation과 test에 기록합니다." },
+    ],
+  },
+  {
+    id: "tuple-shallow-immutability-hashability",
+    title: "tuple의 얕은 불변성과 hashability를 요소 graph까지 추적합니다",
+    lead: "tuple은 slot binding을 바꾸지 못할 뿐 내부 mutable 객체를 동결하지 않습니다. hash key로 쓸 수 있는지는 모든 요소의 hash 계약에 달려 있습니다.",
+    explanations: [
+      "tuple[index] = value와 append는 지원되지 않지만 tuple slot이 가리키는 list/dict 같은 객체는 자체 API로 변경될 수 있습니다.",
+      "hash(tuple)은 각 요소가 hashable일 때만 가능합니다. list를 포함한 tuple은 바깥 tuple이 불변이어도 TypeError를 내므로 dict key/set element가 될 수 없습니다.",
+      "hashable 객체는 lifetime 동안 hash와 equality 결과가 안정돼야 합니다. mutable state가 __hash__/__eq__에 참여하면 hash table에서 찾을 수 없는 key가 생길 수 있습니다.",
+      "tuple += other는 기존 tuple을 바꾸는 것이 아니라 새 tuple을 만들고 이름을 재바인딩합니다. 다른 alias는 이전 tuple을 계속 가리킵니다.",
+      "deeply immutable key가 필요하면 nested list를 tuple로, set을 frozenset으로 변환하되 순서·중복 정보가 바뀌는지 domain contract를 검토합니다.",
+    ],
+    concepts: [
+      { term: "shallow immutability", definition: "컨테이너의 요소 참조 배치는 바꿀 수 없지만 참조 대상의 내부 변경까지 막지는 않는 성질입니다.", detail: ["tuple의 핵심입니다.", "object graph를 따로 봅니다."] },
+      { term: "hashable", definition: "lifetime 동안 안정된 hash를 가지고 equality 비교가 가능한 객체의 계약입니다.", detail: ["dict key/set element에 필요합니다.", "tuple은 요소 전체에 의존합니다."] },
+    ],
+    codeExamples: [{
+      id: "tuple-immutability-hash-evidence",
+      title: "nested mutation·hash 실패·재바인딩을 구분합니다",
+      language: "python",
+      filename: "tuple_immutability_hash.py",
+      purpose: "tuple 자체와 내부 객체, hashability와 += identity를 별도 evidence로 확인합니다.",
+      code: String.raw`record = ("course", ["python"])
+alias = record
+record[1].append("typing")
+print("nested_mutation:", record)
+
+try:
+    hash(record)
+except TypeError as error:
+    print("hash_error:", type(error).__name__)
+
+key = ("course", ("python", "typing"), frozenset({"public"}))
+print("deep_key_hashable:", isinstance(hash(key), int))
+
+before = record
+record += ("v2",)
+print("rebound:", record)
+print("old_alias:", alias)
+print("same_identity:", before is record, before is alias)`,
+      walkthrough: [
+        { lines: "1-4", explanation: "tuple slot 안의 list를 변경해 shallow immutability를 재현합니다." },
+        { lines: "6-13", explanation: "mutable 요소가 있는 tuple의 hash 실패와 deeply hashable tuple key를 비교합니다." },
+        { lines: "15-18", explanation: "+=가 새 tuple로 재바인딩하고 기존 alias는 이전 tuple을 유지함을 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "hash seed 값 자체는 출력하지 않음"], command: "python -I -B tuple_immutability_hash.py" },
+      output: { value: "nested_mutation: ('course', ['python', 'typing'])\nhash_error: TypeError\ndeep_key_hashable: True\nrebound: ('course', ['python', 'typing'], 'v2')\nold_alias: ('course', ['python', 'typing'])\nsame_identity: False True", explanation: ["hash 값은 process seed에 따라 달라질 수 있어 int 여부만 검증합니다.", "alias는 += 이전 tuple을 유지합니다."] },
+      experiments: [
+        { change: "nested list를 tuple로 바꿉니다.", prediction: "모든 요소가 hashable이면 바깥 tuple도 hashable해집니다.", result: "deep immutability가 key 사용을 가능하게 합니다." },
+        { change: "hash 값 자체를 golden output으로 둡니다.", prediction: "str hash randomization 때문에 process별로 달라질 수 있습니다.", result: "결정적 test는 equality/lookup behavior를 검증합니다." },
+        { change: "frozen dataclass의 field에 list를 둡니다.", prediction: "frozen만으로 nested list가 불변/hashable해지지 않습니다.", result: "deep value graph를 검토합니다." },
+      ],
+      sourceRefs: ["py-tuple-stdtypes", "py-hashable-glossary", "py-datamodel-hash"],
+    }],
+    diagnostics: [
+      { symptom: "tuple을 dict key로 넣을 때 unhashable type: list가 난다.", likelyCause: "tuple 요소 중 list 같은 unhashable 객체가 있습니다.", checks: ["각 요소에 hash를 시도하되 exception type을 봅니다.", "nested graph에 mutable containers가 있는지 확인합니다."], fix: "key 의미에 맞춰 tuple/frozenset 같은 deeply immutable values로 변환합니다.", prevention: "key construction boundary에서 hashability와 equality tests를 둡니다." },
+      { symptom: "불변 snapshot의 내부 list가 나중에 바뀐다.", likelyCause: "tuple의 얕은 불변성을 deep freeze로 오해했습니다.", checks: ["mutable nested references와 aliases를 inventory합니다.", "변경 owner를 추적합니다."], fix: "nested immutable value로 변환하거나 defensive deep/domain copy를 사용합니다.", prevention: "snapshot deep-immutability contract와 mutation-isolation tests를 둡니다." },
+    ],
+  },
+  {
+    id: "tuple-namedtuple-dataclass-choice",
+    title: "위치 tuple·NamedTuple·dataclass를 schema 의미에 맞게 선택합니다",
+    lead: "요소가 두세 개라는 이유만으로 tuple을 쓰지 않고, 독자가 field 의미를 위치로 기억해야 하는지와 validation·evolution 요구를 비교합니다.",
+    explanations: [
+      "plain tuple은 짧은 local protocol, iteration pair와 multiple return처럼 위치 의미가 문맥상 분명할 때 간결합니다. 장거리 전달에서는 item[2]가 무엇인지 알기 어렵습니다.",
+      "typing.NamedTuple은 tuple behavior, unpacking과 immutability를 유지하면서 named fields와 static annotations를 제공합니다. _replace는 새 instance를 반환합니다.",
+      "collections.namedtuple은 runtime factory이고 typing.NamedTuple은 type annotation 중심 선언을 제공합니다. 둘 다 tuple subclass라 plain tuple과 값 equality가 True일 수 있습니다.",
+      "dataclass는 method, default/factory, keyword construction, optional mutability와 field-based equality를 더 명확히 제공하며 tuple unpacking을 기본으로 하지 않습니다.",
+      "public schema evolution에서는 positional field 추가가 모든 unpacking consumer를 깨뜨릴 수 있습니다. named access, defaults와 explicit serialization version을 검토합니다.",
+    ],
+    concepts: [
+      { term: "NamedTuple", definition: "tuple의 불변·순서 behavior에 이름과 type annotations를 추가한 record 표현입니다.", detail: ["field access가 명확합니다.", "여전히 positional tuple protocol입니다."] },
+      { term: "schema evolution", definition: "field 추가·삭제·이름·type 변경이 기존 producers/consumers와 호환되는 방식입니다.", detail: ["positional protocol은 취약합니다.", "version/default 정책이 필요합니다."] },
+    ],
+    codeExamples: [{
+      id: "namedtuple-record-choice",
+      title: "NamedTuple의 named/positional access와 불변 업데이트를 검증합니다",
+      language: "python",
+      filename: "namedtuple_choice.py",
+      purpose: "plain tuple 호환성과 named fields, _replace의 새 값 반환을 확인합니다.",
+      code: String.raw`from dataclasses import dataclass
+from typing import NamedTuple
+
+class Progress(NamedTuple):
+    course: str
+    completed: int
+    total: int
+
+progress = Progress("Python", 8, 10)
+course, completed, total = progress
+print("named:", progress.course, progress.completed, progress.total)
+print("unpacked:", course, completed, total)
+print("tuple_equal:", progress == ("Python", 8, 10))
+
+updated = progress._replace(completed=9)
+print("original:", progress)
+print("updated:", updated)
+
+@dataclass(frozen=True, slots=True)
+class ProgressRecord:
+    course: str
+    completed: int
+    total: int
+
+record = ProgressRecord(course="Python", completed=9, total=10)
+print("dataclass:", record)
+print("same_type_equality:", record == updated)`,
+      walkthrough: [
+        { lines: "1-8", explanation: "type-annotated NamedTuple schema와 instance를 선언합니다." },
+        { lines: "9-16", explanation: "named access, tuple unpacking/equality와 _replace의 새 instance를 관찰합니다." },
+        { lines: "18-26", explanation: "frozen slots dataclass의 keyword construction과 type-sensitive equality를 비교합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdlib only"], command: "python -I -B namedtuple_choice.py" },
+      output: { value: "named: Python 8 10\nunpacked: Python 8 10\ntuple_equal: True\noriginal: Progress(course='Python', completed=8, total=10)\nupdated: Progress(course='Python', completed=9, total=10)\ndataclass: ProgressRecord(course='Python', completed=9, total=10)\nsame_type_equality: False", explanation: ["NamedTuple은 plain tuple과 값 equality가 가능합니다.", "dataclass는 다른 record type과 자동으로 같지 않습니다."] },
+      experiments: [
+        { change: "NamedTuple 끝에 default field를 추가합니다.", prediction: "default를 쓰는 named construction은 호환 가능하지만 fixed unpacking consumers는 arity가 바뀝니다.", result: "positional consumer audit가 필요합니다." },
+        { change: "dataclass frozen을 제거합니다.", prediction: "field assignment가 가능해지고 hash policy도 달라집니다.", result: "mutability를 domain contract로 선택합니다." },
+        { change: "plain tuple 두 종류를 같은 shape로 비교합니다.", prediction: "semantic type 차이 없이 값이 같으면 True입니다.", result: "서로 다른 record 의미에는 named type이 안전합니다." },
+      ],
+      sourceRefs: ["py-typing-namedtuple", "py-collections-namedtuple", "py-dataclasses"],
+    }],
+    diagnostics: [
+      { symptom: "record[2]가 무엇인지 call site마다 해석이 다르다.", likelyCause: "장거리/public data를 positional tuple로 전달해 field 의미가 숨었습니다.", checks: ["tuple 생성·소비 locations와 unpacking names를 찾습니다.", "schema evolution 요구를 확인합니다."], fix: "NamedTuple/dataclass 또는 validated mapping으로 field names를 명시합니다.", prevention: "public API에 named schema와 type checking을 적용합니다." },
+      { symptom: "NamedTuple field 추가 뒤 소비자 언패킹이 실패한다.", likelyCause: "positional arity가 public protocol이 됐습니다.", checks: ["모든 fixed unpacking consumers를 검색합니다.", "serialized tuples가 있는지 봅니다."], fix: "named access와 versioned schema로 migration하고 positional compatibility를 명시합니다.", prevention: "schema compatibility tests와 deprecation 기간을 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "head, *middle, tail에서 middle의 타입은 무엇인가요?", answer: "원본 sequence 타입과 무관하게 새 list입니다." },
+  { question: "고정 언패킹의 요소 수가 맞지 않으면 어떤 예외인가요?", answer: "너무 적거나 많으면 ValueError입니다." },
+  { question: "호출의 *와 **는 무엇을 펼치나요?", answer: "*는 positional iterable, **는 string-key mapping을 keyword arguments로 펼칩니다." },
+  { question: "tuple은 내부 list도 불변으로 만드나요?", answer: "아닙니다. slot 배치만 불변이고 참조한 list는 변경될 수 있습니다." },
+  { question: "tuple이 항상 hashable한가요?", answer: "아닙니다. 모든 요소가 hashable해야 tuple도 hashable합니다." },
+  { question: "tuple +=가 기존 객체를 바꾸나요?", answer: "아닙니다. 새 tuple을 만들고 왼쪽 이름을 재바인딩합니다." },
+  { question: "NamedTuple의 장점은 무엇인가요?", answer: "tuple protocol을 유지하면서 named fields와 type annotations를 제공합니다." },
+  { question: "public record에 dataclass가 더 적합할 수 있는 이유는?", answer: "keyword construction, defaults, methods와 명시적 field schema/equality를 제공하기 때문입니다." },
+);
+session.completionChecklist.push(
+  "fixed unpacking의 exact arity를 검증한다.",
+  "starred target이 list를 만든다는 것을 설명한다.",
+  "assignment star와 call *·**를 구분한다.",
+  "tuple의 shallow immutability를 object graph로 추적한다.",
+  "tuple key의 모든 요소 hashability를 확인한다.",
+  "tuple +=와 in-place mutation을 구분한다.",
+  "plain tuple과 NamedTuple의 사용 경계를 설명한다.",
+  "schema evolution에 named access와 versioning을 고려한다.",
+);
+session.sources.push(
+  { id: "py-assignment-statements", repository: "Python 3 Language Reference", path: "Assignment statements", publicUrl: "https://docs.python.org/3/reference/simple_stmts.html#assignment-statements", usedFor: ["target list", "starred assignment"], evidence: "unpacking assignment의 primary language reference입니다." },
+  { id: "py-expression-lists", repository: "Python 3 Language Reference", path: "Expression lists", publicUrl: "https://docs.python.org/3/reference/expressions.html#expression-lists", usedFor: ["comma packing", "tuple creation"], evidence: "패킹과 starred expression의 공식 문법입니다." },
+  { id: "py-call-star", repository: "Python 3 Language Reference", path: "Calls", publicUrl: "https://docs.python.org/3/reference/expressions.html#calls", usedFor: ["* positional", "** keyword expansion"], evidence: "함수 호출 argument expansion의 primary reference입니다." },
+  { id: "py-tuple-stdtypes", repository: "Python 3 Library Reference", path: "Tuples", publicUrl: "https://docs.python.org/3/library/stdtypes.html#tuples", usedFor: ["tuple immutability", "sequence behavior"], evidence: "tuple type의 공식 계약입니다." },
+  { id: "py-hashable-glossary", repository: "Python 3 Glossary", path: "hashable", publicUrl: "https://docs.python.org/3/glossary.html#term-hashable", usedFor: ["hashability contract"], evidence: "hashable의 Python 공식 정의입니다." },
+  { id: "py-datamodel-hash", repository: "Python 3 Language Reference", path: "object.__hash__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__hash__", usedFor: ["hash/equality stability"], evidence: "hash protocol의 primary language reference입니다." },
+  { id: "py-typing-namedtuple", repository: "Python 3 Library Reference", path: "typing.NamedTuple", publicUrl: "https://docs.python.org/3/library/typing.html#typing.NamedTuple", usedFor: ["typed named tuple declaration"], evidence: "typing.NamedTuple 공식 API입니다." },
+  { id: "py-collections-namedtuple", repository: "Python 3 Library Reference", path: "collections.namedtuple", publicUrl: "https://docs.python.org/3/library/collections.html#collections.namedtuple", usedFor: ["runtime named tuple", "_replace"], evidence: "namedtuple runtime API의 공식 계약입니다." },
+  { id: "py-dataclasses", repository: "Python 3 Library Reference", path: "dataclasses", publicUrl: "https://docs.python.org/3/library/dataclasses.html", usedFor: ["record modeling alternative"], evidence: "dataclass의 공식 API입니다." },
+);
+
 export default session;

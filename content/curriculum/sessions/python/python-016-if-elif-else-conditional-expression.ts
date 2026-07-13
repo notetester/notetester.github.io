@@ -242,4 +242,258 @@ const session = {
   sourceCoverage: { filesRead: 4, filesUsed: 4, uncoveredNotes: ["match/case는 py-017, 반복문은 py-018~019에서 별도로 다룹니다.", "정책 객체·branch coverage·보안 기본 거부는 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "truth-value-bool-protocol-operands",
+    title: "bool protocol과 and/or의 operand 반환을 정확히 추적합니다",
+    lead: "if가 단순히 True/False만 받는다고 생각하지 않고 __bool__, __len__, 기본 truth와 and/or 단락 평가가 실제 어떤 객체를 반환하는지 이해합니다.",
+    explanations: [
+      "조건식은 bool(condition)에 해당하는 truth-value testing을 수행합니다. None, False, numeric zero와 빈 standard containers는 falsy이고 대부분의 다른 objects는 truthy입니다.",
+      "사용자 type은 __bool__을 구현할 수 있고, 없으면 __len__ == 0일 때 falsy가 됩니다. 둘 다 없으면 instance는 기본적으로 truthy입니다.",
+      "__bool__은 실제 bool을 반환해야 하며 다른 type이면 TypeError입니다. __len__도 음수가 아닌 integer 계약을 지켜야 합니다.",
+      "and와 or는 결과를 bool로 강제하지 않고 결정에 사용된 operand 자체를 반환합니다. name = raw or 'guest'는 '', None뿐 아니라 0 같은 falsy 값을 모두 default로 바꿀 수 있습니다.",
+      "and/or는 왼쪽 결과로 충분하면 오른쪽을 평가하지 않는 short-circuit입니다. side effect, 비싼 호출과 예외 발생 순서를 조건에 숨기지 않습니다.",
+    ],
+    concepts: [
+      { term: "truth-value testing", definition: "객체를 조건에서 참/거짓으로 판정하는 Python protocol입니다.", detail: ["__bool__을 우선 사용합니다.", "없으면 __len__, 그마저 없으면 truthy입니다."] },
+      { term: "operand propagation", definition: "and/or가 bool이 아니라 선택된 원래 operand를 반환하는 성질입니다.", detail: ["default idiom에 쓰입니다.", "0·empty 같은 유효값 손실에 주의합니다."] },
+      { term: "short-circuit", definition: "왼쪽 operand만으로 결과가 정해지면 오른쪽을 평가하지 않는 동작입니다.", detail: ["예외 guard에 유용합니다.", "side effect 순서가 생깁니다."] },
+    ],
+    codeExamples: [{
+      id: "bool-protocol-and-or-evidence",
+      title: "__bool__·__len__·and/or 반환과 short-circuit을 검증합니다",
+      language: "python",
+      filename: "bool_protocol.py",
+      purpose: "custom truth protocol과 operand propagation을 exact output으로 확인합니다.",
+      code: String.raw`class Quota:
+    def __init__(self, remaining):
+        self.remaining = remaining
+
+    def __bool__(self):
+        return self.remaining > 0
+
+class Batch:
+    def __init__(self, items):
+        self.items = items
+
+    def __len__(self):
+        return len(self.items)
+
+print("quota:", bool(Quota(2)), bool(Quota(0)))
+print("batch:", bool(Batch([1])), bool(Batch([])))
+
+print("or_values:", "" or "guest", 0 or 99, "Python" or "fallback")
+print("and_values:", [] and "next", [1] and "next")
+
+events = []
+def mark(value):
+    events.append(value)
+    return value
+
+result = mark("") and mark("right")
+print("short_and:", repr(result), events)
+events.clear()
+result = mark("left") or mark("right")
+print("short_or:", result, events)
+
+class InvalidTruth:
+    def __bool__(self):
+        return 1
+
+try:
+    bool(InvalidTruth())
+except TypeError as error:
+    print("bool_error:", type(error).__name__)`,
+      walkthrough: [
+        { lines: "1-13", explanation: "__bool__ 기반 Quota와 __len__ fallback Batch의 truth protocol을 정의합니다." },
+        { lines: "15-19", explanation: "custom objects와 and/or가 bool이 아닌 operand를 반환하는 결과를 비교합니다." },
+        { lines: "21-31", explanation: "events list로 오른쪽 operand가 평가되지 않는 short-circuit를 결정적으로 확인합니다." },
+        { lines: "33-39", explanation: "bool이 아닌 값을 반환하는 잘못된 __bool__이 TypeError가 되는 protocol 경계를 검증합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B bool_protocol.py" },
+      output: { value: "quota: True False\nbatch: True False\nor_values: guest 99 Python\nand_values: [] next\nshort_and: '' ['']\nshort_or: left ['left']\nbool_error: TypeError", explanation: ["and/or 결과 type은 operand에 따릅니다.", "events에는 실제 평가된 operand만 남습니다."] },
+      experiments: [
+        { change: "Quota.__bool__을 제거하고 __len__을 추가합니다.", prediction: "len0 여부로 truth가 결정됩니다.", result: "protocol fallback 순서를 확인합니다." },
+        { change: "score = raw or default를 raw0에 사용합니다.", prediction: "유효한0이 default로 바뀝니다.", result: "None만 missing이면 is None을 써야 합니다." },
+        { change: "오른쪽 mark가 예외를 내게 합니다.", prediction: "short-circuit되는 case에서는 예외가 발생하지 않습니다.", result: "조건 순서가 behavior를 결정합니다." },
+      ],
+      sourceRefs: ["py-truth-testing", "py-bool-builtin", "py-boolean-operations"],
+    }],
+    diagnostics: [
+      { symptom: "유효한 숫자0이 default 값으로 바뀐다.", likelyCause: "raw or default가 missing과 모든 falsy values를 합쳤습니다.", checks: ["0, '', False, None 중 어떤 값이 유효한지 표로 만듭니다.", "or default idiom을 찾습니다."], fix: "None만 missing이면 raw if raw is not None else default처럼 명시합니다.", prevention: "각 falsy domain value를 table test에 포함합니다." },
+      { symptom: "custom object를 if에 넣자 __bool__ should return bool 오류가 난다.", likelyCause: "__bool__이 int·object 등 bool 이외 type을 반환했습니다.", checks: ["__bool__ 반환 type을 확인합니다.", "__len__ fallback과 negative length도 점검합니다."], fix: "__bool__에서 명시적 bool을 반환하고 invariant를 unit test합니다.", prevention: "bool(instance) True/False cases와 invalid state tests를 둡니다." },
+    ],
+  },
+  {
+    id: "elif-precedence-guards-first-match",
+    title: "elif의 first-match precedence와 guard clause로 정상 흐름을 평평하게 만듭니다",
+    lead: "분기 순서는 단순 스타일이 아니라 겹치는 조건의 우선순위입니다. 입력·권한·상태 오류를 guard로 먼저 종료하고 정상 정책을 좁은 조건부터 평가합니다.",
+    explanations: [
+      "if/elif/else chain은 위에서 아래 조건을 평가하고 첫 참 block 하나만 실행합니다. 뒤 조건도 참이어도 평가되지 않으므로 순서가 policy precedence입니다.",
+      "score >= 60을 score >= 90보다 먼저 두면90점도 첫 branch에서 통과해 A branch가 unreachable해집니다. 좁고 높은 threshold부터 배치하거나 결정표에서 생성합니다.",
+      "guard clause는 invalid type, range, unauthenticated, forbidden state를 함수 초기에 return/raise해 nested happy path를 줄입니다.",
+      "독립적으로 모두 적용해야 하는 rules는 여러 if를 쓰고, 상호배타 category는 elif를 씁니다. 할인 여러 개 누적과 회원 등급 하나 선택을 구분합니다.",
+      "예외를 guard return code로 바꿀지 raise할지는 layer contract에 달려 있습니다. boundary는 typed error, core invariant 위반은 exception처럼 책임을 구분합니다.",
+    ],
+    concepts: [
+      { term: "first-match precedence", definition: "elif chain에서 먼저 참이 된 조건이 뒤의 참 조건을 가리는 우선순위입니다.", detail: ["순서가 정책입니다.", "overlap을 decision table로 검증합니다."] },
+      { term: "guard clause", definition: "정상 흐름 전에 invalid/forbidden cases를 조기 종료하는 분기입니다.", detail: ["중첩을 줄입니다.", "실패 side effect 전에 둡니다."] },
+    ],
+    codeExamples: [{
+      id: "guard-clause-grade-precedence",
+      title: "type·range guard 뒤 threshold를 높은 순서로 분류합니다",
+      language: "python",
+      filename: "guard_clause_grades.py",
+      purpose: "bool/int type 경계, range와 first-match grade threshold를 stable result로 검증합니다.",
+      code: String.raw`def classify_grade(score):
+    if type(score) is not int:
+        return "invalid-type"
+    if not 0 <= score <= 100:
+        return "out-of-range"
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
+    return "F"
+
+for score in [True, None, -1, 0, 59, 60, 79, 80, 89, 90, 100, 101]:
+    print(repr(score), "->", classify_grade(score))
+
+def broken_grade(score):
+    if score >= 60:
+        return "pass"
+    elif score >= 90:
+        return "A"
+    return "fail"
+
+print("broken_95:", broken_grade(95))`,
+      walkthrough: [
+        { lines: "1-15", explanation: "strict int와 range를 guard한 뒤 높은 threshold부터 즉시 반환합니다." },
+        { lines: "17-18", explanation: "type/range와 각 grade 경계 양쪽을 table로 실행합니다." },
+        { lines: "20-26", explanation: "넓은 pass 조건을 먼저 둔 broken chain이95의 A branch를 가리는 것을 재현합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B guard_clause_grades.py" },
+      output: { value: "True -> invalid-type\nNone -> invalid-type\n-1 -> out-of-range\n0 -> F\n59 -> F\n60 -> D\n79 -> C\n80 -> B\n89 -> B\n90 -> A\n100 -> A\n101 -> out-of-range\nbroken_95: pass", explanation: ["bool은 int subclass지만 strict type guard에서 거부됩니다.", "broken chain은 first-match precedence 문제를 명확히 보여 줍니다."] },
+      experiments: [
+        { change: "type guard를 isinstance(score, int)로 바꿉니다.", prediction: "True가1점으로 F가 됩니다.", result: "bool 허용 여부를 domain policy로 정합니다." },
+        { change: "모든 threshold를 독립 if로 바꿉니다.", prediction: "90점은 여러 branches에 동시에 해당할 수 있습니다.", result: "하나의 grade에는 exclusive chain/return이 필요합니다." },
+        { change: "range guard를 마지막으로 옮깁니다.", prediction: "101이 A로 먼저 분류됩니다.", result: "invalid state guard가 policy보다 앞서야 합니다." },
+      ],
+      sourceRefs: ["py-if-statement-ref", "py-control-flow-tutorial", "py-comparisons"],
+    }],
+    diagnostics: [
+      { symptom: "95점이 A가 아니라 pass로만 분류된다.", likelyCause: "넓은 score>=60 조건이 좁은 score>=90보다 먼저 있습니다.", checks: ["각 입력에서 참인 조건 집합을 적습니다.", "chain 순서와 first return을 추적합니다."], fix: "높은/좁은 threshold를 먼저 두거나 sorted decision table에서 rule을 생성합니다.", prevention: "모든 threshold-1/threshold/threshold+1 tests와 unreachable branch review를 둡니다." },
+      { symptom: "권한 검사 전 DB 변경이 수행된다.", likelyCause: "authorization guard가 side effect 뒤에 있습니다.", checks: ["control-flow trace와 transaction/log 순서를 봅니다.", "early returns를 확인합니다."], fix: "type/presence/authn/authz/state guards를 mutation 전에 배치합니다.", prevention: "forbidden request가 side effect0임을 검증하는 tests를 둡니다." },
+    ],
+  },
+  {
+    id: "conditional-expression-decision-table-testing",
+    title: "조건 표현식은 값 선택에 제한하고 복합 정책은 결정표로 검증합니다",
+    lead: "x if condition else y는 두 값 중 하나를 lazy하게 고르는 expression입니다. 여러 side effects와 중첩 정책은 함수·결정표로 펼쳐 coverage와 precedence를 보입니다.",
+    explanations: [
+      "조건 표현식은 condition을 먼저 평가한 뒤 선택된 expression 하나만 평가합니다. 함수 인수, comprehension과 반환값의 짧은 pure 선택에 적합합니다.",
+      "중첩 조건 표현식은 오른쪽 결합이고 읽기 어려워 우선순위 오류를 숨깁니다. 세 category 이상이나 side effect가 있으면 if/elif 또는 data-driven table을 사용합니다.",
+      "결정표는 입력 dimensions, rule precedence와 expected outcome을 rows로 드러냅니다. authn, owner, locked 같은 bool 조합을 빠짐없이 열거할 수 있습니다.",
+      "조건 coverage만100%여도 경계/조합 bug가 남습니다. 각 decision outcome, short-circuit branch와 threshold boundary를 test합니다.",
+      "security policy는 default deny를 마지막 fallback으로 두고 unknown/None을 truthiness에 맡기지 않습니다. 정책 result는 stable code와 audit reason을 반환합니다.",
+    ],
+    concepts: [
+      { term: "conditional expression", definition: "selected if condition else alternative 형태로 값 하나를 lazy 선택하는 expression입니다.", detail: ["선택 branch 하나만 평가합니다.", "간단한 pure 값 선택에 씁니다."] },
+      { term: "decision table", definition: "조건 조합과 기대 결과를 행 단위로 열거한 정책 명세입니다.", detail: ["누락·overlap을 찾습니다.", "parameterized tests가 됩니다."] },
+      { term: "default deny", definition: "명시적으로 허용된 조건 외의 모든 상태를 거부하는 보안 fallback입니다.", detail: ["unknown을 허용하지 않습니다.", "reason code를 남깁니다."] },
+    ],
+    codeExamples: [{
+      id: "conditional-expression-decision-table",
+      title: "lazy 값 선택과 전체 authorization 결정표를 실행합니다",
+      language: "python",
+      filename: "decision_table.py",
+      purpose: "조건 표현식의 선택 branch evaluation과 guard-based default-deny 정책 조합을 exact output으로 검증합니다.",
+      code: String.raw`events = []
+def choose(label):
+    events.append(label)
+    return label.upper()
+
+value = choose("yes") if 3 > 2 else choose("no")
+print("conditional:", value, events)
+
+def decide(*, authenticated, owner, locked):
+    if not authenticated:
+        return "deny:login"
+    if locked:
+        return "deny:locked"
+    if not owner:
+        return "deny:owner"
+    return "allow"
+
+table = [
+    (False, False, False),
+    (True, False, False),
+    (True, True, True),
+    (True, True, False),
+]
+for authenticated, owner, locked in table:
+    result = decide(authenticated=authenticated, owner=owner, locked=locked)
+    print((authenticated, owner, locked), "->", result)
+
+label = "adult" if 20 >= 19 else "minor"
+print("simple_value:", label)`,
+      walkthrough: [
+        { lines: "1-7", explanation: "events를 통해 조건 표현식이 선택된 yes branch만 평가함을 확인합니다." },
+        { lines: "9-16", explanation: "authentication, locked, owner guards와 default allow를 precedence 순서로 정의합니다." },
+        { lines: "18-26", explanation: "대표 결정표 rows를 실행해 각 deny reason과 allow outcome을 고정합니다." },
+        { lines: "28-29", explanation: "간단한 pure label 선택은 조건 표현식으로 읽기 좋게 유지합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "stdin/network 불필요"], command: "python -I -B decision_table.py" },
+      output: { value: "conditional: YES ['yes']\n(False, False, False) -> deny:login\n(True, False, False) -> deny:owner\n(True, True, True) -> deny:locked\n(True, True, False) -> allow\nsimple_value: adult", explanation: ["조건 표현식은 선택 branch만 events에 남깁니다.", "결정표는 guard precedence에 따른 stable reason을 보여 줍니다."] },
+      experiments: [
+        { change: "locked guard를 owner 뒤로 옮깁니다.", prediction: "owner도 아니고 locked인 조합의 reason precedence가 달라집니다.", result: "guard 순서가 product/audit policy입니다." },
+        { change: "세 단계 조건 표현식으로 decide를 압축합니다.", prediction: "동작은 만들 수 있지만 precedence와 reason coverage가 읽기 어려워집니다.", result: "복합 정책은 statements/table로 유지합니다." },
+        { change: "authenticated=None을 넣습니다.", prediction: "현재 truthiness로 deny:login입니다.", result: "None이 invalid와 unauthenticated 중 무엇인지 boundary policy를 정해야 합니다." },
+      ],
+      sourceRefs: ["py-conditional-expressions", "py-operator-precedence", "py-unittest-subtest"],
+    }],
+    diagnostics: [
+      { symptom: "조건 표현식의 실행되지 않을 것으로 생각한 함수가 호출된다.", likelyCause: "condition 결과를 잘못 추론했거나 side effect를 복잡한 nested expression에 숨겼습니다.", checks: ["condition을 bool로 별도 출력합니다.", "branch calls에 trace를 둡니다.", "operator precedence를 괄호로 명시합니다."], fix: "side effect를 statements로 분리하고 조건 표현식은 pure 값 선택에만 사용합니다.", prevention: "두 condition outcomes와 branch-call count tests를 둡니다." },
+      { symptom: "결정표에 없는 상태가 허용된다.", likelyCause: "else fallback이 default allow이거나 unknown truthiness를 명시적으로 검증하지 않았습니다.", checks: ["모든 input dimensions와 Cartesian combinations를 열거합니다.", "final fallback을 확인합니다."], fix: "invalid/unknown을 guard하고 명시적 allow 조건 외에는 deny합니다.", prevention: "decision table completeness와 default-deny property tests를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "조건에서 객체 truth는 어떤 protocol 순서로 결정되나요?", answer: "__bool__을 사용하고 없으면 __len__, 둘 다 없으면 기본적으로 truthy입니다." },
+  { question: "and와 or는 항상 bool을 반환하나요?", answer: "아닙니다. 결과를 결정한 원래 operand를 반환합니다." },
+  { question: "raw or default가 유효한0을 잃는 이유는?", answer: "0도 falsy라 default operand가 선택되기 때문입니다." },
+  { question: "elif chain에서 뒤 조건도 참이면 실행되나요?", answer: "아닙니다. 첫 참 branch만 실행하고 나머지는 평가하지 않습니다." },
+  { question: "threshold 분기는 어떤 순서가 안전한가요?", answer: "겹치는 >= 조건이면 보통 높은/좁은 threshold부터 평가합니다." },
+  { question: "guard clause의 핵심 이점은 무엇인가요?", answer: "invalid/forbidden state를 side effect 전에 종료하고 정상 흐름의 중첩을 줄입니다." },
+  { question: "조건 표현식의 두 branch가 모두 평가되나요?", answer: "아닙니다. condition 뒤 선택된 expression 하나만 평가됩니다." },
+  { question: "복합 보안 정책에 결정표가 유용한 이유는?", answer: "조건 조합, precedence, 누락과 expected reason을 행 단위로 검증할 수 있기 때문입니다." },
+);
+session.completionChecklist.push(
+  "__bool__·__len__ truth protocol을 설명한다.",
+  "and/or의 operand 반환과 short-circuit를 검증한다.",
+  "falsy 유효값과 missing None을 구분한다.",
+  "elif first-match precedence를 정책으로 다룬다.",
+  "invalid·authn·authz guards를 side effect 전에 둔다.",
+  "threshold 양쪽 경계값을 test한다.",
+  "조건 표현식은 간단한 pure 값 선택에 제한한다.",
+  "결정표와 default-deny fallback을 검증한다.",
+);
+session.sources.push(
+  { id: "py-truth-testing", repository: "Python 3 Library Reference", path: "Truth Value Testing", publicUrl: "https://docs.python.org/3/library/stdtypes.html#truth-value-testing", usedFor: ["falsy values", "__bool__/__len__ protocol"], evidence: "truth-value testing의 공식 계약입니다." },
+  { id: "py-bool-builtin", repository: "Python 3 Library Reference", path: "bool", publicUrl: "https://docs.python.org/3/library/functions.html#bool", usedFor: ["bool conversion"], evidence: "bool builtin의 공식 API입니다." },
+  { id: "py-boolean-operations", repository: "Python 3 Language Reference", path: "Boolean operations", publicUrl: "https://docs.python.org/3/reference/expressions.html#boolean-operations", usedFor: ["and/or operand return", "short-circuit"], evidence: "boolean operation의 primary language reference입니다." },
+  { id: "py-if-statement-ref", repository: "Python 3 Language Reference", path: "The if statement", publicUrl: "https://docs.python.org/3/reference/compound_stmts.html#the-if-statement", usedFor: ["first-match if/elif/else"], evidence: "if statement의 primary language reference입니다." },
+  { id: "py-control-flow-tutorial", repository: "Python 3 Tutorial", path: "if Statements", publicUrl: "https://docs.python.org/3/tutorial/controlflow.html#if-statements", usedFor: ["branching mental model"], evidence: "if/elif의 Python 공식 tutorial입니다." },
+  { id: "py-comparisons", repository: "Python 3 Language Reference", path: "Comparisons", publicUrl: "https://docs.python.org/3/reference/expressions.html#comparisons", usedFor: ["threshold and chained comparison"], evidence: "comparison semantics의 primary reference입니다." },
+  { id: "py-conditional-expressions", repository: "Python 3 Language Reference", path: "Conditional expressions", publicUrl: "https://docs.python.org/3/reference/expressions.html#conditional-expressions", usedFor: ["lazy selected expression"], evidence: "조건 표현식의 primary language reference입니다." },
+  { id: "py-operator-precedence", repository: "Python 3 Language Reference", path: "Operator precedence", publicUrl: "https://docs.python.org/3/reference/expressions.html#operator-precedence", usedFor: ["condition grouping", "conditional precedence"], evidence: "operator precedence의 공식 표입니다." },
+  { id: "py-unittest-subtest", repository: "Python 3 Library Reference", path: "unittest subTest", publicUrl: "https://docs.python.org/3/library/unittest.html#distinguishing-test-iterations-using-subtests", usedFor: ["decision table parameterized checks"], evidence: "표 기반 반복 검증의 표준 library 근거입니다." },
+);
+
 export default session;

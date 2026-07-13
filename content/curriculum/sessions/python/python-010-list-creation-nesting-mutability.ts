@@ -247,4 +247,226 @@ const session = {
   sourceCoverage: { filesRead: 3, filesUsed: 3, uncoveredNotes: ["append·insert·remove·pop·sort와 복사 API는 py-011에서 별도로 다룹니다.", "deepcopy·동시성·입력 자원 제한은 원본 공백을 전문가 관점으로 보강했습니다."] },
 } satisfies DetailedSession;
 
+const expertChapters: DetailedSession["chapters"] = [
+  {
+    id: "aliasing-copy-depth-reference-graph",
+    title: "alias·얕은 복사·깊은 복사를 객체 그래프로 구분합니다",
+    lead: "리스트를 복사했다는 말만으로는 충분하지 않습니다. 바깥 컨테이너와 안쪽 mutable 요소가 각각 같은 객체인지 id와 변경 전파로 확인해야 합니다.",
+    explanations: [
+      "b = a는 리스트를 복사하지 않고 같은 객체에 두 번째 이름을 붙입니다. a is b가 True이고 어느 이름으로 append해도 동일 리스트가 바뀝니다.",
+      "a.copy(), a[:], list(a)는 새 바깥 리스트를 만들지만 요소 참조는 재사용합니다. nested list에서 outer is copy는 False여도 outer[0] is copy[0]은 True일 수 있습니다.",
+      "copy.deepcopy는 접근 가능한 object graph를 재귀적으로 복사하고 memo로 cycle과 repeated reference를 처리합니다. 파일 handle·module·shared service처럼 복사 의미가 없는 객체에는 domain-specific clone이 필요합니다.",
+      "[[0] * cols] * rows는 같은 row 하나를 rows번 참조하므로 한 cell 변경이 모든 행에 보입니다. comprehension으로 매 iteration 새 row를 만들어야 합니다.",
+      "복사 깊이는 기술 선택이 아니라 ownership 계약입니다. 누가 nested object를 변경할 수 있는지, snapshot이 필요한지와 비용 상한을 먼저 정합니다.",
+    ],
+    concepts: [
+      { term: "alias", definition: "둘 이상의 이름 또는 컨테이너 slot이 같은 mutable 객체를 가리키는 상태입니다.", detail: ["is로 identity를 확인합니다.", "변경이 모든 경로에서 관찰됩니다."] },
+      { term: "shallow copy", definition: "바깥 컨테이너만 새로 만들고 내부 요소 참조를 재사용하는 복사입니다.", detail: ["중첩 변경은 공유됩니다.", "불변 요소만 있으면 충분할 수 있습니다."] },
+      { term: "deep copy", definition: "memo를 사용해 object graph의 nested objects까지 재귀 복사하는 연산입니다.", detail: ["비용과 의미를 검토합니다.", "모든 resource에 적합하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "list-alias-shallow-deep-evidence",
+      title: "행 반복 함정과 copy 깊이를 identity로 검증합니다",
+      language: "python",
+      filename: "list_alias_copy_depth.py",
+      purpose: "같은 출력 모양 뒤에 숨은 object identity와 mutation propagation을 결정적으로 드러냅니다.",
+      code: String.raw`from copy import deepcopy
+
+shared_rows = [[0, 0]] * 3
+shared_rows[0][0] = 7
+print("shared_rows:", shared_rows)
+print("same_rows:", shared_rows[0] is shared_rows[1])
+
+independent_rows = [[0, 0] for _ in range(3)]
+independent_rows[0][0] = 7
+print("independent_rows:", independent_rows)
+print("same_rows:", independent_rows[0] is independent_rows[1])
+
+original = [["python"], ["java"]]
+shallow = original.copy()
+deep = deepcopy(original)
+original[0].append("typing")
+print("outer_identity:", original is shallow, original is deep)
+print("inner_identity:", original[0] is shallow[0], original[0] is deep[0])
+print("original:", original)
+print("shallow:", shallow)
+print("deep:", deep)`,
+      walkthrough: [
+        { lines: "1-6", explanation: "반복 연산으로 같은 row reference가 세 slots에 들어가 한 변경이 모두 전파되는 것을 확인합니다." },
+        { lines: "8-11", explanation: "comprehension은 각 iteration에 새 row를 만들어 변경을 한 행에 격리합니다." },
+        { lines: "13-21", explanation: "얕은·깊은 복사의 바깥/안쪽 identity와 변경 결과를 함께 관찰합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "network/filesystem 불필요"], command: "python -I -B list_alias_copy_depth.py" },
+      output: { value: "shared_rows: [[7, 0], [7, 0], [7, 0]]\nsame_rows: True\nindependent_rows: [[7, 0], [0, 0], [0, 0]]\nsame_rows: False\nouter_identity: False False\ninner_identity: True False\noriginal: [['python', 'typing'], ['java']]\nshallow: [['python', 'typing'], ['java']]\ndeep: [['python'], ['java']]", explanation: ["리스트 출력만 보지 않고 identity를 함께 검증합니다.", "deep copy는 mutation 전 snapshot을 독립적으로 유지합니다."] },
+      experiments: [
+        { change: "nested 요소를 tuple로 바꿉니다.", prediction: "얕은 복사에서도 내부 값 자체는 변경할 수 없습니다.", result: "불변 value graph에는 shallow copy가 충분할 수 있습니다." },
+        { change: "self-reference cycle을 만든 뒤 deepcopy합니다.", prediction: "memo 덕분에 무한 재귀 없이 새 cycle이 만들어집니다.", result: "deepcopy가 단순 재귀 이상의 계약임을 확인합니다." },
+        { change: "아주 큰 graph 전체를 deepcopy합니다.", prediction: "시간과 memory가 object graph 크기에 비례해 커집니다.", result: "immutable value나 domain clone으로 범위를 줄입니다." },
+      ],
+      sourceRefs: ["py-list-docs", "py-copy-module", "py-faq-multidimensional", "py-builtins-id"],
+    }],
+    diagnostics: [
+      { symptom: "한 matrix cell을 바꿨는데 같은 열의 모든 행이 바뀐다.", likelyCause: "[[value] * cols] * rows가 동일 row를 반복 참조합니다.", checks: ["rows[0] is rows[1]을 확인합니다.", "id(row)를 모두 출력합니다.", "construction expression의 바깥 *를 찾습니다."], fix: "[[value for _ in range(cols)] for _ in range(rows)]처럼 행을 매번 새로 만듭니다.", prevention: "행 identity가 모두 다르다는 test와 단일-cell mutation test를 둡니다." },
+      { symptom: "복사본을 수정했는데 원본 nested 값도 바뀐다.", likelyCause: "copy 또는 slice가 바깥 list만 복사했습니다.", checks: ["outer와 inner is 관계를 각각 확인합니다.", "mutable nested paths를 inventory합니다."], fix: "ownership에 맞춰 immutable nested values, targeted clone 또는 deepcopy를 선택합니다.", prevention: "copy-depth contract와 mutation-isolation tests를 API 문서에 둡니다." },
+    ],
+  },
+  {
+    id: "rectangular-matrix-shape-invariants",
+    title: "중첩 리스트를 matrix로 쓸 때 shape·cell type·ragged 경계를 검증합니다",
+    lead: "list of lists는 자동으로 matrix가 되지 않습니다. 행 개수·열 개수·rectangular shape와 cell domain을 명시해야 transpose와 계산이 안전합니다.",
+    explanations: [
+      "빈 matrix, 빈 row, 행마다 길이가 다른 ragged data를 허용할지 먼저 정합니다. zip(*rows)는 기본적으로 가장 짧은 행에서 조용히 멈추므로 검증 없이 쓰면 data를 잃습니다.",
+      "shape는 (rows, cols)처럼 tuple로 표현하고 모든 row가 list/sequence인지, len(row) == cols인지 확인합니다.",
+      "bool은 int의 subclass이므로 숫자 cell 검사에서 isinstance(value, int)만 쓰면 True가 1로 통과합니다. 업무가 bool을 금지하면 type(value) is int처럼 명시합니다.",
+      "transpose는 rectangular matrix에서 columns를 rows로 바꾸며 zip이 tuple을 반환합니다. API가 list-of-lists를 약속하면 list 변환도 계약에 포함합니다.",
+      "큰 matrix에는 Python object/list overhead와 cache locality 비용이 큽니다. 수치 연산이 주 목적이면 NumPy 같은 typed dense array를 이후 단계에서 검토합니다.",
+    ],
+    concepts: [
+      { term: "shape invariant", definition: "matrix가 항상 유지해야 하는 행·열 수와 cell type 조건입니다.", detail: ["operation 전에 검증합니다.", "ragged data 정책을 포함합니다."] },
+      { term: "ragged matrix", definition: "행마다 열 개수가 다른 중첩 sequence입니다.", detail: ["일부 업무에는 유효합니다.", "일반 matrix 연산에는 별도 처리해야 합니다."] },
+    ],
+    codeExamples: [{
+      id: "validated-matrix-transpose",
+      title: "rectangular shape를 검증한 뒤 transpose합니다",
+      language: "python",
+      filename: "validated_matrix.py",
+      purpose: "zip truncation 전에 matrix shape와 int cell policy를 검사합니다.",
+      code: String.raw`def validate_matrix(value):
+    if not isinstance(value, list) or not value:
+        return False, "matrix-required"
+    if not all(isinstance(row, list) and row for row in value):
+        return False, "nonempty-rows-required"
+    columns = len(value[0])
+    if any(len(row) != columns for row in value):
+        return False, "ragged"
+    if any(type(cell) is not int for row in value for cell in row):
+        return False, "integer-cells-required"
+    return True, (len(value), columns)
+
+def transpose(matrix):
+    valid, detail = validate_matrix(matrix)
+    if not valid:
+        return detail
+    return [list(column) for column in zip(*matrix)]
+
+matrix = [[1, 2, 3], [4, 5, 6]]
+print("valid:", validate_matrix(matrix))
+print("transpose:", transpose(matrix))
+print("ragged:", transpose([[1, 2], [3]]))
+print("bool_cell:", validate_matrix([[1, True]]))`,
+      walkthrough: [
+        { lines: "1-11", explanation: "container/empty/rectangular/cell-type 조건을 순서대로 검사하고 shape를 반환합니다." },
+        { lines: "13-17", explanation: "검증 성공 뒤에만 zip을 사용하고 tuple columns를 list로 바꿉니다." },
+        { lines: "19-23", explanation: "정상 matrix, ragged data와 bool-as-int 경계를 exact output으로 확인합니다." },
+      ],
+      run: { environment: ["Python 3.13+", "third-party package 불필요"], command: "python -I -B validated_matrix.py" },
+      output: { value: "valid: (True, (2, 3))\ntranspose: [[1, 4], [2, 5], [3, 6]]\nragged: ragged\nbool_cell: (False, 'integer-cells-required')", explanation: ["zip 전에 rectangular invariant를 확인해 truncation을 방지합니다.", "type(cell) is int 정책으로 bool을 분리합니다."] },
+      experiments: [
+        { change: "ragged 검사를 제거합니다.", prediction: "zip(*[[1,2],[3]])는 두 번째 열2를 조용히 잃습니다.", result: "silent truncation이 생깁니다." },
+        { change: "빈 matrix를 허용합니다.", prediction: "열 수를 정의할 추가 schema가 필요합니다.", result: "shape metadata 없이는 []의 columns를 알 수 없습니다." },
+        { change: "cell policy를 numbers.Real로 넓힙니다.", prediction: "float 등은 통과하지만 bool 제외를 별도로 유지해야 합니다.", result: "domain numeric tower를 명시합니다." },
+      ],
+      sourceRefs: ["py-common-sequences", "py-zip-builtins", "py-datamodel-identity"],
+    }],
+    diagnostics: [
+      { symptom: "transpose 뒤 일부 cell이 사라진다.", likelyCause: "ragged rows에 zip을 사용해 shortest iterable에서 중단됐습니다.", checks: ["각 row len을 수집합니다.", "zip(strict=True) 또는 사전 shape 검사를 검토합니다."], fix: "rectangular invariant를 강제하거나 ragged-aware representation/정책을 사용합니다.", prevention: "ragged와 empty boundary tests를 둡니다." },
+      { symptom: "True가 숫자 matrix cell로 저장된다.", likelyCause: "isinstance(True, int)가 True인 Python type 관계를 놓쳤습니다.", checks: ["type(cell)과 isinstance 결과를 비교합니다.", "업무가 bool을 허용하는지 확인합니다."], fix: "strict int가 필요하면 type(cell) is int로 검사합니다.", prevention: "True/False를 numeric validation cases에 포함합니다." },
+    ],
+  },
+  {
+    id: "list-complexity-and-container-choice",
+    title: "리스트 연산의 선형 비용과 data access pattern을 연결합니다",
+    lead: "작은 예제의 편리함을 운영 규모에 그대로 적용하지 않고, index·membership·insert·copy가 몇 요소를 방문하거나 이동하는지 설명합니다.",
+    explanations: [
+      "list index access는 내부 연속 pointer array에서 위치를 계산하므로 평균 O(1)이고, x in list와 index(value)는 앞에서 equality를 검사해 최악 O(n)입니다.",
+      "append는 capacity를 여유 있게 늘리는 amortized O(1)이지만 insert(0, value), pop(0), 중간 삭제는 뒤 pointer들을 이동해 O(n)입니다.",
+      "slice와 concatenation은 선택한 요소 참조를 새 list로 복사하므로 O(k) 시간과 memory를 사용합니다. nested 요소까지 deep copy하는 비용은 object graph 크기에 따릅니다.",
+      "queue의 왼쪽 추가/삭제가 핵심이면 collections.deque, 반복 membership이면 set, key lookup이면 dict가 의도를 더 정확히 표현합니다.",
+      "wall-clock benchmark는 noise가 있으므로 correctness example에는 비교 횟수처럼 결정적 evidence를 쓰고 실제 성능은 representative data와 timeit/pyperf로 별도 측정합니다.",
+    ],
+    concepts: [
+      { term: "amortized complexity", definition: "가끔 비싼 resize 비용을 많은 연산에 나누어 평균적으로 보는 분석입니다.", detail: ["append의 대표 계약입니다.", "개별 호출 latency와 다릅니다."] },
+      { term: "access pattern", definition: "주로 수행하는 위치 접근, membership, 양끝 queue, 정렬 등의 연산 분포입니다.", detail: ["컨테이너 선택 근거입니다.", "데이터 크기와 함께 봅니다."] },
+    ],
+    codeExamples: [{
+      id: "list-membership-comparison-count",
+      title: "membership의 선형 equality 방문을 결정적으로 셉니다",
+      language: "python",
+      filename: "list_complexity_evidence.py",
+      purpose: "불안정한 시간 측정 대신 equality 호출 수로 list membership의 선형 scan을 증명합니다.",
+      code: String.raw`from collections import deque
+
+class Probe:
+    comparisons = 0
+
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        type(self).comparisons += 1
+        return isinstance(other, Probe) and self.value == other.value
+
+items = [Probe(number) for number in range(5)]
+Probe.comparisons = 0
+print("found:", Probe(4) in items, "comparisons:", Probe.comparisons)
+Probe.comparisons = 0
+print("missing:", Probe(9) in items, "comparisons:", Probe.comparisons)
+
+queue = deque(["a", "b", "c"])
+print("popleft:", queue.popleft(), "remaining:", list(queue))
+print("index_access:", items[3].value)`,
+      walkthrough: [
+        { lines: "1-10", explanation: "비교 횟수를 class state로 기록하는 equality probe를 정의합니다." },
+        { lines: "12-17", explanation: "끝에서 발견되는 값과 없는 값이 모두5번 비교되는 worst-case scan을 확인합니다." },
+        { lines: "19-21", explanation: "왼쪽 queue operation은 deque로 표현하고 list index access는 직접 위치를 읽습니다." },
+      ],
+      run: { environment: ["Python 3.13+", "timing/network 불필요"], command: "python -I -B list_complexity_evidence.py" },
+      output: { value: "found: True comparisons: 5\nmissing: False comparisons: 5\npopleft: a remaining: ['b', 'c']\nindex_access: 3", explanation: ["측정 noise 없이 equality visits를 셉니다.", "access pattern에 따라 list와 deque를 구분합니다."] },
+      experiments: [
+        { change: "Probe(0)을 찾습니다.", prediction: "첫 비교에서 성공해 comparisons1입니다.", result: "O(n)은 입력 위치에 따른 upper bound입니다." },
+        { change: "같은 값을 set에 넣습니다.", prediction: "hash/equality 계약이 필요하고 평균 membership이 상수 시간에 가까워집니다.", result: "순서·hashability tradeoff가 생깁니다." },
+        { change: "pop(0)을 큰 list에서 반복합니다.", prediction: "남은 요소 이동이 누적되어 quadratic behavior가 됩니다.", result: "deque.popleft로 바꿉니다." },
+      ],
+      sourceRefs: ["py-deque", "py-timeit"],
+    }],
+    diagnostics: [
+      { symptom: "데이터가 커지자 membership loop가 급격히 느려진다.", likelyCause: "list O(n) membership을 다른 list의 각 항목마다 반복해 O(n·m)가 됐습니다.", checks: ["membership 호출 위치와 input sizes를 기록합니다.", "중복·순서 요구와 hashability를 확인합니다."], fix: "반복 조회 대상은 set/dict index로 한 번 변환하되 순서·중복 semantics를 보존합니다.", prevention: "규모별 complexity budget과 representative benchmark를 둡니다." },
+      { symptom: "queue 처리량이 항목 수와 함께 계속 떨어진다.", likelyCause: "list.pop(0)으로 매번 나머지 references를 이동합니다.", checks: ["left insert/pop calls를 찾습니다.", "access pattern이 양끝인지 확인합니다."], fix: "collections.deque의 append/popleft를 사용합니다.", prevention: "container choice를 access-pattern ADR에 기록합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...expertChapters);
+session.reviewQuestions.push(
+  { question: "b = a는 리스트 복사인가요?", answer: "아닙니다. 두 이름이 같은 list 객체를 가리키는 alias입니다." },
+  { question: "list.copy가 중첩 리스트를 완전히 분리하나요?", answer: "아닙니다. 새 바깥 리스트를 만들지만 내부 요소 참조는 공유합니다." },
+  { question: "[[0] * cols] * rows가 위험한 이유는 무엇인가요?", answer: "한 row 객체의 참조를 반복하므로 한 cell 변경이 모든 행에 보입니다." },
+  { question: "zip으로 ragged matrix를 transpose하면 어떻게 되나요?", answer: "가장 짧은 행에서 중단되어 뒤 cell이 조용히 사라질 수 있습니다." },
+  { question: "isinstance(True, int)는 무엇을 반환하나요?", answer: "True입니다. strict numeric domain이 bool을 금지하면 별도 검사가 필요합니다." },
+  { question: "list membership의 최악 시간 복잡도는 무엇인가요?", answer: "앞에서부터 equality를 검사하므로 O(n)입니다." },
+  { question: "append가 항상 O(1)인가요?", answer: "개별 resize는 비쌀 수 있지만 많은 호출에 평균낸 amortized O(1)입니다." },
+  { question: "queue 왼쪽 삭제에 적합한 표준 컨테이너는 무엇인가요?", answer: "collections.deque의 popleft가 적합합니다." },
+);
+session.completionChecklist.push(
+  "alias와 복사를 is로 구분할 수 있다.",
+  "얕은 복사의 outer/inner identity를 설명할 수 있다.",
+  "반복 연산으로 만든 shared-row matrix 함정을 재현할 수 있다.",
+  "rectangular matrix의 shape와 cell type을 검증한다.",
+  "ragged matrix의 zip truncation을 방지한다.",
+  "bool과 strict int cell 정책을 구분한다.",
+  "index·membership·front mutation의 complexity를 설명한다.",
+  "access pattern에 따라 list·set·dict·deque를 선택한다.",
+);
+session.sources.push(
+  { id: "py-list-docs", repository: "Python 3 Library Reference", path: "Lists", publicUrl: "https://docs.python.org/3/library/stdtypes.html#lists", usedFor: ["list mutability", "copy and repetition"], evidence: "list type의 공식 계약입니다." },
+  { id: "py-copy-module", repository: "Python 3 Library Reference", path: "copy — Shallow and deep copy operations", publicUrl: "https://docs.python.org/3/library/copy.html", usedFor: ["copy/deepcopy", "memo and limitations"], evidence: "copy depth의 공식 API 근거입니다." },
+  { id: "py-faq-multidimensional", repository: "Python 3 FAQ", path: "How do I create a multidimensional list?", publicUrl: "https://docs.python.org/3/faq/programming.html#how-do-i-create-a-multidimensional-list", usedFor: ["shared row repetition trap"], evidence: "다차원 list 생성 함정의 Python 공식 설명입니다." },
+  { id: "py-builtins-id", repository: "Python 3 Library Reference", path: "id", publicUrl: "https://docs.python.org/3/library/functions.html#id", usedFor: ["object identity evidence"], evidence: "identity 관찰 builtin의 공식 계약입니다." },
+  { id: "py-common-sequences", repository: "Python 3 Library Reference", path: "Common Sequence Operations", publicUrl: "https://docs.python.org/3/library/stdtypes.html#common-sequence-operations", usedFor: ["index/slice/repetition/membership complexity model"], evidence: "sequence operation 계약의 공식 근거입니다." },
+  { id: "py-zip-builtins", repository: "Python 3 Library Reference", path: "zip", publicUrl: "https://docs.python.org/3/library/functions.html#zip", usedFor: ["transpose", "shortest iterable behavior"], evidence: "zip truncation과 strict option의 공식 계약입니다." },
+  { id: "py-datamodel-identity", repository: "Python 3 Language Reference", path: "Objects, values and types", publicUrl: "https://docs.python.org/3/reference/datamodel.html#objects-values-and-types", usedFor: ["identity", "mutability"], evidence: "Python object model primary reference입니다." },
+  { id: "py-deque", repository: "Python 3 Library Reference", path: "collections.deque", publicUrl: "https://docs.python.org/3/library/collections.html#collections.deque", usedFor: ["queue access pattern"], evidence: "양끝 queue API의 공식 계약입니다." },
+  { id: "py-timeit", repository: "Python 3 Library Reference", path: "timeit", publicUrl: "https://docs.python.org/3/library/timeit.html", usedFor: ["representative performance measurement"], evidence: "Python timing 도구의 공식 근거입니다." },
+);
+
 export default session;
