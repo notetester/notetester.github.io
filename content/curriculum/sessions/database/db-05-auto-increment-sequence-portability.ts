@@ -455,7 +455,7 @@ const session = createExpertSession({
     { difficulty: "응용", prompt: "원본 AUTO_INCREMENT와 SEQUENCE DDL을 production-ready key generation contract로 확장하세요.", requirements: ["두 원본 files의 실제 constructs를 보존·인용합니다.", "business/public/internal ids를 구분합니다.", "generated-key API와 pool boundary를 정의합니다.", "cache·capacity·grants·monitoring을 정합니다.", "idempotency·bulk mapping tests를 포함합니다.", "ORM strategy/allocationSize를 catalog와 맞춥니다.", "rollback·restore acceptance를 포함합니다."], hints: ["NOCACHE와 연속 번호는 동의어가 아닙니다."], expectedOutcome: "MySQL·Oracle 양쪽에서 검증 가능한 identity 표준과 test matrix가 완성됩니다.", solutionOutline: ["requirements→allocator→API mapping→failure/retry→ORM→operations 순서입니다."] },
     { difficulty: "설계", prompt: "MySQL에서 Oracle로 identity를 이관하는 zero-data-loss cutover runbook을 작성하세요.", requirements: ["parent/child/external key 보존을 정의합니다.", "reserved/in-flight high-water를 계산합니다.", "target sequence/default/grant catalog를 정의합니다.", "write fencing과 CDC watermark를 설계합니다.", "dual database contract tests를 만듭니다.", "ambiguous success/idempotency를 다룹니다.", "forward/rollback allocator collision을 방지합니다.", "restore·capacity·observability evidence를 포함합니다."], hints: ["MAX(table.id)만으로 next value를 정하지 마세요."], expectedOutcome: "split-brain allocation 없이 cutover·rollback·복구 가능한 실행 runbook이 완성됩니다.", solutionOutline: ["inventory→reserve→copy→catch up→fence→verify→cutover→restore drill 순서입니다."] },
   ],
-  nextSessions: ["db-06-insert-single-multi-constraint-failures"],
+  nextSessions: ["db-06-insert-multirow-integrity"],
   sources,
   sourceCoverage: {
     filesRead: 2,
