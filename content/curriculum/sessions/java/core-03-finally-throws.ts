@@ -55,14 +55,18 @@ const session = {
         purpose: "원본 finally·return·propagation·label control·EOF behavior를 warning0 compile과 fresh-process exact/normalized assertions로 보존합니다.",
         code: String.raw`$base = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 $root = Join-Path $base ("core03 audit " + [Guid]::NewGuid().ToString("N"))
-if (Test-Path -LiteralPath $root) { throw "unexpected temp collision" }
-New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
 $launcherNames = @("JDK_JAVAC_OPTIONS", "JDK_JAVA_OPTIONS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS")
 $savedLauncher = @{}
 foreach ($name in $launcherNames) {
-  if (Test-Path "Env:$name") { $savedLauncher[$name] = (Get-Item "Env:$name").Value; Remove-Item "Env:$name" -ErrorAction Stop }
+  if (Test-Path "Env:$name") { $savedLauncher[$name] = (Get-Item "Env:$name").Value }
 }
+$ownsRoot = $false
+$bodyError = $null
 try {
+  if (Test-Path -LiteralPath $root) { throw "unexpected temp collision" }
+  New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+  $ownsRoot = $true
+  foreach ($name in $launcherNames) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
   $lf = [string][char]10
   $crlf = [string][char]13 + [char]10
   $source = "src\com\java\class08"
@@ -186,22 +190,43 @@ try {
   "Ex08=evenStop:2|recovery:5|eof:exit1|finally:True"
   "companions=Ex01:8;Ex02:exit1|cause:True;Ex03-zero:4;Ex04-eof:exit1|sequence7;Ex05-zero:3"
   "shapes=Ex06Finally:$ex06Finally|Returns:$ex06Returns;Ex07Throws:$ex07Throws|Finally:$ex07Finally;Ex08Finally:$ex08Finally|Continues:$ex08Continues|Breaks:$ex08Breaks|launcherOptions:$($launcherNames.Count)"
+} catch {
+  $bodyError = $_.Exception
 } finally {
-  foreach ($name in $launcherNames) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
-  foreach ($entry in $savedLauncher.GetEnumerator()) { Set-Item "Env:$($entry.Key)" $entry.Value }
-  $resolved = [IO.Path]::GetFullPath($root)
-  if (-not [string]::Equals([IO.Path]::GetDirectoryName($resolved), $base, [StringComparison]::OrdinalIgnoreCase)) { throw "unsafe cleanup" }
-  if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction Stop }
-  if (Test-Path -LiteralPath $resolved) { throw "cleanup failed" }
+  $finalErrors = [Collections.Generic.List[Exception]]::new()
+  foreach ($name in $launcherNames) {
+    try {
+      if ($savedLauncher.ContainsKey($name)) {
+        Set-Item "Env:$name" $savedLauncher[$name] -ErrorAction Stop
+        if (-not (Test-Path "Env:$name") -or (Get-Item "Env:$name").Value -cne $savedLauncher[$name]) { throw "launcher restore verification failed: $name" }
+      } else {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        if (Test-Path "Env:$name") { throw "launcher absence restore failed: $name" }
+      }
+    } catch { $finalErrors.Add($_.Exception) }
+  }
+  try {
+    if ($ownsRoot) {
+      $resolved = [IO.Path]::GetFullPath($root)
+      if (-not [string]::Equals([IO.Path]::GetDirectoryName($resolved), $base, [StringComparison]::OrdinalIgnoreCase)) { throw "unsafe cleanup" }
+      if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction Stop }
+      if (Test-Path -LiteralPath $resolved) { throw "cleanup failed" }
+    }
+  } catch { $finalErrors.Add($_.Exception) }
+  if ($null -ne $bodyError) { $finalErrors.Insert(0, $bodyError) }
+  if ($finalErrors.Count -eq 1) {
+    [Runtime.ExceptionServices.ExceptionDispatchInfo]::Capture($finalErrors[0]).Throw()
+  }
+  if ($finalErrors.Count -gt 1) {
+    throw [AggregateException]::new("audit and cleanup failures", $finalErrors.ToArray())
+  }
 }`,
         walkthrough: [
-          { lines: "1-19", explanation: "공백 포함 OS temp direct child, launcher options4 저장·제거, package8/direct3와 독립 output directories를 준비합니다." },
-          { lines: "21-30", explanation: "package/direct를 OpenJDK21 warning0로 compile하고 main roles8|3을 source에서 확인합니다." },
-          { lines: "32-64", explanation: "ArgumentList, child environment isolation, UTF-8 async drain, closed stdin, 10초 timeout, tree kill, 5초 termination grace, task 회수와 Dispose를 구현합니다." },
-          { lines: "66-84", explanation: "Ex06 네 경로, Ex07 세 경로, Ex08 세 경로를 각각 fresh JVM으로 실행하고 Ex06 normal/return/EOF exact·normalized contract를 검사합니다." },
-          { lines: "86-97", explanation: "Ex07 valid/propagation/EOF와 Ex08 break/continue/recovery/EOF를 stdout·stderr·exit로 검증합니다." },
-          { lines: "99-114", explanation: "companion Ex01~Ex05를 실행해 package 건강성, cause chain, EOF 실패와 기존 exact behavior를 보존합니다." },
-          { lines: "116-141", explanation: "direct finally/return/throws/label source shapes를 세고 stable summaries를 출력한 뒤 environment 복원과 parent-bound cleanup을 수행합니다." },
+          { lines: "1-34", explanation: "launcher options4의 원래 존재·값을 mutation 전에 저장하고, outer try 안에서 New-Item 성공 뒤에만 ownership을 표시한 공백 temp root를 만든 뒤 환경 제거와 package8/direct3 warning0 compile·main role 검사를 수행합니다." },
+          { lines: "36-67", explanation: "ArgumentList, child environment isolation, UTF-8 async drain, closed stdin, 10초 timeout, tree kill, 5초 termination grace, task 회수와 Dispose를 구현합니다." },
+          { lines: "70-101", explanation: "Ex06 네 경로, Ex07 세 경로, Ex08 세 경로를 fresh JVM으로 실행하고 normal/return/propagation/label/EOF stdout·stderr·exit를 검증합니다." },
+          { lines: "103-130", explanation: "companion Ex01~Ex05 package health와 direct finally/return/throws/label source shapes를 확인합니다." },
+          { lines: "132-168", explanation: "stable summaries 뒤 body error를 보존하고, launcher variable마다 restore·검증을 끝까지 시도한 뒤 owned temp cleanup도 독립 수행해 단일 오류는 원 stack으로, 복수 오류는 AggregateException으로 함께 전파합니다." },
         ],
         run: { environment: ["PowerShell 7+", "OpenJDK 21.0.11", "javastudy2/classstudy root", "four Java launcher option variables isolated and restored", "10-second runtime timeout plus 5-second termination grace per Java child"], command: "pwsh -NoProfile -File verify-original-core03.ps1" },
         output: { value: "spacePath=True,package=8|exit:0|compilerLines:0|mains:8,direct=3|exit:0|compilerLines:0|mains:3\nEx06=success:4|zeroReturn:3|textReturn:3|eof:exit1|finally:True\nEx07=valid:12|propagatedText:3|eof:exit1|finally:True\nEx08=evenStop:2|recovery:5|eof:exit1|finally:True\ncompanions=Ex01:8;Ex02:exit1|cause:True;Ex03-zero:4;Ex04-eof:exit1|sequence7;Ex05-zero:3\nshapes=Ex06Finally:1|Returns:2;Ex07Throws:2|Finally:1;Ex08Finally:1|Continues:2|Breaks:1|launcherOptions:4", explanation: ["package8/direct3은 warning0이며 모든 source가 독립 main입니다.", "Ex06은 normal·catch return·uncaught EOF 모두 finally를 거치지만 후속 문장 도달 여부는 다릅니다.", "Ex07은 parse exception propagation과 pre-parse EOF를 구분하고 Ex08은 label control과 recovery 재실패를 구분합니다.", "companion5는 direct focus 밖 package regression을 exit·cause·line-count로 감시합니다."] },
@@ -209,6 +234,7 @@ try {
           { change: "Ex06 finally의 scan.close를 catch마다 복사합니다.", prediction: "현재 세 catch 밖 EOF 경로에서 close가 누락되고 중복 code가 늘어납니다.", result: "manual finally보다 ownership을 표현하는 try-with-resources가 더 안전한 경계입니다." },
           { change: "Ex07 throws NumberFormatException 두 선언을 제거합니다.", prediction: "unchecked라 compile과 실행은 같지만 propagation documentation signal이 사라집니다.", result: "unchecked throws는 compiler 의무가 아니라 API communication 선택입니다." },
           { change: "Ex08 숫자 catch에서 nextLine을 제거합니다.", prediction: "invalid token이 cursor에 남아 continue가 같은 token을 반복 처리합니다.", result: "finally correctness와 input-state recovery correctness는 별도 문제입니다." },
+          { change: "temp 생성 직후 또는 launcher environment 일부 제거 뒤 synthetic exception을 주입합니다.", prediction: "outer catch가 body error를 보존하고 finally가 environment restore와 owned-root cleanup을 둘 다 시도합니다.", result: "setup도 try 안에 두고 cleanup errors를 original과 함께 전파해야 failure path에서 상태를 잃지 않습니다." },
         ],
         sourceRefs: ["java-class08-ex01", "java-class08-ex02", "java-class08-ex03", "java-class08-ex04", "java-class08-ex05", "java-class08-ex06", "java-class08-ex07", "java-class08-ex08", "jdk21-javac", "dotnet-process-start-info", "powershell-environment-variables", "dotnet-process-environment", "dotnet-process-lifecycle", "dotnet-stream-reader-async"],
       }],
@@ -1542,7 +1568,7 @@ public class ResourceCompilerContracts {
     "OS temp direct-child cleanup parent boundary를 확인했다.",
     "repository에 .class·fixture·local absolute path residue가0이다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-04-set-generics"],
   sources: [
     { id: "java-class08-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class08/Ex01_Exception.java", usedFor: ["package8 companion", "exact8 smoke", "post-catch completion"], evidence: "array0~4 뒤 index5 failure, normalized exception line, catch marker, outer completion까지 exact8행·exit0을 package companion process에서 확인했습니다." },
     { id: "java-class08-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class08/Ex02_Exception.java", usedFor: ["package8 companion", "checked source failure", "translation cause", "uncaught exit1"], evidence: "empty audit working directory에서 FileNotFoundException을 RuntimeException cause로 감싸 frames13/11·stdout empty·exit1을 확인하고 translation 설명의 원본 대비로 사용했습니다." },
@@ -1603,7 +1629,7 @@ public class ResourceCompilerContracts {
       "Ex08 even→n exact2, x→3→q→y→4→n label/recovery exact5, EOF는 invalid marker와 outer finally marker 뒤 recovery nextLine frame17·exit1입니다.",
       "Ex06 finally1/return2, Ex07 throws NumberFormatException2/finally1, Ex08 finally1/continue2/break esc1 source shapes를 dynamic regex assertions로 확인했습니다.",
       "companion Ex01 exact8, Ex02 cause frames13/11 exit1, Ex03 5→0 exact4, Ex04 sequence7+EOF frame25 exit1, Ex05 zero exact3을 package health evidence로 보존했습니다.",
-      "original audit는 launcher options4를 audit/child environment에서 제거하고 finally 복원하며 async drain, closed stdin, 10-second timeout, tree kill, 5-second termination grace와 Dispose를 사용합니다.",
+      "original audit는 setup mutation 전 outer try를 열고 launcher options4를 audit/child environment에서 제거합니다. body error를 보존하면서 environment restore와 owned temp cleanup을 독립 시도해 단일 오류는 original stack, 복수 오류는 AggregateException으로 전파하며 async drain, closed stdin, 10-second timeout, tree kill, 5-second termination grace와 Dispose를 사용합니다.",
       "normal/return/throw/break/continue와 finally masking은 JLS14.1/14.20.2 규칙을 deterministic Java traces로 확장했습니다.",
       "throws/catch-or-declare, override restriction, precise rethrow는 JLS11/8 rules와 IOException/SQLException examples 및 compiler negatives로 검증했습니다.",
       "AutoCloseable/Closeable ownership, left-to-right acquisition, reverse close, partial acquisition은 JLS/API와 warning0 examples로 검증했습니다.",
