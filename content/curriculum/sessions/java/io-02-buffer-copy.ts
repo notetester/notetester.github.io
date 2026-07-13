@@ -270,7 +270,7 @@ try {
     "timeout·tree kill·async drains·Dispose를 적용했다.", "direct-child cleanup과 failure aggregation을 적용했다.",
     "buffering과 charset decoding을 구분했다.", "모든 synthetic Java examples를 JDK21 warning0·exact output으로 검증한다.",
   ],
-  nextSessions: [],
+  nextSessions: ["io-03-reader-writer"],
   sources: [
     { id: "java-class14-ex01", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex01_FileClass.java", usedFor: ["package compile", "io-01 boundary"], evidence: "class14 package warning0와 이전 File boundary를 확인했습니다." },
     { id: "java-class14-ex02", repository: "javastudy2 classstudy", path: "src/com/java/class14/Ex02_FileOutputStream.java", usedFor: ["package compile", "raw output baseline"], evidence: "package warning0와 raw output 대비 근거입니다." },
