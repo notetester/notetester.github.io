@@ -642,7 +642,7 @@ public class PatternLab {
     "empty·single·end·step·overflow 경계 tests를 작성했다.",
     "세 원본의 active/comment-only evidence를 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["java-08-while-loop-control"],
   sources: [
     { id: "java-day05-for", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day05/Ex07.java", usedFor: ["comment-only 기초 for inventory", "7! active output", "교대 부호 first-hit 199"], evidence: "JDK 21.0.11 clean compile -Xlint:all warning 0; active stdout 7!의 합은? 5040, 정답 : 199." },
     { id: "java-day06-nested", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day06/Ex01.java", usedFor: ["2~9단 세 layout·두 orientation", "4×4 zero pattern", "4×4 identity pattern"], evidence: "JDK 21.0.11 clean run 102 lines; first 구구단-1, 첫 section 마지막 9*9=81, final row 0 0 0 1." },
