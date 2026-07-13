@@ -273,7 +273,7 @@ try {
     "모든 positive Java examples를 JDK21 -Xlint:all warning0로 검증한다.",
     "모든 code output을 exact stable stdout과 대조한다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-07-lambda"],
   sources: [
     { id: "java-class10-ex01", repository: "javastudy2 classstudy", path: "src/com/java/class10/Ex01_Stack.java", usedFor: ["package companion health", "35 output lines"], evidence: "package7 compile과 fresh JVM line-count health에 사용했습니다." },
     { id: "java-class10-ex02", repository: "javastudy2 classstudy", path: "src/com/java/class10/Ex02_ArrayList.java", usedFor: ["package companion health", "22 output lines"], evidence: "package7 compile과 fresh JVM line-count health에 사용했습니다." },
