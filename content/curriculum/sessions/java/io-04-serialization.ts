@@ -59,7 +59,7 @@ const session = {
     ],
   },
   relatedGlossary: ["serialization", "object graph", "schema evolution", "invariant", "allowlist", "atomic publish"],
-  nextSessions: [],
+  nextSessions: ["net-01-url-connection"],
 } satisfies DetailedSession;
 
 export default session;
