@@ -1159,7 +1159,7 @@ public class NegativeInheritanceContracts {
     "공개 code·output·evidence에 credential·실제 개인 literal·identity hash·로컬 절대 경로가 없음을 확인했다.",
     "원본 여섯 파일, JLS SE21, Java SE21 APIs, OpenJDK21 compiler 출처의 사용 범위를 구분했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-07-polymorphism"],
   sources: [
     { id: "java-class04-ex05", repository: "javastudy2/classstudy", path: "src/com/java/class04/Ex05_Sub.java", usedFor: ["subclass extends declaration", "local/this/super field lookup", "hidden child fields", "own private field", "inherited single field"], evidence: "Child가 Parent를 extends하고 local·this·super name, hidden ages, inherited address, child-only height, own-private weight를 출력하며 parent private field direct access는 commented-out임을 읽었습니다. 개인 literals는 공개하지 않았습니다." },
     { id: "java-class04-ex06", repository: "javastudy2/classstudy", path: "src/com/java/class04/Ex06_Sup.java", usedFor: ["superclass fields", "private parent state", "static member contrast", "parent constructor rendering"], evidence: "Parent가 package-private fields, private field, static field와 no-arg constructor를 선언하며 constructor가 current Child runtime rendering을 출력함을 확인했습니다. raw 개인 values/hash는 정규화했습니다." },
