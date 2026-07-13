@@ -885,7 +885,7 @@ public class OptimizedRankingLab {
     { question: "개선 pipeline의 complexity는 무엇인가요?", answer: "record sort O(n log n) 뒤 rank scan O(n)입니다." },
   ],
   completionChecklist: ["원본 5개와 Ex09 synthetic input을 감사했다.", "identity text를 주소로 부르지 않았다.", "array-of-arrays와 independent rows를 설명했다.", "rectangular/jagged/null/empty shape를 분류했다.", "row별 length와 total cells를 사용했다.", "row alias와 shape mutation을 검증했다.", "parallel arrays·magic columns 위험을 식별했다.", "legacy rows를 source-only records로 변환했다.", "count·ID·score·shape·allocation budget을 검사했다.", "total을 checked arithmetic으로 계산했다.", "integer division·truncate·rounding을 구분했다.", "display average와 grade input을 분리했다.", "Ex08 60→F inconsistency를 교정했다.", "학점 threshold와 boundary-1을 test했다.", "competition·dense·ordinal rank를 실행했다.", "동점 tie-break를 명시했다.", "record 전체를 deterministic comparator로 정렬했다.", "source 비변경·ID permutation·row integrity를 test했다.", "O(n²) 원본과 O(n log n)+O(n) 개선을 비교했다.", "null/empty/all-tie/no-tie/invalid boundaries를 실행했다.", "policy version metadata를 설계했다.", "raw names/scores를 로그에 노출하지 않았다."],
-  nextSessions: [],
+  nextSessions: ["oop-01-class-object"],
   sources: [
     { id: "java-day08-parallel-score", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day08/Ex03.java", usedFor: ["parallel arrays", "truncate average", "competition rank", "synchronized swaps"], evidence: "JDK 21.0.11 clean run 8 lines; totals 300..215, averages 100.0..71.6, ranks1..5를 확인했습니다." },
     { id: "java-day08-rectangular", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day08/Ex05.java", usedFor: ["rectangular allocation", "outer/row identity text", "row-specific traversal"], evidence: "clean run 11 lines·blank1; identity text3개와 6 cells를 확인했습니다." },
