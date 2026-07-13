@@ -1178,7 +1178,7 @@ public class ConstructorContractSuite {
     "system temp 직계 GUID root만 사용하고 resolved parent를 검증한 뒤 안전하게 cleanup했다.",
     "공개 code·output·diagnostic에 실제 개인정보·credential·원본 개인 문자열·identity hash·로컬 절대 경로가 없음을 확인했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["oop-05-static-init"],
   sources: [
     { id: "java-class03-ex07", repository: "javastudy2/classstudy", path: "src/com/java/class03/Ex07_MethodDemo.java", usedFor: ["five active overloads", "fixed versus varargs", "commented signature"], evidence: "add(), add(int), add(int,int), add(double,double), add(double,int...) 다섯 active declarations와 commented add(double,int)를 읽었고 varargs body가 a+100임을 확인했습니다." },
     { id: "java-class03-ex08", repository: "javastudy2/classstudy", path: "src/com/java/class03/Ex08_MethodMain.java", usedFor: ["five overload calls", "exact golden output", "double,int selection"], evidence: "clean run이 150·200·350·320.45·175.0을 출력하며 마지막 add(100.0,75)는 fixed double,double을 선택함을 marker 실험으로 교차 확인했습니다." },
