@@ -1359,3 +1359,5 @@ public class LambdaVerificationMatrix {
   "callback lifecycle은 stable numeric key, snapshot publish, idempotent AutoCloseable close와 post-close no-delivery로 검증했습니다.",
   "positive9 assertions와 negative compile fixtures4의 verification matrix를 분리해 compiler/runtime contracts를 혼동하지 않았습니다.",
 );
+
+(session.nextSessions as string[]).push("core-08-stream");
