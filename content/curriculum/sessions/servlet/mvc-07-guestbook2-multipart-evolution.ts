@@ -189,7 +189,7 @@ const session = buildMvcSession({
     { difficulty: "응용", prompt: "DB/storage partial failure state machine과 reconciler를 구현하세요.", requirements: ["STAGED/PENDING/READY/TOMBSTONED를 둡니다.", "outbox/idempotency key를 사용합니다.", "각 step crash를 재현합니다.", "owned+age+state proof 뒤 cleanup합니다.", "unknown pair는 quarantine/alert합니다."], hints: ["DB transaction은 filesystem/object store를 rollback하지 못합니다."], expectedOutcome: "crash/retry 후 orphan과 missing references가 eventual invariant로 수렴합니다.", solutionOutline: ["durable state pair→allowed action table→idempotent worker 순으로 구현합니다."] },
     { difficulty: "설계", prompt: "production attachment service ADR/runbook을 작성하세요.", requirements: ["multipart/type/name/size/scan policies를 포함합니다.", "storage location/encryption/authorization/headers를 정합니다.", "DB/file saga, replacement/delete/retention을 포함합니다.", "security/chaos/capacity/restore matrix를 만듭니다.", "quota/SLO/alerts/reconciler safety를 수치화합니다.", "security-safe rollback/incident owners를 정합니다."], hints: ["cleanup automation 자체가 data-loss 위험입니다."], expectedOutcome: "보안·정합성·운영·복구 근거가 연결된 attachment architecture가 완성됩니다.", solutionOutline: ["threat→limits→states→consistency→delivery→operations 순으로 작성합니다."] },
   ],
-  nextSessions: ["spring-01-container-bean-lifecycle"], sources,
+  nextSessions: ["spring-core-01-ioc-container-bean"], sources,
   sourceCoverage: { filesRead: 21, filesUsed: 21, uncoveredNotes: ["inventory8과 controller가 참조하는 commands/mapper/VO/DBUtil/list/config closure13을 합쳐21 files를 모두 읽고 사용했습니다.", "CSS assets는 presentation styling이며 multipart/DB/file lifecycle closure에 필요하지 않아 coverage에서 제외했습니다.", "실제 upload, user file bytes, DB/credential, webroot/object storage write는 수행하지 않았고 정적 shape/hash만 확인했습니다."] },
 });
 
