@@ -1285,7 +1285,7 @@ public class CollectionExposure {
     "walkthrough line bounds와 의미를 실제 code에 맞췄다.",
     "sourceRefs·URLs·anchors·privacy·class residue를 검증했다.",
   ],
-  nextSessions: [],
+  nextSessions: ["core-06-map"],
   sources: [
     { id: "java-class10-ex01", repository: "javastudy2/classstudy", path: "src/com/java/class10/Ex01_Stack.java", usedFor: ["direct inventory", "Stack LIFO", "duplicate/index mutation", "search/index contrast", "exact35"], evidence: "Stack에 add/push/addElement·중간 삽입·duplicate·peek/last/pop·search/index·set·iterator·drain을 수행해 exact35행, final size0, source new1/push1/pop2/peek1을 확인했습니다." },
     { id: "java-class10-ex02", repository: "javastudy2/classstudy", path: "src/com/java/class10/Ex02_ArrayList.java", usedFor: ["direct inventory", "ArrayList/Vector", "ordered index/set", "iterator", "exact22"], evidence: "ArrayList와 Vector 각각 four-element order, index/get/set와 iterator outputs, blank2 포함 exact22행, source constructors1/1을 확인했습니다." },
