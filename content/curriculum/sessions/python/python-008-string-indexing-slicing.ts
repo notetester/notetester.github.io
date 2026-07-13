@@ -121,12 +121,12 @@ const session = {
           language: "python",
           filename: "slice_steps.py",
           purpose: "step과 불변성을 한 예제에서 확인하고, 원본을 수정하는 대신 슬라이스를 조합하는 방법을 익힙니다.",
-          code: "text = 'Hello Python'\n\nprint(text[::2])\nprint(text[::-1])\nprint(text[10:5:-1])\n\nchanged = text[:6] + 'K' + text[7:]\nprint(text)\nprint(changed)\nprint(len(text), len(changed))",
+          code: "text = 'Hello Python'\n\nprint(text[::2])\nprint(text[::-1])\nprint(text[11:6:-1])\n\nchanged = text[:6] + 'K' + text[7:]\nprint(text)\nprint(changed)\nprint(len(text), len(changed))",
           walkthrough: [
             { lines: "1", explanation: "원본 str을 준비합니다." },
             { lines: "3", explanation: "0,2,4,6,8,10 위치를 선택해 HloPto를 만듭니다." },
             { lines: "4", explanation: "생략 경계와 -1 step으로 전체 순서를 뒤집습니다." },
-            { lines: "5", explanation: "인덱스 10부터 6까지 역방향으로 선택하고 stop 5는 제외해 nohty를 만듭니다." },
+            { lines: "5", explanation: "인덱스 11부터 7까지 역방향으로 선택하고 stop 6은 제외해 nohty를 만듭니다." },
             { lines: "7", explanation: "P가 있는 인덱스 6 앞부분, 새 K, 인덱스 7 이후를 연결해 새 str을 만듭니다." },
             { lines: "8-10", explanation: "원본은 그대로이고 changed만 Hello Kython입니다. 두 문자열 길이는 모두 12입니다." },
           ],
@@ -242,3 +242,176 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "slice-objects-normalized-bounds",
+    title: "슬라이스 표기를 slice 객체와 정규화된 index 범위로 해석합니다",
+    lead: "`text[start:stop:step]`는 세 숫자를 대충 보정하는 문법이 아니라 slice 객체가 sequence 길이에 맞춰 경계를 정규화하고 range와 같은 위치 집합을 선택하는 연산입니다.",
+    explanations: [
+      "대괄호 안의 colon 표기는 내부적으로 start·stop·step을 가진 slice 객체로 표현할 수 있습니다. `text[1:7:2]`와 `text[slice(1, 7, 2)]`는 같은 위치를 고릅니다. slice를 이름에 담으면 설정·API·반복 처리에서 재사용할 수 있고 repr로 계약을 기록할 수 있습니다.",
+      "start와 stop의 None은 단순히 0과 len이라는 뜻이 아닙니다. 양수 step에서는 앞과 뒤 경계를 향하지만 음수 step에서는 기본 start가 마지막 유효 위치, 기본 stop은 첫 위치 앞의 sentinel이 됩니다. 그래서 `[::-1]`은 전체 역순이고 `slice(None, None, -1).indices(8)`은 `(7, -1, -1)`입니다.",
+      "`slice.indices(length)`는 음수·생략·범위 밖 값을 주어진 길이에 맞는 `(start, stop, step)`으로 정규화합니다. 그 tuple을 `range`에 넣으면 실제 선택될 index를 볼 수 있어 복잡한 역방향·큰 경계를 디버깅하기 좋습니다.",
+      "슬라이스 stop은 언제나 선택에서 제외됩니다. 양수 step에서는 start보다 작은 stop이면 빈 결과이고, 음수 step에서는 start보다 큰 stop이면 빈 결과입니다. ‘방향에 맞춰 stop에 도달하기 전까지’라는 range 관점으로 보면 암기할 예외가 줄어듭니다.",
+      "범위 밖 단일 인덱스는 IndexError지만 슬라이스 경계는 가능한 범위로 clamp됩니다. 이 관대한 동작은 preview에는 편리하지만 고정 형식 parser에서는 잘못된 짧은 입력을 조용히 부분값으로 만들 수 있습니다. 먼저 전체 길이와 구분자 계약을 검사합니다.",
+      "step=0은 이동할 수 없어 slice 객체 생성 자체가 아니라 실제 적용 또는 indices 호출 때 ValueError를 냅니다. 외부 설정으로 step을 받는 API는 integer 변환, 0 금지, 방향 허용 범위와 최대 표본 수를 적용 전에 검사합니다.",
+      "custom object는 `__getitem__`에서 int 또는 slice를 받을 수 있습니다. 구현자는 slice.indices로 경계를 정규화할 수 있지만, built-in str와 같은 의미를 제공할지 view를 반환할지 새 객체를 반환할지는 타입의 계약입니다. 모든 slicing이 str과 같은 복사 비용이라고 일반화하지 않습니다.",
+    ],
+    concepts: [
+      { term: "slice object", definition: "start·stop·step을 보관해 sequence 선택 규칙을 표현하는 내장 객체입니다.", detail: ["대괄호 colon 표기와 함께 사용할 수 있습니다.", "indices(length)로 경계를 정규화합니다."] },
+      { term: "normalized bounds", definition: "생략·음수·범위 밖 경계를 특정 sequence 길이에 맞춰 실제 순회 가능한 start·stop·step으로 바꾼 값입니다.", detail: ["step 부호에 따라 기본값이 다릅니다.", "range에 넣어 위치를 검산할 수 있습니다."] },
+      { term: "clamping", definition: "슬라이스의 과도한 경계를 가능한 sequence 경계로 제한하는 동작입니다.", detail: ["단일 index의 IndexError와 다릅니다.", "입력 검증을 대신하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-slice-indices-trace",
+      title: "과도한 경계와 전체 역순을 정규화해 실제 index를 출력합니다",
+      language: "python",
+      filename: "slice_indices.py",
+      purpose: "slice.indices 결과와 range index 목록이 실제 문자열 결과와 일치함을 exact output으로 검증합니다.",
+      code: "text = 'abcdefgh'\n\nspec = slice(-100, 100, 2)\nstart, stop, step = spec.indices(len(text))\nprint(f'normalized={start},{stop},{step}|value={text[spec]}')\n\nreverse = slice(None, None, -1)\nrstart, rstop, rstep = reverse.indices(len(text))\nprint(f'reverse={rstart},{rstop},{rstep}|value={text[reverse]}')\nprint(f'indices={list(range(rstart, rstop, rstep))}')",
+      walkthrough: [
+        { lines: "1-5", explanation: "-100과100을 길이8에 맞춰0과8로 clamp하고 짝수 위치 문자를 선택합니다." },
+        { lines: "7-9", explanation: "음수 step의 생략 경계가 마지막 index7과 sentinel -1로 정규화됩니다." },
+        { lines: "10", explanation: "range에 같은 tuple을 넣어 실제 방문 index를 눈으로 검산합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 내장 slice·range"], command: "python slice_indices.py" },
+      output: { value: "normalized=0,8,2|value=aceg\nreverse=7,-1,-1|value=hgfedcba\nindices=[7, 6, 5, 4, 3, 2, 1, 0]", explanation: ["큰 경계는0과8로 정규화됩니다.", "음수 step의 stop -1은 실제 index -1을 포함한다는 뜻이 아니라 첫 위치 앞 sentinel입니다."] },
+      experiments: [
+        { change: "spec을 slice(6, 1, -2)로 바꿉니다.", prediction: "index6,4,2의 g,e,c를 선택합니다.", result: "stop1은 제외됩니다." },
+        { change: "slice(1, 6, 0).indices(8)을 호출합니다.", prediction: "ValueError가 발생합니다.", result: "0 step 검증 위치를 확인합니다." },
+        { change: "같은 spec을 길이3 문자열에 적용합니다.", prediction: "normalized stop과 결과가 새 길이에 맞게 바뀝니다.", result: "slice object는 절대 index 목록이 아니라 길이 의존 규칙입니다." },
+      ],
+      sourceRefs: ["python-slicing-expression-008", "python-builtins-slice-008", "python-sequence-operations-008"],
+    }],
+    diagnostics: [
+      { symptom: "`[::-1]`의 stop이 왜 -1인데 마지막 문자가 빠지지 않는지 혼란스럽습니다.", likelyCause: "정규화 tuple의 -1 sentinel을 일반 음수 index -1과 같은 선택 위치로 읽었습니다.", checks: ["slice(None,None,-1).indices(len(text))를 출력합니다.", "range 결과 index를 확인합니다.", "명시적 `[:-1:-1]`과 생략 stop을 비교합니다."], fix: "음수 step의 생략 stop은 첫 원소 앞 sentinel이라는 range 관점으로 추적합니다.", prevention: "정·역방향 표본을 slice.indices와 index 목록으로 함께 테스트합니다." },
+      { symptom: "짧은 고정 형식 입력이 오류 없이 일부 필드로 파싱됩니다.", likelyCause: "슬라이스가 범위 밖 stop을 clamp한다는 동작을 형식 검증으로 오해했습니다.", checks: ["원본 len과 delimiter 위치를 먼저 출력합니다.", "각 slice가 빈 문자열인지 확인합니다.", "정상 입력 계약과 최소 길이를 적습니다."], fix: "슬라이스 전에 전체 길이·구분자·문자 종류를 검증하고 실패 이유를 명시적으로 반환합니다.", prevention: "빈 값·한 글자 부족·delimiter 오류·과도한 길이를 parser test에 둡니다." },
+    ],
+  },
+  {
+    id: "unicode-codepoint-grapheme-byte-windows",
+    title: "코드 포인트 slice와 grapheme·UTF-8 byte 제한을 서로 다른 단위로 설계합니다",
+    lead: "Python str의 index 한 칸은 Unicode code point 하나이며, 사용자가 보는 글자와 저장소가 세는 byte는 별도의 경계이므로 ‘10글자’ 요구를 단위 없는 숫자로 구현하면 안 됩니다.",
+    explanations: [
+      "Python의 len(str)과 index·slice는 Unicode code point sequence를 기준으로 합니다. UTF-8은 한 code point를 1~4 bytes로 encode할 수 있으므로 `len(text)`와 `len(text.encode('utf-8'))`는 다릅니다. DB column·메시지 queue·protocol이 byte 상한을 말한다면 bytes 기준을 별도로 검사합니다.",
+      "`é`는 U+00E9 한 code point 또는 U+0065 뒤 U+0301 결합 부호 두 code points로 표현될 수 있습니다. 후자를 `[:1]`로 자르면 e와 accent가 분리됩니다. NFC로 canonical representation을 통일하면 이 사례의 code point 수는 줄지만 모든 사용자 인식 글자 문제를 해결하지는 않습니다.",
+      "가족 이모지는 여러 emoji와 zero-width joiner가 하나처럼 보이고 국기 emoji는 regional indicators 두 개로 구성됩니다. skin tone modifier와 variation selector도 slice 중간에서 분리될 수 있습니다. 사용자 인터페이스의 ‘한 글자’는 Unicode grapheme cluster segmentation을 지원하는 라이브러리나 플랫폼 API로 처리합니다.",
+      "정규화와 grapheme segmentation은 책임이 다릅니다. normalization은 canonical/compatibility representation을 다루고 segmentation은 표시상 문자 경계를 찾습니다. 먼저 보존·비교 정책을 정규화에 적용하고, 그 결과를 사용자 표시 단위로 segment할지 결정합니다.",
+      "byte 상한에 맞추려고 UTF-8 bytes를 임의 위치에서 `[:limit]`로 자른 뒤 decode하면 multi-byte sequence 중간을 끊어 UnicodeDecodeError가 날 수 있습니다. text를 code point 또는 grapheme 단위로 점진적으로 추가하면서 encode 길이를 확인하거나, 프로토콜이 정한 안전한 truncation API를 사용합니다.",
+      "보안에서는 시각적으로 보이는 suffix 몇 글자 마스킹만으로 충분하지 않을 수 있습니다. combining mark·RTL control·zero-width character가 표시를 교란할 수 있고, 너무 짧은 식별자는 앞뒤 공개만으로 거의 전체가 드러납니다. 마스킹 전에 입력 단위와 최소 숨김량, 로그 제어 문자 정책을 정합니다.",
+      "국제화 테스트는 `가`, `e\\u0301`, NFC `é`, 가족 이모지, 국기, CJK 확장 문자와 ASCII를 함께 사용합니다. code point 목록, grapheme 예상 수, UTF-8 byte 수를 각각 기록하면 요구사항이 어느 단위에서 실패했는지 찾기 쉽습니다.",
+    ],
+    concepts: [
+      { term: "code point window", definition: "Python str의 start·stop이 선택하는 Unicode code point 구간입니다.", detail: ["UTF-8 byte window와 다릅니다.", "grapheme cluster를 분리할 수 있습니다."] },
+      { term: "grapheme boundary", definition: "사용자가 하나의 표시 문자로 인식하는 code point 묶음 사이의 경계입니다.", detail: ["표준 str slicing은 인식하지 않습니다.", "UI 길이 제한에 중요합니다."] },
+      { term: "byte budget", definition: "인코딩 뒤 허용되는 최대 bytes 수입니다.", detail: ["codec을 함께 명시해야 합니다.", "multi-byte sequence 중간을 자르지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-unicode-slice-units",
+      title: "결합 악센트의 raw·NFC code point window와 UTF-8 길이를 비교합니다",
+      language: "python",
+      filename: "unicode_slice_units.py",
+      purpose: "겉보기 문자열을 code point 단위로 자른 결과와 normalization 뒤 결과, byte 길이를 ASCII 표기로 확인합니다.",
+      code: "import unicodedata\n\ndef points(value):\n    return ','.join(f'U+{ord(char):04X}' for char in value)\n\ntext = 'e\\u0301X'\nnfc = unicodedata.normalize('NFC', text)\nprint(f'raw_len={len(text)}|head={points(text[:1])}|tail={points(text[1:])}')\nprint(f'nfc_len={len(nfc)}|head={points(nfc[:1])}|tail={points(nfc[1:])}')\nprint(f'utf8_bytes={len(text.encode(\"utf-8\"))},{len(nfc.encode(\"utf-8\"))}|same_nfc={unicodedata.normalize(\"NFC\", text) == nfc}')",
+      walkthrough: [
+        { lines: "1-4", explanation: "보이지 않는 결합 부호를 U+ code point 목록으로 바꾸는 진단 helper를 만듭니다." },
+        { lines: "6-7", explanation: "분해형 e+accent+X와 NFC é+X를 준비합니다." },
+        { lines: "8-10", explanation: "각 첫 slice와 tail, code point 수, UTF-8 byte 수를 분리해 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 unicodedata"], command: "python unicode_slice_units.py" },
+      output: { value: "raw_len=3|head=U+0065|tail=U+0301,U+0058\nnfc_len=2|head=U+00E9|tail=U+0058\nutf8_bytes=4,3|same_nfc=True", explanation: ["raw [:1]은 accent를 tail에 남깁니다.", "NFC 뒤 첫 code point는 U+00E9입니다.", "겉보기는 같아도 UTF-8 bytes 수가 다릅니다."] },
+      experiments: [
+        { change: "text를 가족 이모지+X로 바꿉니다.", prediction: "NFC를 적용해도 여러 code point이며 [:1]은 전체 가족 grapheme이 아닙니다.", result: "normalization과 segmentation 차이를 확인합니다." },
+        { change: "UTF-8 bytes를2 bytes에서 자르고 strict decode합니다.", prediction: "문자 경계를 끊으면 UnicodeDecodeError가 날 수 있습니다.", result: "byte budget용 안전한 truncation이 필요합니다." },
+        { change: "ASCII 'eX'와 byte 수를 비교합니다.", prediction: "code point 수2와 byte 수2가 같아 ASCII만으로는 문제가 숨습니다.", result: "다국어 fixture 필요성을 확인합니다." },
+      ],
+      sourceRefs: ["python-unicode-howto-008", "python-unicodedata-008", "python-str-encode-008"],
+    }],
+    diagnostics: [
+      { symptom: "닉네임을 한 글자만 잘랐는데 악센트나 이모지가 깨져 보입니다.", likelyCause: "code point slice를 grapheme cluster slice로 사용했습니다.", checks: ["각 code point를 U+ 표기로 봅니다.", "결합 부호·ZWJ·modifier 존재를 확인합니다.", "요구 단위가 UI 글자인지 묻습니다."], fix: "사용자 인식 글자 제한에는 Unicode grapheme segmentation을 지원하는 도구를 사용하고 normalization 정책을 별도로 적용합니다.", prevention: "결합 문자·ZWJ emoji·국기·skin tone fixture를 UI test에 포함합니다." },
+      { symptom: "byte 제한에 맞춘 문자열을 decode할 때 오류가 납니다.", likelyCause: "UTF-8 multi-byte sequence 중간에서 bytes를 잘랐습니다.", checks: ["잘린 bytes의 hex와 마지막 lead/continuation byte를 봅니다.", "원본 codec과 byte limit을 확인합니다.", "text/code point 기준 대안을 비교합니다."], fix: "완전한 문자 또는 grapheme 단위로 추가하면서 encode 길이를 계산해 limit 이하에서 멈춥니다.", prevention: "byte limit-1·limit·limit+1과 1~4 byte code point를 함께 테스트합니다." },
+    ],
+  },
+  {
+    id: "slicing-allocation-parsing-redaction",
+    title: "슬라이스 복사 비용·반복 조립·파싱과 마스킹 실패 정책을 함께 설계합니다",
+    lead: "str 슬라이스는 편리하지만 새 문자열 값을 만들고, 반복적인 큰 구간 복사와 단순 위치 마스킹은 성능·정확성·개인정보 요구를 동시에 놓칠 수 있습니다.",
+    explanations: [
+      "built-in str은 immutable이므로 부분 슬라이스 결과는 독립적인 str 값으로 사용됩니다. 구현 최적화의 세부 identity에 의존하지 말고 선택 길이에 비례한 새 결과가 만들어질 수 있다고 계획합니다. 수 GB text에서 겹치는 큰 window를 수천 번 만들면 총 복사량과 메모리 peak가 커집니다.",
+      "검색이나 parser가 원문을 계속 필요로 한다면 매 단계 substring을 만들기보다 `(start, stop)` index pair를 전달하고 최종 경계에서만 slice합니다. bytes protocol에는 memoryview가 복사 없는 view를 제공할 수 있지만 str의 Unicode code point view가 아니므로 codec 경계를 바꾸어 버리는 최적화는 신중해야 합니다.",
+      "문자열을 반복문에서 `result += piece`로 계속 조립하면 매번 더 큰 중간 문자열이 생길 수 있습니다. 조각을 list에 모아 `''.join(parts)`하거나 `io.StringIO`를 쓰면 의도가 분명하고 대량 조립에 적합합니다. 작은 고정 조각 두세 개는 가독성을 우선합니다.",
+      "고정 위치 parser는 slice 전에 전체 형식을 검증하고, variable format은 split·partition·정규식·전용 parser 중 계약에 맞는 도구를 선택합니다. `date[:4]`가 값을 반환했다는 사실은 월·일이나 달력 유효성을 보장하지 않으므로 datetime 같은 도메인 parser에 넘깁니다.",
+      "앞뒤 일부만 남기는 마스킹은 화면 표시 정책이지 암호화나 익명화가 아닙니다. 너무 짧은 값은 전부 숨기고, keep 수를 검증하며, 원본을 로그에 함께 남기지 않습니다. 이메일·전화·카드 번호에는 단순 문자 위치보다 도메인별 최소 공개 규칙과 접근 통제가 필요합니다.",
+      "negative keep, 비문자 입력, empty value, keep*2와 정확히 같은 길이, 매우 긴 입력은 별도 경계입니다. 함수가 code point 기준임을 이름·docstring에 밝히고 grapheme 기준 요구가 있으면 다른 API를 제공합니다.",
+      "성능을 판단할 때는 exact 출력 예제에 wall-clock 숫자를 넣지 않습니다. `timeit`·profiler로 현실적인 크기와 반복을 측정하되 CI에서는 상대적 미세 시간보다 결과 정확성, 할당 상한, 최대 입력 완료 여부를 검증합니다.",
+      "slice 결과를 cache하면 원문 전체를 key나 closure로 붙잡아 메모리가 오래 유지될 수도 있습니다. 데이터 수명, cache 크기, 개인정보 보존 기간을 함께 검토하고, 민감 원문을 성능 편의상 장기 cache하지 않습니다.",
+    ],
+    concepts: [
+      { term: "allocation surface", definition: "슬라이스·연결·조립 과정에서 새 문자열과 중간 결과가 만들어지는 범위입니다.", detail: ["입력 크기와 반복 횟수에 따라 커집니다.", "profiler로 측정합니다."] },
+      { term: "index span", definition: "원문을 복사하지 않고 start·stop 위치로 부분 범위를 가리키는 애플리케이션 수준 표현입니다.", detail: ["최종 소비 시점에 slice할 수 있습니다.", "원문 수명 관리가 필요합니다."] },
+      { term: "display masking", definition: "민감값의 일부를 별표 등으로 가려 사용자 화면에 최소한만 보이는 표시 규칙입니다.", detail: ["익명화·암호화가 아닙니다.", "짧은 값과 Unicode 단위를 정의합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-validated-codepoint-mask",
+      title: "짧은 값은 전부 숨기고 긴 값만 앞뒤 code point를 남깁니다",
+      language: "python",
+      filename: "validated_mask.py",
+      purpose: "keep 경계와 immutable slice 조립을 명시해 과도한 정보 공개를 피하는 표시 함수를 만듭니다.",
+      code: "def mask_codepoints(value, keep=2):\n    if not isinstance(value, str):\n        raise TypeError('value must be str')\n    if keep < 0:\n        raise ValueError('keep must be non-negative')\n    if len(value) <= keep * 2:\n        return '*' * len(value)\n    hidden = len(value) - keep * 2\n    return value[:keep] + '*' * hidden + value[-keep:]\n\nfor sample in ('ABCD', 'ABCDEFGHIJ', '가나다라마바사'):\n    print(f'{sample!r}|masked={mask_codepoints(sample)!r}|length={len(sample)}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "str 타입과 음수 keep을 거부하고 공개 구간이 겹치는 짧은 값은 모두 숨깁니다." },
+        { lines: "7-8", explanation: "긴 값에만 앞·뒤 slice와 정확한 수의 별표를 새 문자열로 조립합니다." },
+        { lines: "10-11", explanation: "경계 길이·긴 ASCII·한글 code point 입력을 repr와 길이로 확인합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "code point 기준 표시 계약"], command: "python validated_mask.py" },
+      output: { value: "'ABCD'|masked='****'|length=4\n'ABCDEFGHIJ'|masked='AB******IJ'|length=10\n'가나다라마바사'|masked='가나***바사'|length=7", explanation: ["길이4는 keep 양쪽이 겹쳐 전부 숨깁니다.", "한글 완성형은 각 음절이 한 code point라 양쪽 두 글자를 남깁니다.", "이 함수는 grapheme·익명화 계약이 아닙니다."] },
+      experiments: [
+        { change: "keep=0으로 실행합니다.", prediction: "모든 code point가 별표가 됩니다.", result: "0 경계를 허용하는 정책을 확인합니다." },
+        { change: "keep=-1로 실행합니다.", prediction: "ValueError가 납니다.", result: "음수 slicing 의미가 보안 정책에 스며들지 않습니다." },
+        { change: "결합 문자·가족 이모지를 입력합니다.", prediction: "code point 기준 별표와 남은 조각이 사용자 글자 경계를 보장하지 않습니다.", result: "grapheme 전용 API로 분리해야 합니다." },
+      ],
+      sourceRefs: ["python-sequence-operations-008", "python-data-model-getitem-008", "python-timeit-008"],
+    }],
+    diagnostics: [
+      { symptom: "큰 텍스트 window 처리에서 메모리가 예상보다 급증합니다.", likelyCause: "겹치는 큰 str slice와 반복 연결로 많은 중간 문자열을 만들었습니다.", checks: ["입력 길이·window 크기·반복 수를 곱해 총 선택량을 추정합니다.", "profiler로 allocation과 peak를 측정합니다.", "substring 대신 index span 전달 가능성을 봅니다."], fix: "start/stop span을 유지하고 최종 경계에서만 slice하며 대량 조립은 join 또는 streaming writer로 바꿉니다.", prevention: "최대 현실 입력의 메모리·완료 시간 budget test를 둡니다." },
+      { symptom: "마스킹했는데 짧은 식별자의 대부분이 노출됩니다.", likelyCause: "항상 앞뒤 keep 글자를 남겨 공개 구간이 겹치거나 최소 숨김량을 정하지 않았습니다.", checks: ["길이0부터2*keep+1까지 표를 만듭니다.", "도메인 최소 공개 요구를 확인합니다.", "원본이 다른 로그 필드에 남는지 검색합니다."], fix: "짧은 값은 전부 숨기고 도메인별 최소 숨김량·접근 권한·보존 정책을 적용합니다.", prevention: "짧은 경계표와 결과에 원본 금지 marker가 없는지 자동 검사합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-slicing-expression-008", repository: "Python Language Reference", path: "Slicings", publicUrl: "https://docs.python.org/3/reference/expressions.html#slicings", usedFor: ["slice grammar", "subscription dispatch", "start stop step"], evidence: "슬라이스 표현식이 slice item과 subscription으로 해석되는 공식 문법을 확인했습니다." },
+  { id: "python-builtins-slice-008", repository: "Python Standard Library", path: "Built-in Functions — slice", publicUrl: "https://docs.python.org/3/library/functions.html#slice", usedFor: ["slice object", "slice.indices", "normalized bounds"], evidence: "slice constructor와 indices(length)의 공식 동작을 확인했습니다." },
+  { id: "python-sequence-operations-008", repository: "Python Standard Library", path: "Common Sequence Operations", publicUrl: "https://docs.python.org/3/library/stdtypes.html#common-sequence-operations", usedFor: ["indexing", "slicing", "concatenation", "repetition", "immutable sequence notes"], evidence: "str을 포함한 공통 sequence 연산과 반복 연결 주의점을 공식 문서로 확인했습니다." },
+  { id: "python-unicode-howto-008", repository: "Python Documentation", path: "Unicode HOWTO", publicUrl: "https://docs.python.org/3/howto/unicode.html", usedFor: ["code points", "encodings", "text versus bytes", "Unicode iteration"], evidence: "Python str의 Unicode code point 모델과 bytes 경계를 공식 HOWTO로 확인했습니다." },
+  { id: "python-unicodedata-008", repository: "Python Standard Library", path: "unicodedata.normalize", publicUrl: "https://docs.python.org/3/library/unicodedata.html#unicodedata.normalize", usedFor: ["NFC", "combining sequences", "normalization boundary"], evidence: "결합 문자 예제의 NFC 변환을 공식 API로 확인했습니다." },
+  { id: "python-str-encode-008", repository: "Python Standard Library", path: "str.encode", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.encode", usedFor: ["UTF-8 byte length", "byte budget", "encoding errors"], evidence: "str에서 bytes로 변환할 때의 encoding·errors 계약을 확인했습니다." },
+  { id: "python-data-model-getitem-008", repository: "Python Language Reference", path: "object.__getitem__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__getitem__", usedFor: ["custom subscription", "int versus slice argument", "sequence protocol"], evidence: "사용자 정의 타입이 subscription과 slicing에 참여하는 공식 protocol을 확인했습니다." },
+  { id: "python-timeit-008", repository: "Python Standard Library", path: "timeit — Measure execution time", publicUrl: "https://docs.python.org/3/library/timeit.html", usedFor: ["repeatable performance measurement", "setup separation", "benchmark caution"], evidence: "슬라이스·조립 성능을 환경 독립 출력에 섞지 않고 별도 측정하는 공식 도구를 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "`text[1:7:2]`와 `text[slice(1,7,2)]`는 어떤 관계인가요?", answer: "같은 slice 규칙을 전달해 같은 위치를 선택합니다." },
+  { question: "slice.indices(length)는 무엇을 반환하나요?", answer: "생략·음수·범위 밖 경계를 해당 길이에 맞춘 start, stop, step tuple로 반환합니다." },
+  { question: "음수 step에서 생략 stop의 -1은 마지막 index -1을 선택하나요?", answer: "아닙니다. 첫 원소 앞의 순회 sentinel로 사용되어 index0까지 포함할 수 있습니다." },
+  { question: "슬라이스가 범위 밖에서 오류를 내지 않는 것이 parser 검증을 대신하나요?", answer: "아닙니다. 짧은 입력도 부분 문자열을 반환하므로 길이·구분자 계약을 먼저 검사합니다." },
+  { question: "Python str의 한 index는 UTF-8 한 byte인가요?", answer: "아닙니다. Unicode code point 하나이며 UTF-8에서는 여러 bytes일 수 있습니다." },
+  { question: "NFC를 적용하면 모든 이모지를 한 code point로 만들 수 있나요?", answer: "아닙니다. grapheme cluster와 normalization은 다른 문제이며 ZWJ emoji는 계속 여러 code points일 수 있습니다." },
+  { question: "UTF-8 bytes를 limit에서 바로 잘라도 안전한가요?", answer: "아닙니다. multi-byte sequence 중간을 끊을 수 있어 완전한 문자 경계를 유지해야 합니다." },
+  { question: "반복적인 문자열 조립에는 왜 join을 고려하나요?", answer: "immutable str 연결이 많은 중간 값을 만들 수 있어 조각을 모아 한 번 조립하는 방식이 의도와 비용을 줄일 수 있습니다." },
+  { question: "앞뒤 두 글자 마스킹이 익명화를 보장하나요?", answer: "아닙니다. 표시 최소화일 뿐이며 짧은 값·Unicode·재식별·다른 로그 필드를 함께 고려해야 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "slice 객체와 colon 표기의 대응을 설명한다.",
+  "slice.indices로 정·역방향 경계를 정규화한다.",
+  "range index 목록으로 실제 선택 위치를 검산한다.",
+  "슬라이스 clamping과 parser 입력 검증을 구분한다.",
+  "code point·grapheme·UTF-8 byte 단위를 분리한다.",
+  "결합 문자와 NFC 전후 slice 결과를 U+ 표기로 비교했다.",
+  "byte 제한에서 multi-byte sequence를 안전하게 보존한다.",
+  "대량 slice·연결의 allocation surface를 측정하고 줄인다.",
+  "마스킹의 짧은 값·음수 keep·Unicode 경계를 테스트한다.",
+);

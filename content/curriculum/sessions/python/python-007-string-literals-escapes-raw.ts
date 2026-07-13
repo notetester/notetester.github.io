@@ -649,3 +649,107 @@ True
 } satisfies DetailedSession;
 
 export default session;
+
+const unicodeCodecChapter: DetailedSession["chapters"][number] = {
+  id: "unicode-normalization-encoding-boundaries",
+  title: "소스 literal·Unicode 정규화·text/bytes codec 경계를 서로 다른 단계로 추적합니다",
+  lead: "화면에서 같은 글자가 같은 코드 포인트·같은 바이트라는 보장은 없으며, escape 해석과 encode/decode 오류 정책까지 구분해야 데이터 손실과 비교 우회를 막을 수 있습니다.",
+  explanations: [
+    "Python 3 소스의 일반 문자열 literal은 Unicode str 값을 만듭니다. 소스 파일을 읽을 때의 문자 인코딩, lexical parser가 `\\n`·`\\uAC00` 같은 escape를 해석하는 단계, 실행 중 str을 UTF-8 같은 bytes로 encode하는 단계는 서로 다릅니다. 어느 단계에서 값이 달라졌는지 repr·code point·bytes hex를 차례로 확인합니다.",
+    "겉보기 같은 글자도 여러 코드 포인트 열로 표현될 수 있습니다. 한글 완성형 `가` U+AC00과 현대 한글 자모 `ᄀ` U+1100 + `ᅡ` U+1161은 화면에서 같은 음절처럼 보일 수 있지만 len, ==, 해시, 슬라이스 결과가 다릅니다. 문자열 비교 전에 도메인이 canonical equivalence를 요구하는지 결정합니다.",
+    "`unicodedata.normalize('NFC', text)`는 가능한 문자를 조합된 형태로, NFD는 canonical decomposition 형태로 정규화합니다. NFKC·NFKD는 compatibility 변환도 수행해 폭·기호 등 의미 있는 구분을 합칠 수 있으므로 검색 편의만 보고 식별자·서명 원문에 무조건 적용하면 안 됩니다.",
+    "정규화는 보안 sanitizer나 국제화 완성품이 아닙니다. 시각적으로 비슷한 서로 다른 문자, bidirectional control, zero-width character와 confusable identifier 문제는 별도 정책이 필요합니다. 사용자 이름, 비밀번호, 파일명, 자연어 본문은 각각 보존과 비교 요구가 다르므로 동일한 정규화 함수를 일괄 적용하지 않습니다.",
+    "`str.encode(encoding, errors)`는 text를 bytes로, `bytes.decode(encoding, errors)`는 bytes를 text로 바꿉니다. 양쪽에서 실제 인코딩을 맞춰야 round-trip이 성립합니다. UTF-8 bytes를 CP949로 decode하거나 이미 decode된 str에 다시 decode를 호출하는 실수는 타입·경계 이름으로 예방합니다.",
+    "기본 `errors='strict'`는 표현할 수 없는 문자에서 UnicodeEncodeError 또는 잘못된 byte sequence에서 UnicodeDecodeError를 냅니다. `ignore`와 `replace`는 계속 진행하지만 데이터가 사라지거나 다른 문자로 바뀔 수 있습니다. 손실 허용 목적·감사 가능성·원본 보존 없이 편의상 선택하지 않습니다.",
+    "`backslashreplace`는 encode할 수 없는 code point를 눈에 보이는 escape bytes로 남겨 진단·ASCII 로그에 유용할 수 있지만 원문 bytes와 같지 않습니다. `surrogateescape` 같은 handler도 특정 운영체제 경계의 undecodable bytes round-trip을 위한 전문 도구이지 일반 사용자 텍스트 정리 기능이 아닙니다.",
+    "네트워크·파일·DB driver 경계에서는 text와 bytes 책임을 한 곳에 둡니다. 파일은 `open(..., encoding='utf-8', errors='strict', newline=...)`처럼 명시하고, HTTP·DB 라이브러리가 이미 decode한 값에 임의 재인코딩을 하지 않습니다. 프로토콜이 BOM·newline·charset을 요구하면 그 계약을 별도로 테스트합니다.",
+    "테스트에는 ASCII뿐 아니라 한글, Euro 기호, 결합 악센트, emoji, NUL·개행, 잘못된 byte sequence를 포함합니다. 성공값만 비교하지 말고 code point 목록과 bytes hex, 정규화 전후 길이, strict 오류 위치, 허용한 손실 정책까지 예상 결과로 기록합니다.",
+  ],
+  concepts: [
+    { term: "canonical equivalence", definition: "코드 포인트 배열은 달라도 Unicode 규칙상 같은 추상 문자를 표현한다고 보는 관계입니다.", detail: ["Python의 기본 ==가 자동 적용하지 않습니다.", "NFC·NFD 정책으로 맞출 수 있습니다."] },
+    { term: "Unicode normalization", definition: "문자열을 NFC·NFD·NFKC·NFKD 중 선택한 표준 형태로 변환하는 과정입니다.", detail: ["canonical과 compatibility normalization을 구분합니다.", "도메인 경계에서 정책을 정합니다."] },
+    { term: "codec", definition: "Unicode text와 특정 byte representation 사이의 encode/decode 규칙입니다.", detail: ["양방향 encoding 이름이 일치해야 합니다.", "오류 handler는 데이터 보존 정책입니다."] },
+    { term: "round-trip", definition: "text를 encode한 뒤 같은 codec으로 decode했을 때 원래 text와 같아지는 성질입니다.", detail: ["lossy error handler에서는 깨질 수 있습니다.", "bytes hex와 equality로 검증합니다."] },
+  ],
+  codeExamples: [
+    {
+      id: "python-unicode-normalization-trace",
+      title: "겉보기 같은 한글의 code point·길이·정규화 결과를 비교합니다",
+      language: "python",
+      filename: "unicode_normalization.py",
+      purpose: "완성형과 자모 sequence가 기본 equality에서는 다르고 NFC 뒤 같아지는 과정을 exact output으로 확인합니다.",
+      code: "import unicodedata\n\ncomposed = '가'\ndecomposed = '\\u1100\\u1161'\nnfd = unicodedata.normalize('NFD', composed)\nnfd_points = ','.join(f'U+{ord(char):04X}' for char in nfd)\n\nprint(f'lengths={len(composed)},{len(decomposed)}|equal={composed == decomposed}')\nprint(f'nfc_equal={unicodedata.normalize(\"NFC\", decomposed) == composed}|nfd_points={nfd_points}')\nprint(f'utf8={composed.encode(\"utf-8\").hex()}')",
+      walkthrough: [
+        { lines: "1-4", explanation: "composed 한 code point와 decomposed 두 자모 code point를 준비합니다." },
+        { lines: "5-6", explanation: "완성형을 NFD로 분해하고 각 code point를 U+ 표기로 만듭니다." },
+        { lines: "8-10", explanation: "기본 길이·동등성, NFC 정책 뒤 동등성, UTF-8 bytes를 순서대로 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 unicodedata"], command: "python unicode_normalization.py" },
+      output: { value: "lengths=1,2|equal=False\nnfc_equal=True|nfd_points=U+1100,U+1161\nutf8=eab080", explanation: ["기본 equality는 code point sequence가 달라 False입니다.", "NFC는 두 자모를 U+AC00으로 조합합니다.", "완성형 가의 UTF-8은 eab080입니다."] },
+      experiments: [
+        { change: "NFC 대신 NFD로 두 값을 모두 정규화합니다.", prediction: "둘 다 U+1100,U+1161이 되어 equality가 True입니다.", result: "어느 canonical form을 택해도 같은 정책이면 비교가 가능합니다." },
+        { change: "라틴 `é`와 `e\\u0301`을 비교합니다.", prediction: "정규화 전에는 다르고 NFC 뒤 같습니다.", result: "한글만의 현상이 아님을 확인합니다." },
+        { change: "원본 문자열과 NFC 문자열의 bytes hex를 모두 저장합니다.", prediction: "정규화가 bytes representation을 바꿀 수 있습니다.", result: "서명·checksum 전에 normalization 정책을 고정해야 합니다." },
+      ],
+      sourceRefs: ["python-unicode-howto-007", "python-unicodedata-007", "python-str-encode-007"],
+    },
+    {
+      id: "python-codec-error-policy",
+      title: "strict encode 실패 위치와 손실 없는 UTF-8 round-trip을 기록합니다",
+      language: "python",
+      filename: "codec_errors.py",
+      purpose: "ASCII가 표현하지 못하는 첫 문자, 진단용 backslashreplace, UTF-8 원본 복원을 한 실행에서 비교합니다.",
+      code: "text = 'A€가'\n\ntry:\n    text.encode('ascii')\nexcept UnicodeEncodeError as error:\n    print(f'strict={type(error).__name__}|start={error.start}|char={text[error.start]!r}')\n\nescaped = text.encode('ascii', errors='backslashreplace')\nutf8 = text.encode('utf-8')\nprint(f'backslash={escaped!r}')\nprint(f'utf8={utf8.hex()}|roundtrip={utf8.decode(\"utf-8\") == text}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "ASCII strict encode가 Euro 기호 위치1에서 실패하는 것을 catch해 stderr 없이 진단합니다." },
+        { lines: "8-9", explanation: "진단용 ASCII escape bytes와 손실 없는 UTF-8 bytes를 별도로 만듭니다." },
+        { lines: "10-11", explanation: "bytes repr·hex와 같은 codec decode 뒤 원본 equality를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "UTF-8 source file"], command: "python codec_errors.py" },
+      output: { value: "strict=UnicodeEncodeError|start=1|char='€'\nbackslash=b'A\\\\u20ac\\\\uac00'\nutf8=41e282aceab080|roundtrip=True", explanation: ["ASCII는 index1의 Euro 기호부터 표현할 수 없습니다.", "backslashreplace는 읽을 수 있는 escape bytes를 만들지만 원본 text encoding이 아닙니다.", "UTF-8은 Euro와 한글을 보존해 round-trip True입니다."] },
+      experiments: [
+        { change: "errors='ignore'로 ASCII encode합니다.", prediction: "결과가 b'A'가 되어 두 문자가 조용히 사라집니다.", result: "손실 정책을 명시하지 않으면 데이터 유실을 놓칩니다." },
+        { change: "UTF-8 bytes 끝 한 바이트를 제거하고 strict decode합니다.", prediction: "불완전 sequence로 UnicodeDecodeError가 납니다.", result: "전송 framing과 decode error를 구분합니다." },
+        { change: "UTF-8 bytes를 latin-1로 decode합니다.", prediction: "오류 없이도 mojibake 문자열이 만들어질 수 있습니다.", result: "성공 여부보다 codec 계약 일치가 중요합니다." },
+      ],
+      sourceRefs: ["python-codecs-007", "python-codec-errors-007", "python-bytes-decode-007"],
+    },
+  ],
+  diagnostics: [
+    { symptom: "화면에서 같은 이름인데 dictionary key 조회가 실패합니다.", likelyCause: "composed와 decomposed Unicode sequence를 정규화 정책 없이 그대로 비교했습니다.", checks: ["두 값의 repr과 len을 비교합니다.", "각 문자의 U+ code point를 출력합니다.", "NFC 뒤 equality를 진단 목적으로 확인합니다."], fix: "도메인이 canonical equivalence를 요구하면 입력 경계에서 합의한 normalization form을 적용하고 원본 보존 여부를 정합니다.", prevention: "완성형·분해형 fixture와 normalization version/policy를 테스트에 둡니다." },
+    { symptom: "파일을 읽으면 한글이 깨지거나 `UnicodeDecodeError`가 납니다.", likelyCause: "실제 byte encoding과 decode에 사용한 이름이 다르거나 byte sequence가 중간에서 잘렸습니다.", checks: ["원본 bytes 일부를 hex로 확인합니다.", "생성 시스템의 charset 계약과 BOM을 확인합니다.", "error.start·end·reason과 framing을 기록합니다."], fix: "생성자와 소비자의 codec을 일치시키고 strict 오류를 경계 오류로 보고합니다. 필요한 경우 원본 bytes를 격리 보존합니다.", prevention: "open·HTTP·DB 경계에 encoding을 명시하고 다국어 round-trip fixture를 둡니다." },
+    { symptom: "오류는 사라졌지만 이름 일부가 조용히 없어졌습니다.", likelyCause: "encode/decode에 errors='ignore' 또는 대체 handler를 근거 없이 사용했습니다.", checks: ["codec 호출의 errors 인자를 검색합니다.", "입력·출력 길이와 round-trip equality를 비교합니다.", "손실을 허용한 업무 요구가 있는지 확인합니다."], fix: "기본 strict로 되돌리고 손실이 정말 필요한 표시 경계에만 명시적 handler와 감사 로그를 둡니다.", prevention: "lossy handler 사용을 코드 리뷰 항목으로 만들고 원본 보존·경고·측정치를 요구합니다." },
+  ],
+  expertNotes: [
+    "Unicode version은 Python이 제공하는 unicodedata database version과 함께 진화할 수 있습니다. 장기간 고정된 식별자 규칙은 runtime version과 normalization 정책을 문서화합니다.",
+    "보안 식별자에서는 normalization만으로 confusable을 해결할 수 없습니다. 허용 script, 제어 문자, bidirectional 표시, skeleton 비교 등 도메인별 방어를 별도 threat model로 다룹니다.",
+  ],
+};
+
+(session.chapters as DetailedSession["chapters"]).push(unicodeCodecChapter);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-unicode-howto-007", repository: "Python Documentation", path: "Unicode HOWTO", publicUrl: "https://docs.python.org/3/howto/unicode.html", usedFor: ["Unicode code points", "text and bytes", "encoding", "Unicode filenames"], evidence: "Python의 Unicode text model과 encode/decode 경계를 공식 HOWTO로 확인했습니다." },
+  { id: "python-unicodedata-007", repository: "Python Standard Library", path: "unicodedata.normalize", publicUrl: "https://docs.python.org/3/library/unicodedata.html#unicodedata.normalize", usedFor: ["NFC", "NFD", "NFKC", "NFKD"], evidence: "Unicode normalization form과 normalize API의 공식 계약을 확인했습니다." },
+  { id: "python-codecs-007", repository: "Python Standard Library", path: "codecs — Codec registry and base classes", publicUrl: "https://docs.python.org/3/library/codecs.html", usedFor: ["codec registry", "encode/decode model", "stream boundaries"], evidence: "codec registry와 text/bytes 변환 기반을 공식 문서로 확인했습니다." },
+  { id: "python-codec-errors-007", repository: "Python Standard Library", path: "Codec error handlers", publicUrl: "https://docs.python.org/3/library/codecs.html#error-handlers", usedFor: ["strict", "ignore", "replace", "backslashreplace", "surrogateescape"], evidence: "각 error handler의 손실·진단 동작을 공식 문서로 확인했습니다." },
+  { id: "python-str-encode-007", repository: "Python Standard Library", path: "str.encode", publicUrl: "https://docs.python.org/3/library/stdtypes.html#str.encode", usedFor: ["str to bytes", "encoding argument", "errors policy"], evidence: "str.encode의 반환 타입과 오류 처리 계약을 공식 문서로 확인했습니다." },
+  { id: "python-bytes-decode-007", repository: "Python Standard Library", path: "bytes.decode", publicUrl: "https://docs.python.org/3/library/stdtypes.html#bytes.decode", usedFor: ["bytes to str", "round-trip", "decode errors"], evidence: "bytes.decode의 codec·errors 계약을 공식 문서로 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "화면에서 같은 두 문자열은 항상 `==`인가요?", answer: "아닙니다. 완성형과 분해형처럼 code point sequence가 다르면 기본 equality는 False일 수 있습니다." },
+  { question: "NFC와 NFKC는 같은 변환인가요?", answer: "아닙니다. NFKC는 compatibility 구분까지 합칠 수 있어 식별자·원문에 적용할 때 더 강한 정책 판단이 필요합니다." },
+  { question: "str.encode의 결과 타입은 무엇인가요?", answer: "bytes입니다. decode는 bytes를 str로 되돌립니다." },
+  { question: "errors='ignore'가 안전한 복구 방법인가요?", answer: "아닙니다. 표현할 수 없는 문자나 잘못된 bytes를 조용히 버려 데이터가 유실될 수 있습니다." },
+  { question: "backslashreplace 결과는 원문의 ASCII 인코딩인가요?", answer: "아닙니다. 표현 불가 문자를 escape 문자 bytes로 바꾼 진단용 표현이며 같은 codec round-trip 원문이 아닙니다." },
+  { question: "UTF-8 encode가 성공하면 어떤 encoding으로 decode해도 되나요?", answer: "아닙니다. 같은 codec 계약을 사용해야 원문 round-trip을 기대할 수 있습니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "소스 decoding·literal escape·runtime encode/decode 단계를 구분한다.",
+  "완성형과 분해형 한글의 code point·길이·equality를 출력했다.",
+  "NFC·NFD와 compatibility normalization의 정책 차이를 설명한다.",
+  "strict codec 오류 위치와 손실 handler 위험을 진단한다.",
+  "UTF-8 bytes hex와 decode round-trip을 검증했다.",
+);

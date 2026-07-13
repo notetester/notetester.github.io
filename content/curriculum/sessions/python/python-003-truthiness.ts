@@ -677,3 +677,126 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "and-or-operand-return-short-circuit",
+    title: "and·or를 bool 반환 연산자가 아니라 operand 선택과 단축 평가로 이해합니다",
+    lead: "조건에서는 truth value가 사용되지만 expression 결과는 원래 operand일 수 있어 default 선택·cache·function 호출에서 타입과 부작용이 달라집니다.",
+    explanations: [
+      "`x and y`는 x가 falsy이면 x 자체를 반환하고, 아니면 y를 평가해 그 결과를 반환합니다. `x or y`는 x가 truthy이면 x 자체를 반환하고, 아니면 y를 평가해 반환합니다.",
+      "따라서 `value or default`는 None만 대체하는 문법이 아닙니다. 유효한0, 빈 문자열, 빈 list도 default로 바뀌므로 missing sentinel과 falsy domain value를 구분해야 합니다.",
+      "short-circuit는 결과가 결정되면 오른쪽 operand를 평가하지 않습니다. expensive call을 피하거나 guard에 쓸 수 있지만, 오른쪽 side effect가 항상 실행될 것이라 기대하면 state가 달라집니다.",
+      "`condition and action()` 같은 표현은 짧지만 action 반환값과 condition 타입을 섞고 statement 의도를 숨길 수 있습니다. 제어 흐름에는 명시적 if가 읽기 쉽고 breakpoint·coverage도 명확합니다.",
+      "`and`가 `or`보다 precedence가 높지만 복합 조건은 괄호와 의미 이름으로 의도를 드러냅니다. call 횟수까지 중요한 경우 truth table뿐 아니라 evaluation event trace를 test합니다.",
+      "awaitable·generator·database object의 truth test가 금지되거나 비싼 경우도 있습니다. third-party type의 `__bool__` 계약을 확인하고 explicit predicate를 선호합니다.",
+    ],
+    concepts: [
+      { term: "operand-returning boolean operation", definition: "truth value로 분기하되 결과로 bool이 아니라 선택된 원래 operand를 반환하는 and/or semantics입니다.", detail: ["type이 유지될 수 있습니다.", "default idiom에 주의합니다."] },
+      { term: "short-circuit", definition: "왼쪽 결과만으로 결론이 나면 오른쪽 expression을 평가하지 않는 동작입니다.", detail: ["성능 최적화가 가능합니다.", "side effect 순서를 바꿉니다."] },
+      { term: "sentinel", definition: "missing과0·empty 같은 유효 값을 구분하기 위한 고유 marker object입니다.", detail: ["`None`도 domain에 따라 sentinel입니다.", "identity로 검사합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-short-circuit-event-trace",
+      title: "and·or가 어느 operand를 평가하고 무엇을 반환하는지 기록합니다",
+      language: "python",
+      filename: "short_circuit_trace.py",
+      purpose: "함수 call event와 operand result를 분리해 단축 평가를 exact 관찰합니다.",
+      code: "events = []\n\ndef probe(name, value):\n    events.append(name)\n    return value\n\nfirst = probe('and-left', 0) and probe('and-right', 99)\nsecond = probe('or-left', 'ready') or probe('or-right', 'fallback')\nthird = probe('fallback-left', '') or probe('fallback-right', 'fallback')\n\nprint(f'values={first!r},{second!r},{third!r}')\nprint(f'events={events}')\nprint(f'types={type(first).__name__},{type(second).__name__},{type(third).__name__}')",
+      walkthrough: [
+        { lines: "1-5", explanation: "probe는 호출된 operand 이름만 events에 기록하고 전달받은 원래 값을 반환합니다." },
+        { lines: "7-9", explanation: "falsy and, truthy or, falsy or의 세 경계를 평가합니다." },
+        { lines: "11-13", explanation: "선택된 operand values, 실제 call events와 결과 runtime types를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python short_circuit_trace.py" },
+      output: { value: "values=0,'ready','fallback'\nevents=['and-left', 'or-left', 'fallback-left', 'fallback-right']\ntypes=int,str,str", explanation: ["and-right와 or-right는 평가되지 않습니다.", "and 결과는 int0이고 or 결과는 str operand입니다.", "fallback case에서만 오른쪽 call이 실행됩니다."] },
+      experiments: [
+        { change: "and-left 값을1로 바꿉니다.", prediction: "and-right event가 추가되고 first=99입니다.", result: "truthy left에서 오른쪽 결과가 최종 operand가 됩니다." },
+        { change: "유효 값0에 `value or 10`을 적용합니다.", prediction: "10이 되어0이 유실됩니다.", result: "None/sentinel explicit 검사로 바꿉니다." },
+        { change: "probe가 exception을 내게 합니다.", prediction: "short-circuit된 branch의 exception은 발생하지 않습니다.", result: "evaluation 여부가 error surface도 결정합니다." },
+      ],
+      sourceRefs: ["python-expressions-boolean", "python-truth-stdtypes-003", "python-data-model-truth-003"],
+    }],
+    diagnostics: [
+      { symptom: "0이 유효한 값인데 default로 바뀝니다.", likelyCause: "`value or default`가 모든 falsy values를 missing으로 취급했습니다.", checks: ["0·False·''·[]가 유효한지 domain을 봅니다.", "None/sentinel contract를 확인합니다.", "result type을 출력합니다."], fix: "`if value is None` 또는 고유 sentinel identity 검사로 missing만 대체합니다.", prevention: "missing과 각 falsy domain value를 별도 test합니다." },
+      { symptom: "오른쪽 함수의 로그/저장이 간헐적으로 실행되지 않습니다.", likelyCause: "and/or short-circuit branch에 필수 side effect를 넣었습니다.", checks: ["왼쪽 truth table을 만듭니다.", "event trace를 기록합니다.", "side effect 호출을 expression에서 찾습니다."], fix: "필수 action은 명시적 statement로 분리하고 조건부 action은 if로 표현합니다.", prevention: "branch coverage와 call-count assertions를 둡니다." },
+      { symptom: "and/or 결과를 bool로 예상했는데 str/list가 전달됩니다.", likelyCause: "and/or가 선택한 operand 자체를 반환합니다.", checks: ["type과 repr을 봅니다.", "consumer가 bool만 요구하는지 확인합니다.", "비교/조건 의도를 분리합니다."], fix: "boolean contract가 필요하면 `bool(expression)` 또는 명시 predicate를 반환합니다.", prevention: "함수 return annotation과 runtime boundary test를 둡니다." },
+    ],
+  },
+  {
+    id: "all-any-lazy-quantifiers",
+    title: "all·any를 lazy quantifier와 빈 iterable의 논리 항등으로 다룹니다",
+    lead: "여러 값의 조건을 합칠 때 단순 반복문보다 의도가 분명하지만 generator 소비·단축 평가·빈 입력 의미를 함께 설계해야 합니다.",
+    explanations: [
+      "`any(iterable)`은 처음 truthy element에서 True로 끝나고 모두 falsy이면 False입니다. `all(iterable)`은 처음 falsy element에서 False로 끝나고 모두 truthy이면 True입니다.",
+      "빈 iterable에서 any는 False, all은 True입니다. 후자는 모든 원소가 조건을 만족한다는 보편 명제가 반례가 없을 때 참인 vacuous truth이며, 업무에서 최소 한 개가 필요하면 `bool(items) and all(...)`을 별도로 씁니다.",
+      "generator expression과 쓰면 필요한 지점까지만 값을 생산해 효율적입니다. 하지만 generator는 한 번 소비되므로 같은 iterator로 any 다음 all을 실행하면 남은 elements만 보게 됩니다.",
+      "predicate가 network·DB·mutation 같은 side effect를 가지면 단축 평가 때문에 호출 수가 데이터에 따라 달라집니다. pure predicate와 이미 준비된 data에 사용하는 편이 안전합니다.",
+      "`all(value is not None for value in fields)`처럼 요구사항을 quantifier로 표현할 수 있지만 empty fields 허용 여부와 String blank normalization을 별도로 정의합니다.",
+      "large input에서 모든 diagnostic failures를 수집해야 하면 all/any의 early stop 대신 명시 loop로 error list를 만듭니다. 빠른 결정과 전체 설명은 다른 목표입니다.",
+    ],
+    concepts: [
+      { term: "existential quantifier", definition: "적어도 하나의 element가 truthy인지 묻는 any의 의미입니다.", detail: ["첫 truthy에서 멈춥니다.", "빈 iterable은 False입니다."] },
+      { term: "universal quantifier", definition: "모든 elements가 truthy인지 묻는 all의 의미입니다.", detail: ["첫 falsy에서 멈춥니다.", "빈 iterable은 True입니다."] },
+      { term: "lazy consumption", definition: "iterator가 요청받은 element만 생산하고 short-circuit 뒤 나머지를 남기는 실행 방식입니다.", detail: ["generator와 잘 맞습니다.", "재사용 시 주의합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-all-any-consumption",
+      title: "any·all의 단축 평가와 빈 iterable 결과를 exact 기록합니다",
+      language: "python",
+      filename: "quantifiers.py",
+      purpose: "predicate call 순서와 empty semantics를 값과 함께 검증합니다.",
+      code: "def traced(values, events):\n    for value in values:\n        events.append(value)\n        yield value\n\nany_events = []\nall_events = []\nany_result = any(traced([0, '', 3, 4], any_events))\nall_result = all(traced([1, 'ok', 0, 5], all_events))\n\nprint(f'any={any_result}|events={any_events}')\nprint(f'all={all_result}|events={all_events}')\nprint(f'empty_any={any([])}|empty_all={all([])}')",
+      walkthrough: [
+        { lines: "1-4", explanation: "generator가 값을 yield하기 직전에 실제 소비된 value를 events에 기록합니다." },
+        { lines: "6-9", explanation: "any는3에서, all은0에서 결론이 나도록 고정 inputs를 둡니다." },
+        { lines: "11-13", explanation: "결과·소비된 prefix와 empty iterable 항등을 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python quantifiers.py" },
+      output: { value: "any=True|events=[0, '', 3]\nall=False|events=[1, 'ok', 0]\nempty_any=False|empty_all=True", explanation: ["any는 truthy3 뒤4를 소비하지 않습니다.", "all은 falsy0 뒤5를 소비하지 않습니다.", "빈 all은 True입니다."] },
+      experiments: [
+        { change: "any input을 [0, '']로 바꿉니다.", prediction: "모두 소비하고 any=False입니다.", result: "existential witness가 없습니다." },
+        { change: "all input을 [1, 'ok']로 바꿉니다.", prediction: "모두 소비하고 all=True입니다.", result: "falsy counterexample이 없습니다." },
+        { change: "한 generator에 any 뒤 all을 연속 적용합니다.", prediction: "all은 남은 tail만 소비합니다.", result: "one-shot iterator ownership을 문서화합니다." },
+      ],
+      sourceRefs: ["python-builtins-all-any", "python-iterator-doc-003", "python-expressions-generator-003"],
+    }],
+    diagnostics: [
+      { symptom: "빈 입력인데 all 검증이 True입니다.", likelyCause: "empty iterable의 vacuous truth를 최소1개 요구와 혼동했습니다.", checks: ["input length/presence를 봅니다.", "최소 cardinality 요구를 확인합니다.", "empty fixture를 실행합니다."], fix: "최소 한 개가 필요하면 presence와 all predicate를 함께 검사합니다.", prevention: "empty/one/many cases를 test matrix에 둡니다." },
+      { symptom: "두 번째 any/all 호출이 일부 값만 봅니다.", likelyCause: "첫 호출이 같은 generator/iterator를 short-circuit 지점까지 소비했습니다.", checks: ["iter(value) is value인지 봅니다.", "next로 남은 tail을 확인합니다.", "iterator 재사용을 찾습니다."], fix: "각 pass에 새 generator를 만들거나 데이터가 bounded하면 materialize합니다.", prevention: "iterator ownership을 함수 contract에 명시합니다." },
+      { symptom: "validation이 첫 오류만 보고 나머지를 누락합니다.", likelyCause: "all/any short-circuit를 전체 오류 수집에 사용했습니다.", checks: ["요구 결과가 boolean인지 error list인지 확인합니다.", "predicate side effects를 봅니다.", "call count를 측정합니다."], fix: "모든 오류가 필요하면 명시 loop/comprehension으로 diagnostics를 수집합니다.", prevention: "fast decision과 exhaustive reporting API를 분리합니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-expressions-boolean", repository: "Python Language Reference", path: "6.11 Boolean operations", publicUrl: "https://docs.python.org/3/reference/expressions.html#boolean-operations", usedFor: ["and", "or", "not", "short-circuit", "operand return"], evidence: "boolean operation의 공식 language semantics입니다." },
+  { id: "python-truth-stdtypes-003", repository: "Python Standard Library", path: "Truth Value Testing", publicUrl: "https://docs.python.org/3/library/stdtypes.html#truth-value-testing", usedFor: ["falsy built-ins", "truth test protocol"], evidence: "built-in truth value testing의 공식 목록입니다." },
+  { id: "python-data-model-truth-003", repository: "Python Language Reference", path: "Basic customization — object.__bool__ and __len__", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__bool__", usedFor: ["__bool__", "__len__", "custom objects"], evidence: "custom truth protocol의 공식 근거입니다." },
+  { id: "python-builtins-all-any", repository: "Python Standard Library", path: "Built-in Functions — all and any", publicUrl: "https://docs.python.org/3/library/functions.html#all", usedFor: ["all", "any", "empty iterable"], evidence: "quantifier built-ins의 공식 API입니다." },
+  { id: "python-iterator-doc-003", repository: "Python Standard Library", path: "Iterator Types", publicUrl: "https://docs.python.org/3/library/stdtypes.html#iterator-types", usedFor: ["one-shot consumption", "iterator protocol"], evidence: "iterator consumption의 공식 contract입니다." },
+  { id: "python-expressions-generator-003", repository: "Python Language Reference", path: "6.2.8 Generator expressions", publicUrl: "https://docs.python.org/3/reference/expressions.html#generator-expressions", usedFor: ["lazy predicate generation", "evaluation timing"], evidence: "generator expression의 공식 semantics입니다." },
+  { id: "python-builtins-bool-003", repository: "Python Standard Library", path: "Built-in Functions — bool", publicUrl: "https://docs.python.org/3/library/functions.html#bool", usedFor: ["explicit bool conversion", "truth protocol invocation"], evidence: "bool conversion의 공식 API입니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "`0 and 99`의 결과는 False인가요?", answer: "아닙니다. falsy 첫 operand인 정수0 자체입니다." },
+  { question: "`'ready' or fallback()`에서 fallback이 호출되나요?", answer: "아닙니다. 왼쪽이 truthy라 short-circuit됩니다." },
+  { question: "`value or default`가 None만 대체하나요?", answer: "아닙니다.0, 빈 문자열, 빈 container 등 모든 falsy value를 대체합니다." },
+  { question: "any는 언제 평가를 멈추나요?", answer: "첫 truthy element를 만났을 때 True로 멈춥니다." },
+  { question: "all은 언제 평가를 멈추나요?", answer: "첫 falsy element를 만났을 때 False로 멈춥니다." },
+  { question: "all([])이 True인 이유는 무엇인가요?", answer: "모든 원소가 truthy라는 명제를 깨는 반례가 빈 집합에는 없기 때문입니다." },
+  { question: "같은 generator를 any와 all에 재사용해도 되나요?", answer: "첫 호출이 일부를 소비하므로 의도한 full pass가 아니라면 새 iterator가 필요합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "and·or가 operand 자체를 반환함을 설명한다.",
+  "short-circuit call events를 예측한다.",
+  "falsy domain value와 missing sentinel을 구분한다.",
+  "필수 side effect를 boolean expression에 숨기지 않는다.",
+  "all·any의 early termination을 설명한다.",
+  "empty any=False·all=True를 검증했다.",
+  "one-shot generator consumption을 관리한다.",
+);

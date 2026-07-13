@@ -134,7 +134,7 @@ print(f'{255:#010x}')`,
             { lines: "9", explanation: "#는 0x 접두사를, 010은 총 폭 10과 0 채움을, x는 소문자 16진수 표현을 지정합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "고정 폭 글꼴을 쓰는 터미널 권장"], command: "python progress_table.py" },
-          output: { value: "|     과정     |    진도    |    비율    |      코드      |\n| Python     | 17/40   |   42.5% |   1,234,567 |\n0x000000ff", explanation: ["한글의 터미널 표시 폭은 환경에 따라 열 경계가 조금 달라질 수 있지만 문자열 길이 기준 포맷은 동일합니다.", "% 타입은 원래 0.425에 100을 곱한 표시를 만들고 rate를 바꾸지 않습니다.", "#010x는 접두사를 포함한 총 폭을 0으로 채웁니다."] },
+          output: { value: "|     과정     |    진도     |    비율    |      코드      |\n| Python     | 17/40   |   42.5% |   1,234,567 |\n0x000000ff", explanation: ["한글의 터미널 표시 폭은 환경에 따라 열 경계가 조금 달라질 수 있지만 문자열 길이 기준 포맷은 동일합니다.", "% 타입은 원래 0.425에 100을 곱한 표시를 만들고 rate를 바꾸지 않습니다.", "#010x는 접두사를 포함한 총 폭을 0으로 채웁니다."] },
           experiments: [
             { change: "course를 'Machine Learning'으로 바꿉니다.", prediction: "폭 10을 넘어도 문자열이 잘리지 않아 표가 오른쪽으로 밀립니다.", result: "폭은 최소값이라는 규칙을 확인하고 길이 제한 정책이 별도임을 알 수 있습니다." },
             { change: "rate의 .1%를 .2f로 바꿉니다.", prediction: "42.5%가 아니라 원래 값 0.42가 표시됩니다.", result: "타입 코드가 값의 표시 의미를 바꾼다는 점을 확인합니다." },
@@ -242,3 +242,175 @@ print(f'{255:#010x}')`,
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "format-specification-mini-language",
+    title: "format specification mini-language를 폭·정렬·부호·정밀도 계약으로 읽습니다",
+    lead: "`:` 뒤의 짧은 문자열은 장식이 아니라 fill, alignment, sign, alternate form, zero padding, width, grouping, precision, type을 순서대로 조합하는 작은 언어입니다.",
+    explanations: [
+      "format field는 대체로 `[[fill]align][sign][z][#][0][width][grouping][.precision][type]`의 순서를 따릅니다. 모든 조각을 외울 필요는 없지만 순서를 바꾸면 ValueError가 날 수 있다는 점과, 폭·정밀도·type의 책임을 구분해야 합니다. 먼저 데이터 타입과 표시 계약을 정한 뒤 가장 단순한 spec부터 한 조각씩 추가합니다.",
+      "문자열의 `<`, `>`, `^`는 각각 왼쪽·오른쪽·가운데 정렬이고 바로 앞 한 문자를 fill로 쓸 수 있습니다. `Python:.<10`은 최소 폭 10을 점으로 채우지만 길이 10을 넘는 문자열을 자르지 않습니다. 잘라야 한다면 문자열 precision이나 명시적인 안전한 축약 정책을 별도로 적용해야 합니다.",
+      "숫자에서 `+`는 양수에도 부호를 표시하고 `0`과 width는 부호 뒤를 0으로 채웁니다. `#`는 2진·8진·16진수에 `0b`, `0o`, `0x` 접두사를 붙입니다. `+06d`와 `#06x`는 둘 다 여섯 칸이지만 부호와 진법 접두사의 위치가 다르므로 예상 문자열을 직접 테스트합니다.",
+      "`,` 또는 `_` grouping은 큰 수를 읽기 쉽게 하지만 저장·계산 값이 아니라 표시 문자열의 일부입니다. CSV에서 쉼표 grouping을 그대로 넣으면 열 구분 escaping이 추가로 필요하고, 기계 간 계약에는 JSON 숫자나 원본 숫자 필드를 사용해야 합니다.",
+      "float의 `.2f`는 소수점 아래 두 자리로 반올림해 표시하고 `.1%`는 값에 100을 곱한 뒤 퍼센트 기호를 붙입니다. 반올림된 표시를 다시 계산 입력으로 삼지 말고 원본 수치를 보존합니다. 금융 규칙은 float 표시만으로 결정하지 말고 Decimal과 명시적 rounding policy를 검토합니다.",
+      "format protocol은 `format(value, spec)`과 `f'{value:spec}'`가 공유합니다. 사용자 정의 타입은 `__format__`으로 자체 표기 계약을 제공할 수 있지만, 지원하지 않는 spec을 조용히 무시하지 말고 명확한 ValueError를 내는 편이 오타를 빨리 찾습니다.",
+      "표의 정렬은 Python 코드 포인트 수와 터미널 표시 폭이 다를 때 어긋날 수 있습니다. 한글·결합 문자·전각 문자·이모지가 섞인 CLI 표는 단순 width만 믿지 말고 대상 터미널에서 검사하거나 표시 폭을 계산하는 전용 계층을 둡니다.",
+    ],
+    concepts: [
+      { term: "format specification mini-language", definition: "값이 문자열로 변환될 때 정렬·폭·정밀도·표현 형식을 지시하는 `:` 뒤의 규칙입니다.", detail: ["값의 타입은 바꾸지 않습니다.", "잘못된 조합은 보통 ValueError를 만듭니다."] },
+      { term: "minimum field width", definition: "출력 필드가 차지할 최소 문자 수이며 값이 더 길 때 자르는 최대 길이가 아닙니다.", detail: ["정렬과 fill이 남는 공간에 적용됩니다.", "초과 길이 정책은 별도로 설계합니다."] },
+      { term: "presentation type", definition: "d, f, e, x, %처럼 값의 최종 표현 종류를 선택하는 spec의 마지막 요소입니다.", detail: ["대상 타입과 호환되어야 합니다.", "표시와 계산 계약을 분리합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-format-spec-matrix",
+      title: "정수·실수·문자열의 format spec을 한 화면에서 검산합니다",
+      language: "python",
+      filename: "format_matrix.py",
+      purpose: "부호와 접두사까지 폭에 포함되는 방식, 최소 폭, grouping과 percent 변환을 exact output으로 확인합니다.",
+      code: "value = 12345.678\ncount = 42\nname = 'Python'\n\nprint(f'number={value:,.2f}|signed={count:+06d}|hex={count:#06x}')\nprint(f'text={name:.<10}|center={name:*^10}|percent={0.125:.1%}')",
+      walkthrough: [
+        { lines: "1-3", explanation: "계산용 float·int와 표시할 str을 원본 타입 그대로 둡니다." },
+        { lines: "5", explanation: "grouping·precision, sign-aware zero padding, alternate hexadecimal form을 비교합니다." },
+        { lines: "6", explanation: "문자열 fill·가운데 정렬과 비율의 percent 표시를 확인합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "locale에 의존하지 않는 고정 spec"], command: "python format_matrix.py" },
+      output: { value: "number=12,345.68|signed=+00042|hex=0x002a\ntext=Python....|center=**Python**|percent=12.5%", explanation: ["width에는 부호와 0x 접두사도 포함됩니다.", "문자열 폭은 최소 폭이고 percent는 0.125를 12.5%로 표시합니다."] },
+      experiments: [
+        { change: "name을 'LongPythonName'으로 바꿉니다.", prediction: "폭 10을 넘겨도 잘리지 않고 전체가 출력됩니다.", result: "width가 maximum length가 아님을 확인합니다." },
+        { change: "value에 `.2e`를 적용합니다.", prediction: "1.23e+04 형태의 과학 표기법이 됩니다.", result: "같은 원본 값에 presentation type만 바뀝니다." },
+        { change: "문자열 name에 `d`를 적용합니다.", prediction: "ValueError가 발생합니다.", result: "type과 presentation type 호환성을 경계에서 검증합니다." },
+      ],
+      sourceRefs: ["python-format-spec-006", "python-builtins-format-006", "python-string-format-006"],
+    }],
+    diagnostics: [
+      { symptom: "`ValueError: Invalid format specifier`가 발생합니다.", likelyCause: "spec 요소 순서가 틀렸거나 값 타입이 해당 presentation type을 지원하지 않습니다.", checks: ["value의 type과 repr을 봅니다.", "spec을 width·precision·type으로 분해합니다.", "요소를 하나씩 제거해 실패하는 최소 spec을 찾습니다."], fix: "공식 mini-language 순서로 spec을 다시 구성하고 타입별 지원 형식을 적용합니다.", prevention: "표시 계약별 대표값·음수·0·긴 문자열을 exact output으로 테스트합니다." },
+      { symptom: "폭을 지정했는데 긴 값 때문에 표의 열이 밀립니다.", likelyCause: "width를 최대 길이나 자동 truncate 기능으로 오해했습니다.", checks: ["입력의 len과 지정 width를 비교합니다.", "초과값의 업무 정책을 확인합니다.", "한글·이모지의 실제 표시 폭도 확인합니다."], fix: "명시적인 축약·줄바꿈·열 확장 중 하나를 선택하고 원본 보존 및 생략 표시 규칙을 둡니다.", prevention: "가장 긴 정상값과 비정상 초과값을 UI/터미널 통합 테스트에 포함합니다." },
+    ],
+  },
+  {
+    id: "dynamic-format-policy-and-internationalization",
+    title: "동적 format spec은 허용 목록으로 제한하고 locale 책임을 표시 계층에 둡니다",
+    lead: "폭과 정밀도를 실행 중 바꿀 수 있다는 사실은 임의 문자열을 spec으로 받아도 된다는 뜻이 아니며, 국제화된 숫자·날짜 표시는 별도의 정책과 테스트가 필요합니다.",
+    explanations: [
+      "f-string은 format spec 안에도 대체 필드를 둘 수 있어 `f'{value:{width}.{precision}f}'`처럼 폭과 정밀도를 계산할 수 있습니다. 중첩이 깊어지면 읽기와 검증이 어려워지므로 width·precision을 먼저 정수로 검증하고 spec 이름을 만들어 `format`에 전달하는 편이 진단하기 쉽습니다.",
+      "외부 사용자가 임의 spec을 전달하면 예상치 못한 아주 큰 width로 메모리와 로그를 부풀리거나 객체의 custom `__format__` 경로를 호출할 수 있습니다. `compact`, `report` 같은 의미 있는 profile을 허용 목록의 고정 spec에 매핑하고 길이·정밀도 상한을 둡니다.",
+      "Python의 기본 `,` grouping과 `.` decimal point는 일관된 기술 출력에는 좋지만 모든 언어권의 숫자 표기 규칙을 해결하지 않습니다. `n` presentation type은 현재 locale 설정의 영향을 받으며 프로세스 전역 locale 변경은 같은 프로세스의 다른 thread와 라이브러리에 영향을 줄 수 있습니다.",
+      "locale 기반 출력은 개발 장비와 CI에서 사용 가능한 locale 이름이 다를 수 있습니다. 정확한 사용자 지역화가 필요하면 요청별 locale을 지원하는 국제화 라이브러리·프레임워크 계층을 사용하고, 학습 예제의 exact output은 locale-neutral spec으로 고정합니다.",
+      "날짜·시간의 f-string도 결국 대상 객체의 `__format__`을 호출합니다. datetime format code는 숫자 mini-language와 다른 문법을 사용하므로 같은 `:.2f` 사고를 적용하지 않습니다. timezone-aware 값, locale 이름, 서머타임과 ISO 기계 계약을 분리합니다.",
+      "표시 profile은 데이터 단위와 함께 버전 관리합니다. 예를 들어 ratio 원본 0.125를 compact에서 12.5%, export에서 0.125로 내보낸다면 profile 이름·단위·정밀도와 rounding 기대를 테스트에 기록합니다.",
+      "동적 포맷 결과가 다시 parser 입력이 되면 grouping·공백·통화기호 때문에 복원이 불안정합니다. 계산과 직렬화에는 typed value를 유지하고, 포맷된 문자열은 최종 사용자 경계에서만 만듭니다.",
+    ],
+    concepts: [
+      { term: "dynamic format spec", definition: "폭·정밀도·표현 규칙을 실행 중 선택해 `format` 또는 중첩 필드에 전달하는 spec입니다.", detail: ["숫자 범위를 먼저 검증합니다.", "외부 입력은 allowlist profile로 변환합니다."] },
+      { term: "locale-neutral output", definition: "실행 장비의 지역 설정과 무관하게 같은 구두점·숫자·날짜 표현을 내는 기계적 표시 계약입니다.", detail: ["테스트와 프로토콜에 적합합니다.", "사용자 지역화와 목적이 다릅니다."] },
+      { term: "presentation profile", definition: "compact·report·export처럼 매체별 폭·정밀도·단위를 이름 있는 정책으로 묶은 것입니다.", detail: ["임의 spec보다 검토하기 쉽습니다.", "상한과 예상 출력을 함께 둡니다."] },
+    ],
+    codeExamples: [{
+      id: "python-dynamic-format-allowlist",
+      title: "동적 폭·정밀도와 허용된 표시 profile을 분리합니다",
+      language: "python",
+      filename: "dynamic_format.py",
+      purpose: "검증된 숫자 중첩 spec과 사용자 선택 profile allowlist의 경계를 exact output으로 보여 줍니다.",
+      code: "value = 12.3456\nwidth = 10\nprecision = 3\ndynamic = f'{value:{width}.{precision}f}'\nprint(f'dynamic={dynamic!r}')\n\nprofiles = {'compact': '.2f', 'report': '12,.2f'}\nfor name in ('compact', 'report'):\n    spec = profiles[name]\n    print(f'{name}|spec={spec!r}|value={format(value, spec)!r}')\n\ntry:\n    profile = 'raw-user-spec'\n    if profile not in profiles:\n        raise ValueError('unknown profile')\nexcept ValueError as error:\n    print(f'rejected={type(error).__name__}:{error}')",
+      walkthrough: [
+        { lines: "1-5", explanation: "정수 width와 precision으로 중첩 spec을 구성하고 repr로 공백까지 관찰합니다." },
+        { lines: "7-10", explanation: "외부 이름은 두 개의 검토된 고정 spec 중 하나로만 매핑됩니다." },
+        { lines: "12-17", explanation: "알 수 없는 profile은 임의 spec으로 실행하지 않고 안정된 업무 오류로 바꿉니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "locale-neutral format spec"], command: "python dynamic_format.py" },
+      output: { value: "dynamic='    12.346'\ncompact|spec='.2f'|value='12.35'\nreport|spec='12,.2f'|value='       12.35'\nrejected=ValueError:unknown profile", explanation: ["폭 10에는 네 공백이 생깁니다.", "report 폭 12에는 일곱 공백이 생깁니다.", "알 수 없는 입력은 실행되지 않습니다."] },
+      experiments: [
+        { change: "width를 1_000_000으로 요청합니다.", prediction: "허용한다면 거대한 문자열이 만들어질 수 있습니다.", result: "width 상한 검증이 resource policy임을 확인합니다." },
+        { change: "precision을 -1로 바꿉니다.", prediction: "구성된 spec이 유효하지 않아 오류가 납니다.", result: "0 이상 업무 상한 이하로 먼저 검증합니다." },
+        { change: "profiles에 percent='.1%'를 추가하고 0.125를 넣습니다.", prediction: "12.5%가 됩니다.", result: "profile에 입력 단위도 함께 문서화합니다." },
+      ],
+      sourceRefs: ["python-format-spec-006", "python-builtins-format-006", "python-locale-006"],
+    }],
+    diagnostics: [
+      { symptom: "사용자 입력 뒤 로그 한 줄이 수백 MB로 커집니다.", likelyCause: "검증하지 않은 동적 width를 그대로 format spec에 넣었습니다.", checks: ["spec 입력 출처와 최대 길이를 확인합니다.", "width·precision을 숫자로 파싱한 위치를 찾습니다.", "custom __format__ 호출 가능성을 봅니다."], fix: "외부 선택을 고정 profile allowlist로 매핑하고 폭·정밀도·결과 길이 상한을 적용합니다.", prevention: "최대·최대+1·비숫자·알 수 없는 profile을 resource-limit 테스트에 포함합니다." },
+      { symptom: "개발 PC와 서버의 숫자 구분자가 다릅니다.", likelyCause: "`n` 형식이나 locale-aware API가 프로세스 환경 설정에 의존합니다.", checks: ["현재 locale과 환경 변수를 기록합니다.", "사용한 presentation type을 확인합니다.", "CI와 운영체제의 설치 locale을 비교합니다."], fix: "기계 계약은 locale-neutral 형식으로 고정하고 사용자 표시는 요청별 국제화 계층에서 생성합니다.", prevention: "지원 locale별 golden test와 locale-neutral export test를 분리합니다." },
+    ],
+  },
+  {
+    id: "formatting-security-structured-boundaries",
+    title: "f-string을 HTML·JSON·SQL·shell escaping 도구로 오해하지 않습니다",
+    lead: "문자열 보간은 값을 붙일 뿐 출력 컨텍스트의 문법과 공격 경계를 알지 못하므로 전용 인코더·매개변수 API·구조화 로깅이 필요합니다.",
+    explanations: [
+      "f-string은 `<`, `&`, 따옴표를 HTML 문맥에 맞게 escape하지 않습니다. 텍스트 노드와 attribute·URL·script context의 규칙도 서로 다릅니다. 웹 프레임워크의 auto-escaping template을 기본으로 하고, 낮은 수준의 단순 텍스트 경계에서만 `html.escape` 같은 전용 함수를 씁니다.",
+      "JSON을 `f'{{\"message\": \"{message}\"}}'`로 만들면 따옴표·역슬래시·개행·제어 문자에서 문서가 깨지거나 구조가 바뀝니다. `json.dumps`는 문자열 escaping과 타입·Unicode·중첩 구조를 함께 처리하므로 dict/list 같은 typed 구조를 전달합니다.",
+      "SQL 값은 f-string으로 붙이지 않고 DB driver의 parameter binding을 사용합니다. 식별자와 값의 문법은 다르며 placeholder 자체에도 따옴표를 덧씌우지 않습니다. table/column 이름이 동적이면 driver의 identifier API나 검토된 allowlist가 필요합니다.",
+      "shell command도 하나의 f-string을 만들어 실행하지 않습니다. 가능하면 subprocess에 argument list를 전달하고 shell=False를 유지합니다. 출력용 `shlex.join`은 명령 표시를 돕지만 모든 운영체제 shell 실행의 안전성 계약을 대신하지 않습니다.",
+      "로그에서 f-string은 비활성 level이어도 표현식과 함수 호출을 먼저 평가합니다. `logging.debug('user_id=%s', user_id)` 같은 지연 formatting은 불필요한 변환을 줄이지만, 비밀번호·token을 전달해도 된다는 뜻은 아닙니다. 허용 필드와 중앙 redaction이 먼저입니다.",
+      "`!r`은 개행과 제어 문자를 눈에 보이게 해 진단에 유용하지만 비밀을 제거하거나 log injection을 완전히 막는 sanitizer가 아닙니다. 데이터 최소화·길이 제한·제어 문자 정책·구조화 필드를 함께 적용합니다.",
+      "표시 테스트는 정상 문장뿐 아니라 따옴표, `<>&`, 역슬래시, 개행, 한글, 매우 긴 값과 비밀 marker를 포함해야 합니다. 결과가 문법적으로 유효한지 전용 parser로 다시 읽고, 금지된 비밀이 결과에 없음을 assert합니다.",
+    ],
+    concepts: [
+      { term: "contextual escaping", definition: "HTML·JSON·SQL·shell처럼 서로 다른 출력 문맥의 문법에 맞춰 특별 문자를 안전하게 표현하는 처리입니다.", detail: ["한 문맥의 escape를 다른 문맥에 재사용하지 않습니다.", "전용 encoder나 parameter API를 사용합니다."] },
+      { term: "structured logging", definition: "완성 문장 하나 대신 event 이름과 typed fields를 분리해 로깅 시스템에 전달하는 방식입니다.", detail: ["검색과 redaction이 쉬워집니다.", "민감 필드 allowlist가 여전히 필요합니다."] },
+      { term: "lazy logging formatting", definition: "log record가 실제 처리될 때 인자와 형식 문자열을 결합하도록 미루는 방식입니다.", detail: ["비활성 level 비용을 줄입니다.", "민감정보 보호 기능은 아닙니다."] },
+    ],
+    codeExamples: [{
+      id: "python-context-encoders",
+      title: "같은 입력을 개발자 표시·HTML 텍스트·JSON 문서에 각각 맞게 변환합니다",
+      language: "python",
+      filename: "context_encoders.py",
+      purpose: "f-string repr, HTML escaping, JSON serialization이 서로 다른 계약임을 exact output과 parser round-trip으로 증명합니다.",
+      code: "import html\nimport json\n\nmessage = '<b title=\"x\">가</b>\\nnext'\nhtml_text = html.escape(message, quote=True)\npayload = json.dumps({'message': message}, ensure_ascii=False, sort_keys=True)\n\nprint(f'display={message!r}')\nprint(f'html={html_text!r}')\nprint(f'json={payload}')\nprint(f'roundtrip={json.loads(payload)[\"message\"] == message}')",
+      walkthrough: [
+        { lines: "1-3", explanation: "각 출력 문맥을 담당하는 표준 라이브러리를 import합니다." },
+        { lines: "5-7", explanation: "HTML은 markup 특수 문자를 escape하고 JSON은 dict를 문서로 직렬화합니다." },
+        { lines: "9-11", explanation: "repr로 보이지 않는 개행을 드러내고 JSON parser로 원본 복원을 검사합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리 html·json"], command: "python context_encoders.py" },
+      output: { value: "display='<b title=\"x\">가</b>\\nnext'\nhtml='&lt;b title=&quot;x&quot;&gt;가&lt;/b&gt;\\nnext'\njson={\"message\": \"<b title=\\\"x\\\">가</b>\\nnext\"}\nroundtrip=True", explanation: ["repr의 backslash-n은 한 줄 로그에서 개행 경계를 보입니다.", "HTML과 JSON은 서로 다른 문자 집합과 구조를 처리합니다.", "JSON 결과는 전용 parser로 원본을 복원합니다."] },
+      experiments: [
+        { change: "message에 `&`와 tab을 추가합니다.", prediction: "HTML은 &amp;를 만들고 JSON은 tab을 escape합니다.", result: "문맥별 encoder가 다른 규칙을 적용합니다." },
+        { change: "dict를 f-string으로 직접 JSON처럼 출력합니다.", prediction: "Python repr의 작은따옴표 때문에 일반적인 JSON이 아닙니다.", result: "serializer를 대체할 수 없음을 확인합니다." },
+        { change: "message에 demo token marker를 넣고 금지 assert를 추가합니다.", prediction: "허용 필드 정책이 없다면 그대로 남습니다.", result: "escaping과 redaction은 별도 책임입니다." },
+      ],
+      sourceRefs: ["python-html-escape-006", "python-json-006", "python-logging-006"],
+    }],
+    diagnostics: [
+      { symptom: "사용자 이름의 따옴표 때문에 JSON parse가 실패합니다.", likelyCause: "JSON 문자열을 f-string으로 직접 조립해 escape와 타입 규칙을 빠뜨렸습니다.", checks: ["결과를 json.loads로 읽어 봅니다.", "문자열 연결·f-string JSON 생성을 검색합니다.", "따옴표·역슬래시·개행 fixture를 넣습니다."], fix: "dict/list 구조를 만들고 json.dumps 또는 framework serializer를 사용합니다.", prevention: "직렬화 결과 round-trip과 schema test를 둡니다." },
+      { symptom: "HTML 화면에서 입력이 태그로 실행되거나 구조를 깨뜨립니다.", likelyCause: "f-string 보간을 HTML escaping으로 오해했거나 safe 표시를 잘못 지정했습니다.", checks: ["값이 들어간 HTML context를 확인합니다.", "template auto-escape 설정과 safe bypass를 찾습니다.", "`<>&\"'` 입력으로 재현합니다."], fix: "context-aware auto-escaping template을 사용하고 raw HTML 허용은 별도 sanitizer와 엄격한 정책으로 제한합니다.", prevention: "XSS 경계 테스트와 safe bypass 코드 리뷰 규칙을 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-format-spec-006", repository: "Python Language Reference", path: "Format Specification Mini-Language", publicUrl: "https://docs.python.org/3/library/string.html#format-specification-mini-language", usedFor: ["format spec grammar", "alignment", "width", "precision", "presentation types"], evidence: "형식 지정자의 순서와 타입별 표시 규칙을 공식 표준 라이브러리 문서로 확인했습니다." },
+  { id: "python-fstring-lexical-006", repository: "Python Language Reference", path: "Formatted string literals", publicUrl: "https://docs.python.org/3/reference/lexical_analysis.html#f-strings", usedFor: ["f-string lexical grammar", "replacement fields", "conversion", "nested fields"], evidence: "f-string의 중괄호·변환·중첩 필드 구문을 공식 언어 레퍼런스로 확인했습니다." },
+  { id: "python-builtins-format-006", repository: "Python Standard Library", path: "Built-in Functions — format", publicUrl: "https://docs.python.org/3/library/functions.html#format", usedFor: ["format built-in", "__format__ dispatch", "dynamic spec"], evidence: "format(value, spec)이 타입의 __format__ protocol을 사용하는 공식 계약을 확인했습니다." },
+  { id: "python-string-format-006", repository: "Python Standard Library", path: "Custom String Formatting", publicUrl: "https://docs.python.org/3/library/string.html#custom-string-formatting", usedFor: ["Formatter", "field parsing", "format customization"], evidence: "format string parsing과 확장 지점의 공식 범위를 확인했습니다." },
+  { id: "python-locale-006", repository: "Python Standard Library", path: "locale — Internationalization services", publicUrl: "https://docs.python.org/3/library/locale.html", usedFor: ["locale-sensitive n format", "process locale", "internationalization boundary"], evidence: "locale 설정의 프로세스 범위와 지역화 출력 주의점을 공식 문서로 확인했습니다." },
+  { id: "python-html-escape-006", repository: "Python Standard Library", path: "html.escape", publicUrl: "https://docs.python.org/3/library/html.html#html.escape", usedFor: ["HTML special characters", "quote escaping", "context boundary"], evidence: "HTML 텍스트의 기본 특수 문자 변환 API를 공식 문서로 확인했습니다." },
+  { id: "python-json-006", repository: "Python Standard Library", path: "json — JSON encoder and decoder", publicUrl: "https://docs.python.org/3/library/json.html", usedFor: ["JSON serialization", "ensure_ascii", "round-trip parsing"], evidence: "typed Python 구조를 JSON으로 인코딩하고 다시 디코딩하는 공식 API를 확인했습니다." },
+  { id: "python-logging-006", repository: "Python Standard Library", path: "logging — Logging facility", publicUrl: "https://docs.python.org/3/library/logging.html", usedFor: ["lazy formatting", "log levels", "structured field boundary"], evidence: "logging 호출에서 format 문자열과 arguments를 분리하는 공식 API를 확인했습니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "format width는 문자열을 지정 길이로 잘라 주나요?", answer: "아닙니다. 최소 폭이므로 더 긴 값은 전체가 출력되고 축약 정책은 따로 구현해야 합니다." },
+  { question: "`+06d`에서 부호도 여섯 칸에 포함되나요?", answer: "포함됩니다. 42는 +00042로 표시됩니다." },
+  { question: "`.1%`는 값 0.125를 어떻게 표시하나요?", answer: "100을 곱한 표시값 12.5%를 만듭니다. 원본 float는 바뀌지 않습니다." },
+  { question: "외부 사용자의 format spec을 그대로 받아도 되나요?", answer: "큰 폭과 custom format 경로 등 위험이 있으므로 검토된 profile allowlist와 수치 상한을 사용합니다." },
+  { question: "`n` 형식이 모든 서버에서 같은 출력인가요?", answer: "현재 locale의 영향을 받으므로 기계 계약의 exact output에는 locale-neutral 형식을 사용합니다." },
+  { question: "f-string으로 JSON을 만들면 어떤 입력에서 깨지나요?", answer: "따옴표·역슬래시·개행·제어 문자와 중첩 타입에서 깨질 수 있어 json.dumps를 사용합니다." },
+  { question: "html.escape 결과를 SQL에도 쓸 수 있나요?", answer: "아닙니다. 출력 문맥마다 문법이 다르며 SQL 값은 driver parameter binding을 사용합니다." },
+  { question: "`!r`이 민감정보를 안전하게 마스킹하나요?", answer: "아닙니다. 보이지 않는 문자를 드러낼 뿐 비밀 제거는 allowlist와 redaction 책임입니다." },
+  { question: "logging의 지연 formatting이 해결하지 못하는 문제는 무엇인가요?", answer: "비활성 로그의 계산 비용은 줄일 수 있지만 전달한 token·password 노출은 막지 못합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "format spec의 fill·alignment·sign·width·precision·type 역할을 분해한다.",
+  "width가 최소 폭이고 truncate 정책이 아님을 긴 값으로 검증했다.",
+  "부호·진법 접두사·0 padding의 정확한 결과를 예측한다.",
+  "동적 width·precision에 범위 검증과 profile allowlist를 적용한다.",
+  "locale-neutral 기계 출력과 사용자 국제화 표시를 분리한다.",
+  "HTML·JSON·SQL·shell에 각각 전용 경계 API를 선택한다.",
+  "json.dumps 결과를 json.loads로 round-trip 검증한다.",
+  "escaping과 민감정보 redaction이 다른 책임임을 설명한다.",
+  "logging 지연 formatting의 성능 이점과 보안 한계를 구분한다.",
+);

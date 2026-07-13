@@ -233,3 +233,173 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "integer-precision-size-guardrails",
+    title: "int의 임의 정밀도와 시간·메모리·문자열 변환 한계를 함께 봅니다",
+    lead: "고정 폭 overflow가 없다는 장점이 입력 크기와 계산 비용이 무제한이라는 뜻은 아닙니다.",
+    explanations: [
+      "Python `int`는 값에 필요한 만큼 정밀도를 늘려 큰 정수를 표현합니다. C의 signed64 overflow처럼 조용히 wrap하지 않지만 값이 커질수록 arithmetic 시간과 memory 사용량이 증가합니다.",
+      "`bit_length()`는 부호와 leading zeros를 제외한 binary 표현에 필요한 bits 수를 제공합니다. protocol field 범위·cryptographic parameter size·serialization 전 guard에 사용할 수 있습니다.",
+      "decimal text와 int 사이 변환은 매우 긴 공격 입력에서 CPU를 소모할 수 있어 Python은 non-power-of-two conversion digit limit를 제공합니다. 설정을 무조건 해제하지 말고 application input length를 먼저 제한합니다.",
+      "`int(text, base)`는 whitespace와 sign, 지정 base의 digits를 해석합니다. `base=0`은 prefix로 base를 추론하지만 user-facing input에서 허용 문법을 명시하는 편이 오류와 혼동을 줄입니다.",
+      "`//`와 `%`, `divmod`는 음수에서도 `a == (a // b) * b + a % b` 관계를 유지하고 remainder는 divisor와 같은 sign 또는0입니다. truncate-to-zero 언어와 결과가 다릅니다.",
+      "database·binary protocol·NumPy type은 고정 폭일 수 있습니다. Python int가 값을 표현해도 boundary target range를 넘으면 명시적으로 거부해야 합니다.",
+    ],
+    concepts: [
+      { term: "arbitrary precision integer", definition: "값 크기에 맞춰 storage를 늘려 고정 폭 overflow 없이 정수를 표현하는 모델입니다.", detail: ["자원 비용은 증가합니다.", "외부 고정 폭 경계는 별도입니다."] },
+      { term: "bit length", definition: "정수 절댓값을 binary로 표현하는 데 필요한 bits 수입니다.", detail: ["0의 bit_length는0입니다.", "range guard에 활용합니다."] },
+      { term: "conversion digit limit", definition: "매우 긴 decimal 문자열과 int 변환의 과도한 비용을 줄이기 위한 interpreter guard입니다.", detail: ["version/config를 확인합니다.", "application length validation이 우선입니다."] },
+    ],
+    codeExamples: [{
+      id: "python-big-int-boundary",
+      title: "2의100제곱과 음수 divmod를 exact 검증합니다",
+      language: "python",
+      filename: "integer_boundaries.py",
+      purpose: "환경 의존 memory 주소/크기를 출력하지 않고 임의 정밀도, bit/digit 수와 floor division invariant를 관찰합니다.",
+      code: "value = 2 ** 100\nquotient, remainder = divmod(-17, 5)\n\nprint(f'value={value}')\nprint(f'bits={value.bit_length()}|decimal_digits={len(str(value))}')\nprint(f'divmod={quotient},{remainder}|reconstructed={quotient * 5 + remainder}')\nprint(f'fits_signed64={-(2 ** 63) <= value < 2 ** 63}')",
+      walkthrough: [
+        { lines: "1-2", explanation: "고정 큰 정수와 음수/divisor 양수 divmod 결과를 준비합니다." },
+        { lines: "4-5", explanation: "exact value와 binary bits101·decimal digits31을 출력합니다." },
+        { lines: "6-7", explanation: "quotient/remainder invariant와 signed64 target 범위를 검증합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 built-ins만 사용"], command: "python integer_boundaries.py" },
+      output: { value: "value=1267650600228229401496703205376\nbits=101|decimal_digits=31\ndivmod=-4,3|reconstructed=-17\nfits_signed64=False", explanation: ["2**100은 정확히 보존됩니다.", "-17 // 5는-4이고 remainder3입니다.", "Python에서는 표현되지만 signed64에는 들어가지 않습니다."] },
+      experiments: [
+        { change: "value를 2**63-1로 바꿉니다.", prediction: "fits_signed64=True이고 bits=63입니다.", result: "target inclusive/exclusive boundary를 확인합니다." },
+        { change: "divisor를 -5로 바꿉니다.", prediction: "remainder sign이 음수 divisor를 따릅니다.", result: "floor division invariant로 결과를 검증합니다." },
+        { change: "수백만 decimal digits 입력을 int로 바꿉니다.", prediction: "길이 guard 또는 큰 CPU 비용 경계에 걸립니다.", result: "실험 대신 bounded synthetic input과 configured limit를 사용합니다." },
+      ],
+      sourceRefs: ["python-numeric-stdtypes-004", "python-sys-int-limit", "python-expressions-arithmetic-004"],
+    }],
+    diagnostics: [
+      { symptom: "Python 계산은 되지만 DB insert에서 overflow가 납니다.", likelyCause: "Python arbitrary precision 값을 고정 폭 DB column range와 검증하지 않았습니다.", checks: ["target min/max를 확인합니다.", "bit_length와 실제 value를 봅니다.", "schema signed/unsigned를 확인합니다."], fix: "serialization/DB boundary 전에 target range를 명시적으로 검증합니다.", prevention: "min-1/min/max/max+1 contract tests를 둡니다." },
+      { symptom: "긴 숫자 문자열 변환이 실패하거나 CPU를 오래 씁니다.", likelyCause: "interpreter digit limit 또는 application input bound가 없습니다.", checks: ["문자열 길이를 먼저 봅니다.", "sys int conversion limit를 확인합니다.", "base가 power-of-two인지 확인합니다."], fix: "입력 길이와 업무 range를 conversion 전에 제한합니다.", prevention: "oversized numeric payload negative test와 request size limit를 둡니다." },
+      { symptom: "음수 페이지 번호 계산이 다른 언어와 다릅니다.", likelyCause: "Python `//` floor와 truncate-to-zero division을 혼동했습니다.", checks: ["divmod 결과를 봅니다.", "reconstruction invariant를 검증합니다.", "domain에서 음수를 허용하는지 확인합니다."], fix: "음수 input을 거부하거나 floor semantics를 명시적으로 반영합니다.", prevention: "양수·음수 dividend/divisor matrix를 test합니다." },
+    ],
+  },
+  {
+    id: "decimal-fraction-exact-models",
+    title: "Decimal과 Fraction으로 decimal money·rational ratio의 정확한 모델을 선택합니다",
+    lead: "float의 binary 근사를 무조건 나쁘다고 하지 않고 값의 출처와 필요한 algebra에 맞는 numeric type을 고릅니다.",
+    explanations: [
+      "`Decimal('0.1')`은 decimal 문자열0.1을 정확히 표현하지만 `Decimal(0.1)`은 이미 근사된 binary float 값을 정확히 가져와 긴 decimal expansion이 됩니다. 외부 decimal text는 문자열에서 생성합니다.",
+      "Decimal arithmetic는 현재 context의 precision, rounding, traps와 flags 영향을 받습니다. library가 global context를 무심코 바꾸지 말고 `localcontext()`로 operation boundary를 좁힙니다.",
+      "`Fraction(numerator, denominator)`은 유리수를 기약분수로 정확히 표현합니다. ratio·확률·unit conversion에 유용하지만 denominator가 커질 수 있어 input과 operation complexity를 제한합니다.",
+      "float, Decimal, Fraction을 무분별하게 섞으면 TypeError 또는 예상하지 않은 coercion이 납니다. 한 계산 domain의 canonical type과 boundary conversions를 정합니다.",
+      "money에는 currency·minor unit·rounding rule이 함께 필요합니다. Decimal type 하나만 사용했다고 회계 규칙이 완성되는 것은 아닙니다.",
+      "serialization에서는 Decimal/Fraction을 JSON number로 자동 손실 변환하지 말고 decimal string 또는 numerator/denominator schema를 명시합니다.",
+    ],
+    concepts: [
+      { term: "decimal arithmetic context", definition: "Decimal operation의 precision·rounding·signals/traps를 결정하는 실행 설정입니다.", detail: ["thread/context-local behavior를 확인합니다.", "localcontext로 범위를 좁힙니다."] },
+      { term: "rational number", definition: "두 integers의 비 p/q로 정확히 표현할 수 있는 수이며 Fraction이 이를 기약 형태로 모델링합니다.", detail: ["denominator0은 금지됩니다.", "크기 증가를 관리합니다."] },
+      { term: "canonical numeric type", definition: "한 업무 계산 경계에서 값과 연산 의미를 대표하도록 선택한 단일 numeric type입니다.", detail: ["혼합 coercion을 줄입니다.", "serialization schema와 연결합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-decimal-fraction-exactness",
+      title: "float 근사와 Decimal·Fraction exact 결과를 비교합니다",
+      language: "python",
+      filename: "exact_numbers.py",
+      purpose: "고정 inputs와 local Decimal context로 representation·precision 차이를 exact 출력합니다.",
+      code: "from decimal import Decimal, localcontext\nfrom fractions import Fraction\n\nfloat_sum = 0.1 + 0.1 + 0.1\ndecimal_sum = Decimal('0.1') * 3\nrational_sum = Fraction(1, 3) + Fraction(1, 6)\n\nwith localcontext() as context:\n    context.prec = 6\n    seventh = Decimal(1) / Decimal(7)\n\nprint(f'float_equal={float_sum == 0.3}|hex={float_sum.hex()}')\nprint(f'decimal={decimal_sum}|fraction={rational_sum}')\nprint(f'one_seventh={seventh}')",
+      walkthrough: [
+        { lines: "1-6", explanation: "binary float sum, decimal 문자열 기반 sum과 rational sum을 준비합니다." },
+        { lines: "8-10", explanation: "Decimal precision6을 local context 안에서만 적용해1/7을 계산합니다." },
+        { lines: "12-14", explanation: "float equality/hex와 exact Decimal/Fraction, rounded context 결과를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "decimal·fractions 표준 라이브러리"], command: "python exact_numbers.py" },
+      output: { value: "float_equal=False|hex=0x1.3333333333334p-2\ndecimal=0.3|fraction=1/2\none_seventh=0.142857", explanation: ["float sum은 0.3과 binary representation이 다릅니다.", "Decimal과 Fraction은 의도한 decimal/rational 값을 정확히 표현합니다.", "1/7은 context precision6에서 반올림됩니다."] },
+      experiments: [
+        { change: "Decimal('0.1')을 Decimal(0.1)로 바꿉니다.", prediction: "긴 decimal 근삿값이 나타납니다.", result: "float source의 근사도 정확히 보존되기 때문입니다." },
+        { change: "context.prec를3으로 바꿉니다.", prediction: "one_seventh=0.143입니다.", result: "precision policy가 operation output을 바꿉니다." },
+        { change: "Fraction(1, 0)을 만듭니다.", prediction: "ZeroDivisionError가 납니다.", result: "invalid denominator를 boundary에서 거부합니다." },
+      ],
+      sourceRefs: ["python-decimal-doc", "python-fractions-doc", "python-floating-point-tutorial"],
+    }],
+    diagnostics: [
+      { symptom: "Decimal을 썼는데 여전히 긴0.100000... 값입니다.", likelyCause: "문자열이 아니라 binary float0.1에서 Decimal을 생성했습니다.", checks: ["constructor argument type을 봅니다.", "repr와 as_tuple을 확인합니다.", "입력 source format을 확인합니다."], fix: "decimal text는 Decimal(text), exact integer는 Decimal(integer)로 변환합니다.", prevention: "float→Decimal boundary를 lint/review하고 exact fixtures를 둡니다." },
+      { symptom: "다른 code 실행 뒤 Decimal 결과 자릿수가 바뀝니다.", likelyCause: "shared context precision/rounding을 전역적으로 변경했습니다.", checks: ["getcontext 변경을 검색합니다.", "operation 주변 localcontext를 봅니다.", "concurrent task context를 확인합니다."], fix: "localcontext 안에서 필요한 policy를 설정하고 library global mutation을 제거합니다.", prevention: "context-isolation test와 explicit rounding policy를 둡니다." },
+    ],
+  },
+  {
+    id: "float-special-values-overflow-nan",
+    title: "float의 infinity·NaN·signed zero와 유한성 검사를 정상 data contract에 포함합니다",
+    lead: "IEEE 754 special value는 exception 없이 계산을 전파할 수 있어 단순 range 비교만으로 검증되지 않습니다.",
+    explanations: [
+      "Python float는 일반적으로 IEEE 754 binary64를 사용하며 너무 큰 유한 연산 결과가 infinity가 될 수 있습니다. 모든 환경 세부를 가정하기보다 `math.isfinite`로 application boundary를 검증합니다.",
+      "NaN은 자신과도 같지 않아 `nan == nan`이 False이고 ordered comparisons도 False입니다. NaN 판별에는 `math.isnan`을 사용합니다.",
+      "`min`, `max`, sorting과 NaN을 섞으면 total ordering을 가정한 business logic이 불안정해집니다. ingest 단계에서 special values를 거부하거나 명시 category로 분리합니다.",
+      "positive/negative infinity는 `math.isinf`, 모든 정상 finite number는 `math.isfinite`로 분류합니다. 문자열 `nan`, `inf`를 float parser가 허용할 수 있으므로 user numeric policy를 별도로 둡니다.",
+      "-0.0은0.0과 equal이지만 sign bit가 있고 division·copysign·serialization에서 차이가 보일 수 있습니다. domain이 방향을 사용하지 않으면 canonical zero 정책을 둘 수 있습니다.",
+      "JSON 표준 상 non-finite numbers portability는 제한됩니다. serializer의 allow_nan/default behavior를 확인하고 interoperable API에서는 reject 또는 tagged string schema를 사용합니다.",
+    ],
+    concepts: [
+      { term: "NaN", definition: "정의되지 않거나 표현할 수 없는 floating result를 나타내는 not-a-number special value입니다.", detail: ["자기 자신과 같지 않습니다.", "math.isnan으로 검사합니다."] },
+      { term: "infinity", definition: "float 범위를 넘거나 명시적으로 만든 양·음의 무한 special value입니다.", detail: ["math.isinf로 검사합니다.", "finite range validation 전에 거부합니다."] },
+      { term: "finite-number contract", definition: "application이 NaN/infinity를 허용하지 않고 유한 numeric value만 받는다는 boundary 규칙입니다.", detail: ["parse 뒤 즉시 검사합니다.", "serialization과 연결합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-float-special-values",
+      title: "overflow infinity와 NaN comparison을 exact 분류합니다",
+      language: "python",
+      filename: "float_specials.py",
+      purpose: "platform address나 locale 없이 math predicates와 IEEE-visible 결과를 검증합니다.",
+      code: "import math\n\nfinite = 1.5\noverflow = 1e308 * 10\nnot_a_number = float('nan')\n\nprint(f'finite={math.isfinite(finite)}|overflow={overflow}|isinf={math.isinf(overflow)}')\nprint(f'nan_equal={not_a_number == not_a_number}|isnan={math.isnan(not_a_number)}')\nprint(f'nan_ordered={(not_a_number < 0) or (not_a_number > 0)}|all_finite={all(map(math.isfinite, [finite, overflow]))}')",
+      walkthrough: [
+        { lines: "1-5", explanation: "finite value, overflow infinity와 parsed NaN을 준비합니다." },
+        { lines: "7-9", explanation: "finite/inf/NaN predicates, self-equality, ordered comparisons와 batch contract를 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "math 표준 라이브러리"], command: "python float_specials.py" },
+      output: { value: "finite=True|overflow=inf|isinf=True\nnan_equal=False|isnan=True\nnan_ordered=False|all_finite=False", explanation: ["overflow는 exception 대신 inf가 됩니다.", "NaN은 자기 자신과 같지 않습니다.", "한 값이 infinity라 batch finite contract가 False입니다."] },
+      experiments: [
+        { change: "overflow를1e307로 바꿉니다.", prediction: "finite=True이고 isinf=False입니다.", result: "경계에서는 predicate로 분류합니다." },
+        { change: "nan 검사에 `value == float('nan')`을 씁니다.", prediction: "항상 False입니다.", result: "math.isnan을 사용합니다." },
+        { change: "json.dumps에 NaN을 전달하고 allow_nan=False를 설정합니다.", prediction: "ValueError로 non-standard value를 거부합니다.", result: "API interoperability policy를 명시합니다." },
+      ],
+      sourceRefs: ["python-math-specials", "python-expressions-comparisons-004", "python-json-numbers-004"],
+    }],
+    diagnostics: [
+      { symptom: "range check를 통과하지도 실패하지도 않고 NaN이 남습니다.", likelyCause: "NaN ordered comparisons가 모두 False인 특성을 고려하지 않았습니다.", checks: ["math.isnan/isfinite를 먼저 봅니다.", "parser가 nan text를 허용하는지 확인합니다.", "aggregation source를 추적합니다."], fix: "range 비교 전에 finite-number contract를 적용합니다.", prevention: "NaN·±inf·-0.0 fixtures를 numeric boundary에 둡니다." },
+      { symptom: "API consumer가 JSON 숫자를 parse하지 못합니다.", likelyCause: "serializer가 NaN/Infinity 확장을 출력했지만 consumer는 strict JSON입니다.", checks: ["wire payload를 봅니다.", "allow_nan 설정을 확인합니다.", "schema numeric constraints를 봅니다."], fix: "non-finite를 reject하거나 explicit tagged nullable/error schema로 변환합니다.", prevention: "strict cross-language JSON contract test를 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-numeric-stdtypes-004", repository: "Python Standard Library", path: "Numeric Types — int, float, complex", publicUrl: "https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex", usedFor: ["integer precision", "numeric operations", "bit_length"], evidence: "built-in numeric types의 공식 API입니다." },
+  { id: "python-sys-int-limit", repository: "Python Standard Library", path: "Integer string conversion length limitation", publicUrl: "https://docs.python.org/3/library/stdtypes.html#integer-string-conversion-length-limitation", usedFor: ["conversion digit limit", "denial-of-service guard"], evidence: "긴 integer text 변환 제한의 공식 설명입니다." },
+  { id: "python-expressions-arithmetic-004", repository: "Python Language Reference", path: "6.7 Binary arithmetic operations", publicUrl: "https://docs.python.org/3/reference/expressions.html#binary-arithmetic-operations", usedFor: ["floor division", "modulo", "power"], evidence: "정수/실수 arithmetic semantics의 공식 근거입니다." },
+  { id: "python-decimal-doc", repository: "Python Standard Library", path: "decimal — Decimal fixed-point and floating-point arithmetic", publicUrl: "https://docs.python.org/3/library/decimal.html", usedFor: ["Decimal", "context", "rounding", "signals"], evidence: "decimal arithmetic의 공식 API입니다." },
+  { id: "python-fractions-doc", repository: "Python Standard Library", path: "fractions — Rational numbers", publicUrl: "https://docs.python.org/3/library/fractions.html", usedFor: ["Fraction", "rational exactness", "normalization"], evidence: "rational number의 공식 API입니다." },
+  { id: "python-floating-point-tutorial", repository: "Python Documentation", path: "Floating-Point Arithmetic: Issues and Limitations", publicUrl: "https://docs.python.org/3/tutorial/floatingpoint.html", usedFor: ["binary approximation", "0.1", "comparison strategy"], evidence: "float representation 한계의 공식 tutorial입니다." },
+  { id: "python-math-specials", repository: "Python Standard Library", path: "math — isfinite, isinf, isnan", publicUrl: "https://docs.python.org/3/library/math.html#number-theoretic-and-representation-functions", usedFor: ["NaN", "infinity", "finite validation"], evidence: "floating special value predicates의 공식 API입니다." },
+  { id: "python-expressions-comparisons-004", repository: "Python Language Reference", path: "6.10 Comparisons", publicUrl: "https://docs.python.org/3/reference/expressions.html#comparisons", usedFor: ["NaN comparisons", "cross numeric comparisons"], evidence: "comparison과 NaN semantics의 공식 근거입니다." },
+  { id: "python-json-numbers-004", repository: "Python Standard Library", path: "json — Infinite and NaN number values", publicUrl: "https://docs.python.org/3/library/json.html#infinite-and-nan-number-values", usedFor: ["non-finite serialization", "allow_nan"], evidence: "JSON interoperability의 공식 동작입니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "Python int에는 overflow가 전혀 없다는 말이 정확한가요?", answer: "고정 폭 wrap은 없지만 memory·시간과 외부 고정 폭 boundary 한계는 있습니다." },
+  { question: "2**100의 bit_length는 얼마인가요?", answer: "최상위1 bit 위치를 포함해101입니다." },
+  { question: "-17을5로 divmod한 결과는?", answer: "quotient-4, remainder3이며 -17=(-4)*5+3입니다." },
+  { question: "Decimal을 float0.1에서 만들면 왜 길어지나요?", answer: "이미 근사된 binary float 값을 정확히 Decimal로 옮기기 때문입니다." },
+  { question: "Fraction(1,3)+Fraction(1,6)은?", answer: "기약분수1/2입니다." },
+  { question: "Decimal context는 무엇을 결정하나요?", answer: "precision, rounding, signals/traps 같은 arithmetic policy를 결정합니다." },
+  { question: "NaN은 자신과 같은가요?", answer: "아닙니다. NaN equality는 자기 자신과도 False입니다." },
+  { question: "NaN을 어떻게 검사하나요?", answer: "`math.isnan(value)`를 사용합니다." },
+  { question: "API에서 infinity를 그대로 JSON number로 보내도 되나요?", answer: "strict JSON consumer와 호환되지 않을 수 있어 reject 또는 명시 schema가 필요합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "arbitrary precision과 무제한 자원을 구분한다.",
+  "bit_length로 target range를 점검한다.",
+  "긴 integer text를 conversion 전에 제한한다.",
+  "Python int와 signed/unsigned 외부 범위를 검증한다.",
+  "Decimal을 decimal 문자열에서 생성한다.",
+  "Decimal context를 local boundary로 제한한다.",
+  "Fraction의 rational exactness와 denominator 비용을 설명한다.",
+  "NaN·infinity를 range 비교 전에 거부한다.",
+  "non-finite serialization policy를 명시한다.",
+);

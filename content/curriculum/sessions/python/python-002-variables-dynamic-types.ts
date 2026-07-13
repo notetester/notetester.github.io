@@ -637,3 +637,124 @@ except NameError as error:
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "identity-aliasing-mutability-copy",
+    title: "binding을 identity·alias·mutable state·copy 깊이까지 확장합니다",
+    lead: "두 이름의 값이 같다는 사실과 같은 객체를 가리킨다는 사실을 구분해야 list·dict·class instance 변경이 어디까지 퍼지는지 예측할 수 있습니다.",
+    explanations: [
+      "모든 객체에는 identity, type, value가 있습니다. `==`는 값 동등성 protocol을, `is`는 같은 객체 identity를 비교합니다. `None` 같은 singleton 검사 외에는 value 비교를 identity에 의존하지 않습니다.",
+      "`alias = original`은 객체를 복제하지 않고 같은 list에 두 번째 이름을 바인딩합니다. 어느 이름으로 append해도 두 이름에서 같은 변경이 관찰됩니다.",
+      "int·str·tuple 같은 불변 객체는 내부 값을 바꾸지 못하므로 산술·연결 결과를 새 객체에 재바인딩합니다. 불변성은 assignment를 금지하는 것이 아니라 객체 내부 mutation을 금지하는 계약입니다.",
+      "`list.copy()`와 `copy.copy()`는 바깥 container만 새로 만드는 shallow copy입니다. 내부에 mutable list가 있으면 원본과 copy가 그 nested 객체를 계속 공유합니다.",
+      "`copy.deepcopy()`는 graph를 재귀 복제하며 memo로 cycle과 중복 참조를 다룹니다. 하지만 file/socket/module, custom resource owner까지 의미 있게 복제해 주는 만능 operation은 아닙니다.",
+      "`id()`의 정수 값은 실행마다 달라질 수 있고 객체 lifetime 뒤 재사용될 수 있으므로 exact output, database key, 보안 token으로 쓰지 않습니다. 테스트에는 `is` boolean과 관찰 가능한 state를 사용합니다.",
+    ],
+    concepts: [
+      { term: "alias", definition: "둘 이상의 이름 또는 container 위치가 같은 객체를 참조하는 관계입니다.", detail: ["mutation이 공유됩니다.", "assignment만으로 copy되지 않습니다."] },
+      { term: "shallow copy", definition: "바깥 container identity만 새로 만들고 내부 element references는 재사용하는 copy입니다.", detail: ["nested mutable state를 공유합니다.", "copy depth를 문서화합니다."] },
+      { term: "deep copy", definition: "object graph를 memo와 함께 재귀적으로 복제하는 operation입니다.", detail: ["custom type 정책이 필요할 수 있습니다.", "resource ownership 복제와 다릅니다."] },
+    ],
+    codeExamples: [{
+      id: "python-alias-shallow-copy",
+      title: "alias·shallow copy·nested sharing을 identity 숫자 없이 검증합니다",
+      language: "python",
+      filename: "alias_copy.py",
+      purpose: "환경마다 달라지는 id 정수 대신 `is`, equality와 list state로 binding/copy 결과를 exact 관찰합니다.",
+      code: "original = ['python']\nalias = original\nshallow = original.copy()\n\nalias.append('jsp')\nprint(f'alias_same={alias is original}|copy_same={shallow is original}')\nprint(f'original={original}|alias={alias}|shallow={shallow}')\n\nnested = [['core']]\nnested_copy = nested.copy()\nnested_copy[0].append('web')\nprint(f'outer_same={nested_copy is nested}|inner_same={nested_copy[0] is nested[0]}')\nprint(f'nested={nested}|nested_copy={nested_copy}')",
+      walkthrough: [
+        { lines: "1-3", explanation: "alias는 같은 list, shallow는 새 바깥 list에 바인딩됩니다." },
+        { lines: "5-7", explanation: "alias mutation이 original에 보이고 독립 shallow에는 보이지 않는지 출력합니다." },
+        { lines: "9-13", explanation: "nested shallow copy의 바깥 identity는 다르지만 내부 list identity와 mutation은 공유됩니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 라이브러리만 사용"], command: "python alias_copy.py" },
+      output: { value: "alias_same=True|copy_same=False\noriginal=['python', 'jsp']|alias=['python', 'jsp']|shallow=['python']\nouter_same=False|inner_same=True\nnested=[['core', 'web']]|nested_copy=[['core', 'web']]", explanation: ["assignment alias는 같은 바깥 list입니다.", "첫 shallow copy는 top-level append를 격리합니다.", "nested shallow copy는 내부 list를 공유합니다."] },
+      experiments: [
+        { change: "nested.copy()를 copy.deepcopy(nested)로 바꿉니다.", prediction: "inner_same=False이고 copy 쪽 append가 원본에 보이지 않습니다.", result: "필요한 copy depth를 선택합니다." },
+        { change: "original을 tuple로 바꿉니다.", prediction: "append attribute가 없어 mutation이 실패합니다.", result: "binding과 mutability는 type contract로 결정됩니다." },
+        { change: "id 값을 직접 출력합니다.", prediction: "실행마다 숫자가 달라질 수 있습니다.", result: "exact evidence에는 identity boolean을 사용합니다." },
+      ],
+      sourceRefs: ["python-data-model-002", "python-copy-doc", "python-simple-statements-002"],
+    }],
+    diagnostics: [
+      { symptom: "함수에 넘긴 list를 수정했더니 호출자 값도 바뀝니다.", likelyCause: "인수 이름과 호출자 이름이 같은 mutable object의 aliases입니다.", checks: ["`is`로 identity를 봅니다.", "mutation method를 찾습니다.", "함수의 ownership contract를 확인합니다."], fix: "pure transform이면 새 list를 반환하고 in-place API면 이름·문서·test로 mutation을 명시합니다.", prevention: "입력 불변/소유권 규칙과 before/after tests를 둡니다." },
+      { symptom: "copy했는데 nested 값이 함께 바뀝니다.", likelyCause: "shallow copy가 내부 mutable elements를 공유합니다.", checks: ["바깥과 내부 `is`를 각각 봅니다.", "object graph 깊이를 그립니다.", "custom copy hooks를 확인합니다."], fix: "필요한 부분을 명시적으로 복제하거나 검토 후 deepcopy를 사용합니다.", prevention: "nested mutation fixture로 copy depth를 검증합니다." },
+    ],
+  },
+  {
+    id: "legb-closure-nonlocal-global",
+    title: "LEGB name resolution과 local·nonlocal·global binding을 실행 순서로 추적합니다",
+    lead: "함수 안에서 같은 철자를 읽고 쓰는 순간 compiler가 local binding으로 분류할 수 있어 값이 존재해 보여도 UnboundLocalError가 납니다.",
+    explanations: [
+      "이름 읽기는 Local→Enclosing function→Global module→Builtins의 LEGB 순서로 찾는 정신 모델을 사용합니다. class scope와 comprehension 같은 세부 예외는 reference에서 별도로 확인합니다.",
+      "함수 body 어디엔가 일반 assignment target이 있으면 해당 이름은 기본적으로 그 함수 local로 분류됩니다. assignment 전에 같은 이름을 읽으면 global fallback이 아니라 UnboundLocalError가 날 수 있습니다.",
+      "`global name`은 module namespace binding을, `nonlocal name`은 가장 가까운 enclosing function binding을 갱신하겠다는 compile-time 선언입니다. 존재하지 않는 nonlocal binding은 syntax error입니다.",
+      "closure는 enclosing function이 끝난 뒤에도 필요한 cell bindings를 보존합니다. mutable state를 숨기는 용도보다 작은 stateful callable factory처럼 lifecycle이 분명한 곳에 사용합니다.",
+      "default argument는 함수 정의 시점에 한 번 평가되므로 mutable default를 closure state처럼 쓰면 호출 간 state가 의도치 않게 공유됩니다. `None` sentinel 뒤 새 container를 만드는 pattern을 사용합니다.",
+      "module global mutable state는 tests·concurrency·import order를 결합합니다. configuration과 dependencies는 함수 인수/object에 주입하고 global은 상수성 값에 제한합니다.",
+    ],
+    concepts: [
+      { term: "LEGB", definition: "local, enclosing, global, builtins 순으로 이름 binding을 찾는 기본 resolution 모델입니다.", detail: ["assignment 분류가 중요합니다.", "모든 scope 세부를 단순화한 정신 모델입니다."] },
+      { term: "closure", definition: "내부 함수가 정의 환경의 필요한 enclosing bindings를 함께 보존하는 callable입니다.", detail: ["cell state를 가질 수 있습니다.", "lifetime을 명시합니다."] },
+      { term: "nonlocal", definition: "현재 local이 아니라 가장 가까운 enclosing function scope 이름에 재바인딩하겠다는 선언입니다.", detail: ["module global과 다릅니다.", "binding이 이미 존재해야 합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-legb-closure-counter",
+      title: "enclosing read·local shadow·nonlocal state를 한 실행에서 비교합니다",
+      language: "python",
+      filename: "scope_closure.py",
+      purpose: "UnboundLocal 오류를 직접 내지 않고 각각의 binding target을 반환값과 state로 exact 관찰합니다.",
+      code: "label = 'global'\n\ndef outer():\n    label = 'enclosing'\n\n    def read():\n        return label\n\n    def local_value():\n        label = 'local'\n        return label\n\n    return read(), local_value(), label\n\ndef make_counter():\n    count = 0\n\n    def step():\n        nonlocal count\n        count += 1\n        return count\n\n    return step\n\nprint(f'scopes={outer()}|global={label}')\ncounter = make_counter()\nprint(f'counter={counter()},{counter()},{counter()}')",
+      walkthrough: [
+        { lines: "1-13", explanation: "global과 enclosing label을 두고 read는 enclosing을, local_value는 별도 local을 선택합니다." },
+        { lines: "15-24", explanation: "factory가 count binding을 만들고 step은 nonlocal로 같은 cell을 증가시킵니다." },
+        { lines: "26-27", explanation: "scope 결과와 closure state1,2,3을 결정적으로 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python scope_closure.py" },
+      output: { value: "scopes=('enclosing', 'local', 'enclosing')|global=global\ncounter=1,2,3", explanation: ["local shadow가 enclosing/global을 수정하지 않습니다.", "nonlocal counter는 호출 사이에 상태를 보존합니다."] },
+      experiments: [
+        { change: "step의 nonlocal을 제거합니다.", prediction: "`count += 1`에서 UnboundLocalError가 납니다.", result: "assignment 때문에 count가 local로 분류됩니다." },
+        { change: "nonlocal을 global로 바꿉니다.", prediction: "module에 count가 없으므로 실행 시 이름 경계가 달라집니다.", result: "enclosing state와 module state를 구분합니다." },
+        { change: "counter를 두 번 make_counter로 만듭니다.", prediction: "각 counter는 독립 count cell에서1부터 시작합니다.", result: "closure factory 호출별 ownership을 확인합니다." },
+      ],
+      sourceRefs: ["python-execution-model-002", "python-global-nonlocal", "python-faq-programming"],
+    }],
+    diagnostics: [
+      { symptom: "UnboundLocalError: local variable referenced before assignment가 납니다.", likelyCause: "함수 안 assignment 때문에 이름이 local로 분류됐는데 그 전에 읽었습니다.", checks: ["함수 전체의 assignment targets를 찾습니다.", "global/nonlocal 의도를 확인합니다.", "read-modify-write 순서를 봅니다."], fix: "값을 인수/반환으로 전달하거나 의도한 enclosing binding에는 nonlocal을 명시합니다.", prevention: "숨은 global mutation을 피하고 scope-focused tests를 둡니다." },
+      { symptom: "서로 독립이어야 할 호출이 이전 list 값을 기억합니다.", likelyCause: "mutable default argument가 정의 시점부터 공유됩니다.", checks: ["함수 signature의 []/{}/set()을 찾습니다.", "두 호출의 `is`를 봅니다.", "default 평가 시점을 확인합니다."], fix: "default를 None으로 두고 호출마다 새 container를 만듭니다.", prevention: "repeat-call regression과 mutable-default lint rule을 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-data-model-002", repository: "Python Language Reference", path: "3. Data model — Objects, values and types", publicUrl: "https://docs.python.org/3/reference/datamodel.html#objects-values-and-types", usedFor: ["identity", "type", "value", "mutability"], evidence: "객체의 세 핵심 속성과 identity 공식 근거입니다." },
+  { id: "python-simple-statements-002", repository: "Python Language Reference", path: "7.2 Assignment statements", publicUrl: "https://docs.python.org/3/reference/simple_stmts.html#assignment-statements", usedFor: ["binding", "augmented assignment", "assignment target"], evidence: "assignment가 binding/mutation을 수행하는 공식 semantics입니다." },
+  { id: "python-copy-doc", repository: "Python Standard Library", path: "copy — Shallow and deep copy operations", publicUrl: "https://docs.python.org/3/library/copy.html", usedFor: ["shallow copy", "deepcopy", "memo"], evidence: "copy depth와 제한의 공식 API입니다." },
+  { id: "python-execution-model-002", repository: "Python Language Reference", path: "4. Execution model — Resolution of names", publicUrl: "https://docs.python.org/3/reference/executionmodel.html#resolution-of-names", usedFor: ["LEGB", "local classification", "free variables"], evidence: "name resolution과 UnboundLocal의 공식 근거입니다." },
+  { id: "python-global-nonlocal", repository: "Python Language Reference", path: "7.12 global and 7.13 nonlocal", publicUrl: "https://docs.python.org/3/reference/simple_stmts.html#the-global-statement", usedFor: ["global", "nonlocal", "binding declarations"], evidence: "scope declaration의 공식 language semantics입니다." },
+  { id: "python-faq-programming", repository: "Python Documentation", path: "Programming FAQ", publicUrl: "https://docs.python.org/3/faq/programming.html", usedFor: ["shared objects", "mutable defaults", "name binding"], evidence: "자주 혼동하는 binding/mutability 사례의 공식 FAQ입니다." },
+  { id: "python-typing-doc-002", repository: "Python Standard Library", path: "typing — Support for type hints", publicUrl: "https://docs.python.org/3/library/typing.html", usedFor: ["static type contracts", "annotations", "mutability interfaces"], evidence: "동적 runtime과 별도인 유지보수 type hint 근거입니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "`a = b`는 객체를 복제하나요?", answer: "아닙니다. b가 가리키는 객체에 a라는 binding을 추가합니다." },
+  { question: "`==`와 `is`의 차이는 무엇인가요?", answer: "==는 값 동등성, is는 같은 객체 identity를 비교합니다." },
+  { question: "shallow copy가 nested mutation을 격리하나요?", answer: "아닙니다. 바깥 container만 새로 만들고 내부 references는 공유합니다." },
+  { question: "id 정수를 persistent key로 써도 되나요?", answer: "안 됩니다. process/lifetime에 한정되고 재사용될 수 있습니다." },
+  { question: "LEGB는 무엇의 약자인가요?", answer: "Local, Enclosing, Global, Builtins name resolution 순서입니다." },
+  { question: "함수 안 assignment가 UnboundLocalError를 만드는 이유는?", answer: "그 이름이 함수 local로 분류되어 assignment 전 read가 local 미바인딩을 읽기 때문입니다." },
+  { question: "nonlocal과 global의 차이는 무엇인가요?", answer: "nonlocal은 enclosing function binding, global은 module binding을 대상으로 합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "value equality와 object identity를 구분한다.",
+  "assignment alias를 object copy와 구분한다.",
+  "shallow·deep copy의 graph 깊이를 설명한다.",
+  "mutable input ownership을 API에 명시한다.",
+  "LEGB resolution을 추적한다.",
+  "UnboundLocalError의 compile-time local 분류를 진단한다.",
+  "nonlocal closure state와 module global state를 구분한다.",
+);

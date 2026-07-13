@@ -231,3 +231,176 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapters: DetailedSession["chapters"] = [
+  {
+    id: "entrypoint-streams-exit-contract",
+    title: "파일 진입점·표준 스트림·종료 상태를 하나의 실행 계약으로 봅니다",
+    lead: "화면에 글자가 보이는 것만 확인하지 않고 어떤 인터프리터가 어떤 모듈을 실행해 stdout과 종료 코드에 무엇을 남겼는지 추적합니다.",
+    explanations: [
+      "`python lesson.py`는 새 프로세스에서 파일을 최상위 모듈로 실행합니다. 이때 그 모듈의 `__name__`은 `__main__`이며 import로 읽힐 때는 모듈 이름이 됩니다. 실행용 코드와 재사용 가능한 함수가 섞이지 않게 `if __name__ == '__main__':` 경계를 두는 이유입니다.",
+      "`sys.argv`의 첫 항목은 일반적으로 실행한 script 경로이고 나머지가 사용자가 전달한 인수입니다. 현재 작업 폴더와 script 위치는 다를 수 있으므로 상대 경로를 사용할 때 어느 기준으로 해석되는지 별도로 확인해야 합니다.",
+      "`print`는 기본적으로 `sys.stdout`에 text를 쓰고 `None`을 반환합니다. 함수 반환값, 화면 출력, 파일 변경은 서로 다른 관찰 결과이므로 테스트에서는 각각을 따로 검증합니다.",
+      "오류와 진단은 `sys.stderr`, 정상 machine-readable 결과는 stdout으로 분리할 수 있습니다. shell과 CI는 두 stream과 process exit status를 독립적으로 수집하므로 정상 실행에서는 stderr0이라는 계약을 둘 수 있습니다.",
+      "stdout encoding 이름은 terminal·redirect·운영체제에 따라 달라질 수 있습니다. 출력의 의미를 encoding 이름 문자열에 의존시키지 말고, 파일과 protocol boundary에서는 UTF-8을 명시하며 terminal에서는 실제 `sys.stdout.encoding`과 오류 정책을 진단 정보로만 사용합니다.",
+      "처리하지 않은 예외는 보통 nonzero exit와 traceback을 stderr에 남깁니다. 정상 결과와 실패 결과를 같은 stdout 문장으로만 표현하면 automation이 성공 여부를 신뢰할 수 없습니다.",
+    ],
+    concepts: [
+      { term: "진입점", definition: "프로그램 실행을 시작하는 module과 조건을 정의하는 경계입니다.", detail: ["직접 실행 시 `__name__ == '__main__'`입니다.", "import 시 side effect를 줄이는 기준이 됩니다."] },
+      { term: "표준 스트림", definition: "프로세스가 기본 text 입력·정상 출력·오류 출력을 주고받는 stdin·stdout·stderr 통로입니다.", detail: ["redirect와 capture가 가능합니다.", "return 값과 다른 외부 관찰입니다."] },
+      { term: "종료 상태", definition: "프로세스가 성공 또는 실패를 호출자에게 전달하는 정수 상태입니다.", detail: ["일반적으로0은 성공입니다.", "stderr 내용만으로 성공 여부를 추정하지 않습니다."] },
+    ],
+    codeExamples: [{
+      id: "python-entrypoint-output-contract",
+      title: "직접 실행 module과 print 반환값을 결정적으로 관찰합니다",
+      language: "python",
+      filename: "entrypoint_contract.py",
+      purpose: "경로·실제 encoding 이름처럼 환경 의존적인 값은 출력하지 않고 진입점, 인수 개수, stdout write와 print 반환값을 검증합니다.",
+      code: "import sys\n\n\ndef main() -> None:\n    result = print('phase=body')\n    print(f'module={__name__}|extra_args={len(sys.argv) - 1}|print_return={result!r}')\n    print(f'stdout_has_encoding={sys.stdout.encoding is not None}')\n\n\nif __name__ == '__main__':\n    main()",
+      walkthrough: [
+        { lines: "1-1", explanation: "process arguments와 stdout metadata를 제공하는 표준 sys module을 import합니다." },
+        { lines: "4-7", explanation: "main은 정상 text를 stdout에 쓰고 print 반환값 None과 환경 독립 boolean만 관찰합니다." },
+        { lines: "10-11", explanation: "직접 실행일 때만 main을 호출해 import side effect를 막습니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "추가 command-line 인수 없음", "UTF-8 source"], command: "python entrypoint_contract.py" },
+      output: { value: "phase=body\nmodule=__main__|extra_args=0|print_return=None\nstdout_has_encoding=True", explanation: ["파일 직접 실행이라 module은 __main__입니다.", "print는 text를 쓴 뒤 None을 반환합니다.", "실제 encoding 명칭 대신 stream에 encoding 계약이 존재하는지만 확인합니다."] },
+      experiments: [
+        { change: "script 뒤에 demo 인수를 하나 추가합니다.", prediction: "extra_args=1이 됩니다.", result: "argv[0]을 사용자 인수로 세지 않습니다." },
+        { change: "다른 파일에서 이 module을 import합니다.", prediction: "guard 아래 main이 실행되지 않아 stdout이 비어 있습니다.", result: "import-safe module 경계가 유지됩니다." },
+        { change: "main에서 예외를 발생시킵니다.", prediction: "정상 stdout 뒤 stderr traceback과 nonzero status가 생깁니다.", result: "성공/실패 검증은 streams와 exit status를 함께 봅니다." },
+      ],
+      sourceRefs: ["python-tutorial-interpreter", "python-simple-statements", "python-sys-doc"],
+    }],
+    diagnostics: [
+      { symptom: "import만 했는데 학습용 출력이 실행됩니다.", likelyCause: "module 최상위에 실행 code가 있고 `__main__` guard가 없습니다.", checks: ["import 대상의 최상위 statements를 봅니다.", "__name__ 값을 확인합니다.", "함수 정의와 호출을 구분합니다."], fix: "재사용 logic을 함수로 옮기고 직접 실행 call만 guard 안에 둡니다.", prevention: "import smoke test에서 stdout/stderr0을 검증합니다." },
+      { symptom: "CI가 실패를 성공으로 처리합니다.", likelyCause: "오류 문장만 stdout에 출력하고 process를 성공0으로 종료했습니다.", checks: ["exit status를 봅니다.", "stdout/stderr를 분리해 capture합니다.", "exception을 삼키는 except를 찾습니다."], fix: "실패는 typed exception 또는 explicit nonzero exit로 전달하고 사용자 message는 stderr에 둡니다.", prevention: "success/failure process contract tests를 둡니다." },
+      { symptom: "terminal에서는 한글이 보이지만 redirect한 파일은 깨집니다.", likelyCause: "terminal과 redirected stream의 encoding이 다르거나 decoder가 잘못됐습니다.", checks: ["sys.stdout.encoding을 기록합니다.", "consumer decoding을 확인합니다.", "PYTHONIOENCODING/UTF-8 mode 설정을 봅니다."], fix: "파일/protocol boundary에서 UTF-8을 명시하고 producer와 consumer를 맞춥니다.", prevention: "non-ASCII redirect round-trip test를 둡니다." },
+    ],
+  },
+  {
+    id: "identifier-keyword-namespace-resolution",
+    title: "이름의 철자 규칙·keyword·namespace 탐색을 분리합니다",
+    lead: "문법상 유효한 identifier와 실제로 정의된 이름, 예약 keyword와 shadow된 built-in은 서로 다른 문제입니다.",
+    explanations: [
+      "identifier는 문자·숫자·underscore와 Unicode identifier 규칙을 따르며 숫자로 시작할 수 없습니다. `str.isidentifier()`는 lexical shape를 확인하지만 keyword 여부와 현재 scope 정의 여부까지 보장하지 않습니다.",
+      "`class`, `for`, `True` 같은 keyword는 identifier shape처럼 보여도 변수 이름으로 쓸 수 없습니다. `keyword.iskeyword()`로 language keyword를 별도로 확인합니다.",
+      "Python은 대소문자를 구분하므로 `score`, `Score`, `SCORE`는 서로 다른 이름입니다. 시각적으로 비슷한 Unicode 문자를 섞으면 review와 보안 진단이 어려워져 public API에는 보수적인 naming policy가 유리합니다.",
+      "이름을 읽을 때 현재 local, enclosing function, global module, builtins 순서인 LEGB 정신 모델을 사용합니다. 이 세션에서는 우선 module과 builtins의 차이를 관찰하고 함수 scope는 다음 세션에서 확장합니다.",
+      "`list = 3`처럼 built-in 이름을 재바인딩하는 것은 문법 오류가 아니지만 이후 `list()` 호출을 막습니다. 객체는 사라진 것이 아니라 현재 namespace의 같은 철자가 먼저 선택된 것입니다.",
+      "namespace를 무작정 `globals()`로 수정하면 dependency가 숨습니다. 값을 함수 인수와 반환으로 전달하고, introspection은 진단·도구 목적에 제한합니다.",
+    ],
+    concepts: [
+      { term: "identifier", definition: "source에서 변수·함수·class 등의 이름으로 사용할 수 있는 lexical token입니다.", detail: ["keyword 여부는 별도입니다.", "Unicode 규칙을 따릅니다."] },
+      { term: "namespace", definition: "이름에서 객체로 가는 binding을 보관하는 mapping 성격의 공간입니다.", detail: ["module·function·class마다 다릅니다.", "같은 철자가 다른 scope에 존재할 수 있습니다."] },
+      { term: "shadowing", definition: "가까운 namespace의 같은 이름이 바깥 또는 built-in binding을 가리는 현상입니다.", detail: ["객체 삭제와 다릅니다.", "diagnostic에서 scope를 확인합니다."] },
+    ],
+    codeExamples: [{
+      id: "python-identifier-keyword-matrix",
+      title: "identifier shape와 keyword를 같은 표에서 구분합니다",
+      language: "python",
+      filename: "identifier_matrix.py",
+      purpose: "ASCII·keyword·숫자 시작·Unicode 이름 후보를 환경 독립 boolean 결과로 분류합니다.",
+      code: "import keyword\n\ncandidates = ('score_1', 'class', '1score', '학습량')\nfor candidate in candidates:\n    print(f'{candidate}|identifier={candidate.isidentifier()}|keyword={keyword.iskeyword(candidate)}')",
+      walkthrough: [
+        { lines: "1-1", explanation: "현재 Python version의 keyword table을 제공하는 표준 module을 import합니다." },
+        { lines: "3-3", explanation: "각기 다른 lexical 경계를 대표하는 고정 후보 네 개를 준비합니다." },
+        { lines: "4-5", explanation: "identifier shape와 reserved keyword 여부를 독립 boolean으로 출력합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "UTF-8 source"], command: "python identifier_matrix.py" },
+      output: { value: "score_1|identifier=True|keyword=False\nclass|identifier=True|keyword=True\n1score|identifier=False|keyword=False\n학습량|identifier=True|keyword=False", explanation: ["class는 identifier shape지만 keyword라 binding target으로 쓸 수 없습니다.", "Unicode 한글 이름은 lexical identifier가 될 수 있습니다.", "숫자 시작은 identifier가 아닙니다."] },
+      experiments: [
+        { change: "candidate에 `match`를 추가합니다.", prediction: "Python version의 soft keyword와 일반 keyword API 차이를 조사하게 됩니다.", result: "keyword.issoftkeyword도 별도 확인할 수 있습니다." },
+        { change: "`list = 3; list()`를 실행합니다.", prediction: "int object is not callable TypeError가 납니다.", result: "built-in shadowing은 문법이 아니라 name resolution 문제입니다." },
+        { change: "score_1을 Score_1로 바꿉니다.", prediction: "둘 다 valid지만 서로 다른 이름입니다.", result: "case-sensitive binding을 확인합니다." },
+      ],
+      sourceRefs: ["python-lexical-identifiers", "python-keyword-doc", "python-execution-model"],
+    }],
+    diagnostics: [
+      { symptom: "SyntaxError가 이름을 가리킵니다.", likelyCause: "숫자로 시작하거나 keyword를 binding target으로 사용했습니다.", checks: ["isidentifier 결과를 봅니다.", "keyword/soft keyword를 확인합니다.", "오류 offset을 봅니다."], fix: "의미 있는 snake_case identifier로 rename합니다.", prevention: "formatter·linter와 naming convention을 사용합니다." },
+      { symptom: "TypeError: 'int' object is not callable가 list() 줄에서 납니다.", likelyCause: "앞에서 list 같은 callable/built-in 이름을 int로 shadow했습니다.", checks: ["`type(list)`를 봅니다.", "현재 scope assignment를 검색합니다.", "builtins.list와 비교합니다."], fix: "변수 이름을 items 등으로 바꾸고 shadow binding을 제거합니다.", prevention: "built-in shadowing lint rule을 켭니다." },
+      { symptom: "보이는 철자가 같은데 NameError가 납니다.", likelyCause: "대소문자 또는 서로 다른 Unicode code point를 사용했습니다.", checks: ["repr과 code points를 봅니다.", "editor의 Unicode 표시를 확인합니다.", "정의/사용 spelling을 copy가 아닌 symbol rename으로 맞춥니다."], fix: "한 가지 canonical 이름으로 rename합니다.", prevention: "public identifiers에 단순한 naming policy와 confusable review를 둡니다." },
+    ],
+  },
+  {
+    id: "str-repr-ascii-encoding-observation",
+    title: "type·str·repr·ascii·UTF-8 bytes를 서로 다른 관찰로 사용합니다",
+    lead: "값을 보았다는 한 문장 안에는 사용자 표현, 개발자 표현, 객체 타입, text encoding 결과가 서로 다르게 존재합니다.",
+    explanations: [
+      "`type(value)`는 runtime class object를 반환합니다. 표시 문자열 `<class 'str'>`만 parse하지 말고 비교가 필요하면 `isinstance`와 명시 type contract를 사용합니다.",
+      "`str(value)`는 사람이 읽는 표현을 지향하고 `repr(value)`는 가능한 경우 모호하지 않은 개발자 표현을 지향합니다. built-in 문자열의 repr은 따옴표와 newline escape를 보여 주어 숨은 문자를 진단하기 좋습니다.",
+      "f-string의 `!s`, `!r`, `!a`는 각각 str, repr, ascii conversion을 적용한 뒤 format합니다. `ascii`는 non-ASCII를 escape해 ASCII-only log에서 code point를 확인할 수 있지만 사용자 표시로는 부적절할 수 있습니다.",
+      "Python `str`은 Unicode text이고 `.encode('utf-8')`가 bytes를 만듭니다. 문자 수와 byte 수는 다르며 newline도 한 code point·한 UTF-8 byte로 포함됩니다.",
+      "repr은 비밀 masking이 아닙니다. password/token/PII를 `!r`로 출력하면 quotes만 추가될 뿐 값은 그대로 노출됩니다. debug output에도 redaction이 먼저입니다.",
+      "custom class의 `__repr__`은 진단에 유용한 type/key state를 주되 secret과 거대한 payload를 제외하고, 가능하면 deterministic field ordering을 유지합니다.",
+    ],
+    concepts: [
+      { term: "str 표현", definition: "사용자에게 읽기 쉬운 text 변환을 지향하는 객체 표현입니다.", detail: ["`str()`과 `__str__`이 관여합니다.", "serialization 규격이 아닙니다."] },
+      { term: "repr 표현", definition: "개발자가 값의 경계와 hidden characters를 진단하기 위한 표현입니다.", detail: ["`repr()`과 `__repr__`이 관여합니다.", "secret-safe를 뜻하지 않습니다."] },
+      { term: "encoding", definition: "Unicode text를 UTF-8 같은 규칙으로 bytes에 매핑하는 과정입니다.", detail: ["decode가 역방향입니다.", "문자 수와 byte 수는 다릅니다."] },
+    ],
+    codeExamples: [{
+      id: "python-repr-ascii-utf8",
+      title: "newline·한글 text의 표현과 UTF-8 bytes를 exact 비교합니다",
+      language: "python",
+      filename: "representations.py",
+      purpose: "환경 의존 terminal rendering 없이 repr/ascii/hex와 문자·byte 길이를 재현합니다.",
+      code: "text = 'A\\n가'\nencoded = text.encode('utf-8')\n\nprint(f'type={type(text).__name__}|chars={len(text)}|bytes={len(encoded)}')\nprint(f'repr={text!r}')\nprint(f'ascii={ascii(text)}')\nprint(f'utf8_hex={encoded.hex()}')",
+      walkthrough: [
+        { lines: "1-2", explanation: "A, newline, 한글 가로 이루어진 str과 UTF-8 bytes를 분리합니다." },
+        { lines: "4-4", explanation: "runtime type 이름, code point 수3과 UTF-8 byte 수5를 출력합니다." },
+        { lines: "5-7", explanation: "repr은 newline, ascii는 newline과 non-ASCII, hex는 실제 bytes를 가시화합니다." },
+      ],
+      run: { environment: ["Python 3.11 이상", "UTF-8 source"], command: "python representations.py" },
+      output: { value: "type=str|chars=3|bytes=5\nrepr='A\\n가'\nascii='A\\n\\uac00'\nutf8_hex=410aeab080", explanation: ["str 길이는 code points3입니다.", "가의 UTF-8은 eab080 세 bytes입니다.", "repr/ascii는 실제 newline을 한 줄의 escape로 보여 줍니다."] },
+      experiments: [
+        { change: "`가`를 ASCII B로 바꿉니다.", prediction: "chars3·bytes3이고 ascii와 repr이 같아집니다.", result: "ASCII code point는 UTF-8 한 byte입니다." },
+        { change: "encoded.decode('utf-8') == text를 출력합니다.", prediction: "True입니다.", result: "같은 encoding으로 round trip합니다." },
+        { change: "utf-8 bytes를 ascii로 decode합니다.", prediction: "UnicodeDecodeError가 납니다.", result: "decoder 계약 불일치를 확인합니다." },
+      ],
+      sourceRefs: ["python-builtins-functions", "python-data-model", "python-unicode-howto"],
+    }],
+    diagnostics: [
+      { symptom: "빈 줄·tab·공백 차이를 print에서 구분하기 어렵습니다.", likelyCause: "str 사용자 표현만 보고 hidden characters를 관찰하지 않았습니다.", checks: ["repr(value)를 봅니다.", "len과 code points를 봅니다.", "입력 normalization을 확인합니다."], fix: "진단에는 redacted repr/hex를 사용하고 사용자 UI와 분리합니다.", prevention: "whitespace boundary fixtures를 둡니다." },
+      { symptom: "len(text)와 저장 byte 제한이 맞지 않습니다.", likelyCause: "Unicode code point 수와 encoded byte 수를 같은 단위로 보았습니다.", checks: ["len(text.encode('utf-8'))를 봅니다.", "database/protocol 한도 단위를 확인합니다.", "normalization 정책을 봅니다."], fix: "요구사항 단위에 맞춰 문자/byte 제한을 각각 검증합니다.", prevention: "ASCII·한글·emoji boundary tests를 둡니다." },
+      { symptom: "debug repr에 token이 그대로 남았습니다.", likelyCause: "repr을 안전한 redaction으로 오해했습니다.", checks: ["custom __repr__을 봅니다.", "f-string !r sinks를 찾습니다.", "log retention을 확인합니다."], fix: "표현 전에 secret fields를 제거·mask하고 필요한 metadata만 남깁니다.", prevention: "log secret scan과 safe repr convention을 둡니다." },
+    ],
+  },
+];
+
+(session.chapters as DetailedSession["chapters"]).push(...advancedChapters);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-tutorial-interpreter", repository: "Python Documentation", path: "Tutorial 2. Using the Python Interpreter", publicUrl: "https://docs.python.org/3/tutorial/interpreter.html", usedFor: ["script invocation", "arguments", "source encoding"], evidence: "공식 tutorial의 interpreter 실행 계약을 반영했습니다." },
+  { id: "python-simple-statements", repository: "Python Language Reference", path: "7. Simple statements", publicUrl: "https://docs.python.org/3/reference/simple_stmts.html", usedFor: ["expression statement", "assignment", "del"], evidence: "표현식 실행과 binding statement의 공식 semantics입니다." },
+  { id: "python-sys-doc", repository: "Python Standard Library", path: "sys — System-specific parameters and functions", publicUrl: "https://docs.python.org/3/library/sys.html", usedFor: ["argv", "stdout", "stderr", "encoding"], evidence: "process-visible streams와 arguments의 공식 API입니다." },
+  { id: "python-lexical-identifiers", repository: "Python Language Reference", path: "2. Lexical analysis — Names", publicUrl: "https://docs.python.org/3/reference/lexical_analysis.html#identifiers", usedFor: ["identifier", "Unicode names", "keywords"], evidence: "이름 token의 공식 lexical grammar입니다." },
+  { id: "python-keyword-doc", repository: "Python Standard Library", path: "keyword — Testing for Python keywords", publicUrl: "https://docs.python.org/3/library/keyword.html", usedFor: ["keyword", "soft keyword"], evidence: "keyword 판별 공식 API입니다." },
+  { id: "python-execution-model", repository: "Python Language Reference", path: "4. Execution model — Naming and binding", publicUrl: "https://docs.python.org/3/reference/executionmodel.html", usedFor: ["namespace", "name resolution", "binding"], evidence: "이름 resolution의 공식 language semantics입니다." },
+  { id: "python-builtins-functions", repository: "Python Standard Library", path: "Built-in Functions", publicUrl: "https://docs.python.org/3/library/functions.html", usedFor: ["print", "type", "repr", "ascii", "isinstance"], evidence: "관찰 함수의 공식 API입니다." },
+  { id: "python-data-model", repository: "Python Language Reference", path: "3. Data model", publicUrl: "https://docs.python.org/3/reference/datamodel.html", usedFor: ["object type", "__str__", "__repr__"], evidence: "객체 표현과 type/value/identity의 공식 근거입니다." },
+  { id: "python-unicode-howto", repository: "Python HOWTO", path: "Unicode HOWTO", publicUrl: "https://docs.python.org/3/howto/unicode.html", usedFor: ["Unicode text", "UTF-8 encoding", "code points"], evidence: "text/bytes 경계의 공식 설명입니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "파일을 직접 실행할 때 __name__은 무엇인가요?", answer: "최상위 실행 module에서는 `__main__`입니다." },
+  { question: "print가 화면에 쓴 text를 반환하나요?", answer: "아닙니다. 출력 side effect를 수행하고 `None`을 반환합니다." },
+  { question: "stdout과 stderr를 왜 구분하나요?", answer: "정상 결과와 진단/오류를 automation이 독립적으로 처리할 수 있게 하기 위해서입니다." },
+  { question: "str.isidentifier가 True이면 변수 이름으로 항상 쓸 수 있나요?", answer: "아닙니다. keyword인지도 확인해야 하며 현재 scope 정의 여부는 또 별개입니다." },
+  { question: "built-in list를 shadow했다는 말은 무엇인가요?", answer: "현재 scope의 `list` binding이 built-in 이름보다 먼저 resolution된다는 뜻입니다." },
+  { question: "str과 repr의 목적 차이는 무엇인가요?", answer: "str은 사용자 표현, repr은 개발자 진단을 지향하지만 둘 다 secret redaction을 자동 제공하지 않습니다." },
+  { question: "`A\\n가`의 len은 왜3인가요?", answer: "A, newline, 가의 Unicode code point 세 개이기 때문입니다." },
+  { question: "같은 문자열의 UTF-8 길이가5인 이유는 무엇인가요?", answer: "ASCII A/newline은 각1 byte이고 한글 가는3 bytes이기 때문입니다." },
+  { question: "type 출력 문자열을 parse해 분기해도 되나요?", answer: "피해야 합니다. type contract에는 `isinstance`나 명시적 protocol을 사용합니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "직접 실행과 import의 __name__ 차이를 설명한다.",
+  "sys.argv[0]과 추가 인수를 구분한다.",
+  "print 반환값이 None임을 검증했다.",
+  "stdout·stderr·exit status를 분리한다.",
+  "identifier·keyword·defined name을 구분한다.",
+  "built-in shadowing을 진단한다.",
+  "str·repr·ascii 목적을 구분한다.",
+  "Unicode 문자 수와 UTF-8 byte 수를 구분한다.",
+  "debug representation에서도 secret을 redaction한다.",
+);

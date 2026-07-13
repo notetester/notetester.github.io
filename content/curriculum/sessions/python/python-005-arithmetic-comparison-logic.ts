@@ -346,3 +346,79 @@ const session = {
 } satisfies DetailedSession;
 
 export default session;
+
+const advancedChapter: DetailedSession["chapters"][number] = {
+  id: "evaluation-order-chain-protocols",
+  title: "precedence·평가 순서·비교 chaining·operator protocol을 한 단계씩 분리합니다",
+  lead: "괄호가 묶는 구조와 function call이 실제 실행되는 순서는 다르며 custom type은 NotImplemented 협상까지 거쳐 결과를 만듭니다.",
+  explanations: [
+    "operator precedence는 expression의 parse tree를 결정합니다. `a + b * c`는 `a + (b * c)`로 묶이지만 operands는 일반적으로 왼쪽에서 오른쪽으로 평가되어 a call이 b와 c보다 먼저 일어날 수 있습니다.",
+    "function arguments, list/dict display, expression list도 정해진 evaluation order가 있습니다. side effect가 있는 operands를 복잡한 한 줄에 넣기보다 먼저 이름에 계산해 order dependency를 줄입니다.",
+    "`low < value < high`는 논리적으로 `low < value and value < high`와 비슷하지만 middle expression을 한 번만 평가합니다. expensive·stateful middle call에서 이 차이가 중요합니다.",
+    "rich comparison과 arithmetic은 `__lt__`, `__eq__`, `__add__` 같은 special methods로 type이 참여합니다. 지원하지 않는 다른 type이면 바로 exception 대신 `NotImplemented`를 반환해 reflected operation 기회를 줄 수 있습니다.",
+    "`NotImplemented` singleton과 `NotImplementedError` exception은 전혀 다릅니다. operator protocol은 전자를 반환하고 abstract/unimplemented method 표현은 후자를 raise할 수 있습니다.",
+    "`+=`는 immutable int에는 새 값 재바인딩을 만들지만 mutable list에는 `__iadd__`로 같은 object를 변경할 수 있습니다. 같은 token이라도 type protocol과 alias가 side effect를 결정합니다.",
+    "비교 결과가 total order를 이룬다고 가정하기 전에 NaN·set subset·custom partial order를 확인합니다. sort key를 명시하면 비교 protocol 의존과 repeated computation을 줄일 수 있습니다.",
+  ],
+  concepts: [
+    { term: "evaluation order", definition: "parse된 subexpressions와 calls가 실제로 평가되는 시간 순서입니다.", detail: ["precedence와 다릅니다.", "side effect 관찰에 중요합니다."] },
+    { term: "rich comparison", definition: "type이 `__lt__`·`__eq__` 등으로 equality/order 연산에 참여하는 protocol입니다.", detail: ["NotImplemented 협상이 가능합니다.", "total order가 자동 보장되지 않습니다."] },
+    { term: "single evaluation chaining", definition: "비교 chain의 가운데 expression을 한 번만 평가하고 인접 비교에 그 값을 재사용하는 semantics입니다.", detail: ["call count를 줄입니다.", "and 중복 표현과 다릅니다."] },
+  ],
+  codeExamples: [{
+    id: "python-evaluation-order-chain",
+    title: "precedence 구조와 실제 call 순서·chain middle 1회를 기록합니다",
+    language: "python",
+    filename: "evaluation_order.py",
+    purpose: "operator 결과뿐 아니라 event trace로 parsing과 runtime evaluation을 분리합니다.",
+    code: "events = []\n\ndef value(name, result):\n    events.append(name)\n    return result\n\narithmetic = value('a', 1) + value('b', 2) * value('c', 3)\nprint(f'arithmetic={arithmetic}|events={events}')\n\nevents.clear()\nchained = value('low', 1) < value('middle', 2) < value('high', 3)\nmiddle_calls = events.count('middle')\nprint(f'chained={chained}|events={events}|middle_calls={middle_calls}')",
+    walkthrough: [
+      { lines: "1-5", explanation: "value helper가 각 operand evaluation을 ordered events에 기록합니다." },
+      { lines: "7-8", explanation: "multiplication precedence로 결과7을 만들면서 call order a,b,c를 관찰합니다." },
+      { lines: "10-13", explanation: "comparison chain에서 middle call이 한 번뿐인지 exact count로 검증합니다." },
+    ],
+    run: { environment: ["Python 3.11 이상", "표준 문법만 사용"], command: "python evaluation_order.py" },
+    output: { value: "arithmetic=7|events=['a', 'b', 'c']\nchained=True|events=['low', 'middle', 'high']|middle_calls=1", explanation: ["parse grouping은 multiplication 우선이지만 calls는 a,b,c 순입니다.", "middle expression은 한 번만 평가됩니다."] },
+    experiments: [
+      { change: "middle 결과를4로 바꿉니다.", prediction: "첫 비교1<4는 True, 다음4<3은 False라 chained=False입니다.", result: "chain은 adjacent comparisons를 short-circuit합니다." },
+      { change: "chain을 `low < middle() and middle() < high`로 직접 반복합니다.", prediction: "조건에 따라 middle이 두 번 호출됩니다.", result: "stateful expression 중복을 피합니다." },
+      { change: "a call에서 exception을 발생시킵니다.", prediction: "b와 c는 평가되지 않습니다.", result: "왼쪽 evaluation failure가 나머지 event surface를 막습니다." },
+    ],
+    sourceRefs: ["python-expression-eval-order-005", "python-operator-precedence-005", "python-comparison-chaining-005"],
+  }],
+  diagnostics: [
+    { symptom: "곱셈이 먼저인데 왜 a 함수가 먼저 호출됐는지 이해되지 않습니다.", likelyCause: "operator precedence와 operand evaluation order를 같은 개념으로 보았습니다.", checks: ["괄호로 parse tree를 적습니다.", "각 call에 event를 기록합니다.", "공식 evaluation order를 확인합니다."], fix: "side-effect calls를 별도 statements로 계산하고 expression에는 values만 사용합니다.", prevention: "복잡한 expression의 event-order test를 둡니다." },
+    { symptom: "custom type과 숫자 덧셈이 엉뚱한 TypeError를 냅니다.", likelyCause: "__add__가 지원하지 않는 type에 NotImplemented 대신 잘못된 값/exception을 반환했습니다.", checks: ["left/right operand types를 봅니다.", "__add__/__radd__ 반환을 확인합니다.", "NotImplemented와 NotImplementedError를 구분합니다."], fix: "지원 type만 처리하고 나머지는 NotImplemented를 반환해 reflected protocol을 허용합니다.", prevention: "same/cross/unsupported operand tests를 둡니다." },
+  ],
+};
+
+(session.chapters as DetailedSession["chapters"]).push(advancedChapter);
+
+(session.sources as DetailedSession["sources"]).push(
+  { id: "python-expression-eval-order-005", repository: "Python Language Reference", path: "6.16 Evaluation order", publicUrl: "https://docs.python.org/3/reference/expressions.html#evaluation-order", usedFor: ["left-to-right evaluation", "assignment order", "call events"], evidence: "expression evaluation order의 공식 semantics입니다." },
+  { id: "python-operator-precedence-005", repository: "Python Language Reference", path: "6.17 Operator precedence", publicUrl: "https://docs.python.org/3/reference/expressions.html#operator-precedence", usedFor: ["precedence table", "associativity", "parentheses"], evidence: "operator parse binding의 공식 표입니다." },
+  { id: "python-comparison-chaining-005", repository: "Python Language Reference", path: "6.10 Comparisons", publicUrl: "https://docs.python.org/3/reference/expressions.html#comparisons", usedFor: ["comparison chaining", "single middle evaluation", "identity/membership"], evidence: "comparison semantics의 공식 근거입니다." },
+  { id: "python-data-model-numeric-005", repository: "Python Language Reference", path: "Emulating numeric types", publicUrl: "https://docs.python.org/3/reference/datamodel.html#emulating-numeric-types", usedFor: ["__add__", "__radd__", "__iadd__", "NotImplemented"], evidence: "custom operator protocol의 공식 근거입니다." },
+  { id: "python-data-model-richcmp-005", repository: "Python Language Reference", path: "Basic customization — rich comparison", publicUrl: "https://docs.python.org/3/reference/datamodel.html#object.__lt__", usedFor: ["rich comparisons", "NotImplemented", "ordering consistency"], evidence: "custom comparison protocol의 공식 근거입니다." },
+  { id: "python-operator-module-005", repository: "Python Standard Library", path: "operator — Standard operators as functions", publicUrl: "https://docs.python.org/3/library/operator.html", usedFor: ["operator functions", "itemgetter", "methodcaller"], evidence: "operator를 callable로 다루는 공식 API입니다." },
+  { id: "python-functools-ordering-005", repository: "Python Standard Library", path: "functools.total_ordering", publicUrl: "https://docs.python.org/3/library/functools.html#functools.total_ordering", usedFor: ["derived ordering methods", "performance tradeoff"], evidence: "total ordering 보조 도구의 공식 API입니다." },
+);
+
+(session.reviewQuestions as DetailedSession["reviewQuestions"]).push(
+  { question: "precedence와 evaluation order는 같은가요?", answer: "아닙니다. precedence는 parse grouping, evaluation order는 subexpression 실행 순서입니다." },
+  { question: "a+b*c에서 a call이 먼저 실행될 수 있나요?", answer: "네. multiplication이 더 강하게 묶여도 operands는 왼쪽에서 오른쪽으로 평가됩니다." },
+  { question: "비교 chain의 가운데 expression은 몇 번 평가되나요?", answer: "한 번 평가되어 두 인접 비교에 재사용됩니다." },
+  { question: "NotImplemented와 NotImplementedError는 같은가요?", answer: "아닙니다. 전자는 operator 협상 singleton, 후자는 exception type입니다." },
+  { question: "custom __add__가 모르는 type을 받으면 무엇을 반환하나요?", answer: "보통 NotImplemented를 반환해 reflected operation 기회를 줍니다." },
+  { question: "+=는 항상 새 객체를 만드나요?", answer: "아닙니다. immutable type은 재바인딩하지만 mutable type은 in-place protocol로 같은 객체를 바꿀 수 있습니다." },
+);
+
+(session.completionChecklist as string[]).push(
+  "precedence parse tree와 runtime evaluation order를 분리한다.",
+  "side-effect operand call 순서를 event로 검증한다.",
+  "comparison chain middle이 한 번 평가됨을 안다.",
+  "custom operator의 NotImplemented 협상을 설명한다.",
+  "NotImplemented와 NotImplementedError를 구분한다.",
+  "__iadd__의 type별 mutation/rebinding 차이를 확인한다.",
+  "partial order와 total order 요구를 구분한다.",
+);
