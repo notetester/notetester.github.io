@@ -804,7 +804,7 @@ public class ExchangeSortLab {
     { question: "length 14 comparison 수는 왜 91인가요?", answer: "모든 i<j pair인 14×13/2이기 때문입니다." },
   ],
   completionChecklist: ["원본 5개·191행을 감사했다.", "identity text를 주소로 부르지 않았다.", "`int su2[]`와 권장 `int[] su2`가 같은 1차원 type임을 확인했다.", "constant narrowing과 String reference type을 설명했다.", "default·empty·negative allocation을 검증했다.", "index/null/empty matrix를 test했다.", "alias identity/content를 분리했다.", "enhanced local/indexed slot mutation을 실행했다.", "covariant store failure를 설명했다.", "array/element identity를 각각 검증했다.", "shallow/deep isolation과 arraycopy overlap을 test했다.", "copy truncate/padding/range를 실행했다.", "sort mutation·defensive copy를 선택했다.", "natural/locale ordering을 구분했다.", "sort/search ordering을 통일했다.", "insertion point·duplicates를 검증했다.", "equals/hash/mismatch/deep variants를 사용했다.", "exchange sort 91/48을 재현했다.", "sortedness·permutation·ownership을 test했다.", "length·copy peak memory budget을 정했다.", "raw contents를 운영 로그에 노출하지 않았다."],
-  nextSessions: [],
+  nextSessions: ["java-10-multidimensional-ranking"],
   sources: [
     { id: "java-day07-array-basic", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day07/Ex08.java", usedFor: ["allocation/index", "identity correction", "length traversal"], evidence: "JDK 21.0.11 clean run 12 lines·blank 1; same int[] identity text와 values를 확인했습니다." },
     { id: "java-day07-array-init", repository: "javastudy/MyJavaProject", path: "src/com/ictedu/day07/Ex09.java", usedFor: ["char/double initializer", "constant narrowing", "invalid syntax"], evidence: "clean run J,A,V,A,J 5 lines입니다." },
