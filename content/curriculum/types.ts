@@ -59,6 +59,13 @@ export type DetailedCodeExample = {
     value: string;
     explanation: string[];
   };
+  downloads?: Array<{
+    label: string;
+    filename: string;
+    href: string;
+    description: string;
+    checks: string[];
+  }>;
   experiments: Array<{
     change: string;
     prediction: string;

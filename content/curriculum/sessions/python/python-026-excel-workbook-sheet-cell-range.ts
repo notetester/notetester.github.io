@@ -202,6 +202,15 @@ True yyyy-mm-dd`,
               "저장 후에도 A1 bold와 C2 number_format이 유지됩니다.",
             ],
           },
+          downloads: [
+            {
+              label: "두 시트 학습 보고서",
+              filename: "learning_report.xlsx",
+              href: "/samples/python/excel/learning_report.xlsx",
+              description: "위 코드를 실행해 만든 요약·상세 시트 workbook입니다.",
+              checks: ["요약!D2의 IF 수식", "요약 header의 굵은 글꼴과 C2 날짜 형식", "상세!B2의 불리언 값"],
+            },
+          ],
           experiments: [
             { change: "detail = wb.create_sheet('상세', 0)으로 위치를 바꿉니다.", prediction: "sheetnames는 ['상세', '요약']이 됩니다.", result: "create_sheet의 index가 최종 탭 순서를 결정하고 active 변수 이름과는 무관합니다." },
             { change: "C2에 '2026-07-11' 문자열을 넣고 type을 재조회합니다.", prediction: "datetime이 아니라 str로 읽힙니다.", result: "표시가 같은 날짜 텍스트와 실제 날짜 타입은 Excel 정렬·계산 의미가 다릅니다." },
@@ -309,6 +318,15 @@ None
               "숫자 범위는 수식 모드와 무관하게 저장된 값 그대로 읽힙니다.",
             ],
           },
+          downloads: [
+            {
+              label: "수식과 계산 캐시 비교",
+              filename: "formula_cache.xlsx",
+              href: "/samples/python/excel/formula_cache.xlsx",
+              description: "A1:B2의 숫자와 C1의 SUM 수식을 함께 저장한 비교용 workbook입니다.",
+              checks: ["계산!C1의 =SUM(A1:B2) 수식", "data_only=False의 수식 문자열", "새로 작성한 파일에서 data_only=True 캐시가 None인 이유"],
+            },
+          ],
           experiments: [
             { change: "C1 수식 대신 Python에서 sum([10,20,30,40]) 결과 100을 저장합니다.", prediction: "두 data_only 모드 모두 100을 읽습니다.", result: "값 셀은 formula/cache 선택 대상이 아니며 최신 계산을 Python이 책임진 경우 명확합니다." },
             { change: "파일을 Excel에서 열어 재계산·저장한 뒤 다시 data_only=True로 읽습니다.", prediction: "환경이 formula를 계산·cache 저장했다면 100이 나옵니다.", result: "계산 주체·설정에 의존하므로 자동화 테스트에서는 cache 존재와 계산 시점을 별도로 검증해야 합니다." },
@@ -484,6 +502,15 @@ s 정상`,
               "위험 두 값에는 정책상 실제 apostrophe가 추가됐고 정상 값은 바뀌지 않았습니다.",
             ],
           },
+          downloads: [
+            {
+              label: "수식 주입 방지 내보내기",
+              filename: "safe_export.xlsx",
+              href: "/samples/python/excel/safe_export.xlsx",
+              description: "불신 입력이 Excel 수식으로 실행되지 않도록 문자열로 저장한 보안 예제입니다.",
+              checks: ["입력!A1의 '=2+2 문자열", "입력!A2의 '+10 문자열", "세 셀 모두 formula가 아닌 문자열 타입"],
+            },
+          ],
           experiments: [
             { change: "spreadsheet_text를 거치지 않고 ws.append(['=2+2'])를 실행합니다.", prediction: "재조회한 cell.data_type이 f이고 value는 =2+2입니다.", result: "openpyxl은 = 시작 문자열을 formula로 분류하므로 불신 입력과 통제된 formula를 schema에서 분리해야 합니다." },
             { change: "os.replace 직전에 load_workbook(temp_path, read_only=True)로 필수 시트·header를 검증합니다.", prediction: "깨진 temp라면 원본 target을 교체하기 전에 실패합니다.", result: "저장 성공만이 아니라 최소 구조 read-back을 원자 교체 전 품질 gate로 둘 수 있습니다." },

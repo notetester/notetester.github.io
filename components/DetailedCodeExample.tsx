@@ -47,6 +47,31 @@ export function DetailedCodeExample({ example }: { example: DetailedCodeExampleD
         </div>
       </div>
 
+      {example.downloads?.length ? (
+        <div className="deep-code__downloads" aria-label="실행 결과 파일">
+          <div>
+            <span>VERIFIED SAMPLE</span>
+            <h5>실행 결과 파일을 직접 열어 확인하세요</h5>
+            <p>예제 코드를 실행하면 생성되는 결과와 같은 검증용 파일입니다. 내려받아 Excel 또는 호환 프로그램에서 셀 값·수식·서식을 확인할 수 있습니다.</p>
+          </div>
+          <ul>
+            {example.downloads.map((download) => (
+              <li key={download.href}>
+                <div>
+                  <strong>{download.label}</strong>
+                  <code>{download.filename}</code>
+                  <p>{download.description}</p>
+                  <ul>{download.checks.map((check) => <li key={check}>{check}</li>)}</ul>
+                </div>
+                <a href={download.href} download={download.filename} aria-label={`${download.filename} 다운로드`}>
+                  XLSX 다운로드
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {example.experiments.length ? (
         <div className="experiment-list">
           <h5>값을 바꾸며 예측하기</h5>

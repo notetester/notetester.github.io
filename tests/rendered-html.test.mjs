@@ -53,6 +53,22 @@ test("exports every lesson and GitHub Pages control files", async () => {
   assert.match(rag, /data-copy-code/);
 });
 
+test("exports the Python Excel workbooks as verified downloads", async () => {
+  const session = await readFile(
+    new URL("curriculum/python/python-026-excel-workbook-sheet-cell-range/index.html", outputRoot),
+    "utf8",
+  );
+  const filenames = ["learning_report.xlsx", "formula_cache.xlsx", "safe_export.xlsx"];
+
+  for (const filename of filenames) {
+    const href = `/samples/python/excel/${filename}`;
+    const workbook = await readFile(new URL(href.slice(1), outputRoot));
+    assert.equal(workbook.subarray(0, 2).toString("ascii"), "PK", `${filename}: invalid xlsx container`);
+    assert.match(session, new RegExp(`href=["']${href.replaceAll(".", "\\.")}["']`));
+    assert.match(session, new RegExp(`download=["']${filename.replaceAll(".", "\\.")}["']`));
+  }
+});
+
 test("keeps every internal page link inside the static export", async () => {
   const htmlFiles = await collectHtml(outputRoot);
   const missing = [];
