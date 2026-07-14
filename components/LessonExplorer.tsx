@@ -33,11 +33,15 @@ export function LessonExplorer({
   const [track, setTrack] = useState("all");
 
   const visibleLessons = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ko");
+    const searchTerms = query
+      .trim()
+      .toLocaleLowerCase("ko")
+      .split(/\s+/)
+      .filter(Boolean);
     return lessons.filter((lesson) => {
       const trackMatches = track === "all" || lesson.track === track;
       if (!trackMatches) return false;
-      if (!normalized) return true;
+      if (!searchTerms.length) return true;
       const haystack = [
         lesson.title,
         lesson.eyebrow,
@@ -46,7 +50,7 @@ export function LessonExplorer({
       ]
         .join(" ")
         .toLocaleLowerCase("ko");
-      return haystack.includes(normalized);
+      return searchTerms.every((term) => haystack.includes(term));
     });
   }, [lessons, query, track]);
 
