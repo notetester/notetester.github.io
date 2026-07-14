@@ -14,6 +14,21 @@ type SessionPageProps = {
 
 export const dynamicParams = false;
 
+function publicSourcePath(sourcePath: string) {
+  const normalized = sourcePath.replaceAll("\\", "/");
+  const devRelative = normalized.match(/^[A-Za-z]:\/dev\/(.+)$/i)?.[1];
+  if (devRelative) return devRelative;
+
+  const runnerRelative = normalized.match(/^\/home\/runner\/work\/[^/]+\/[^/]+\/(.+)$/i)?.[1];
+  if (runnerRelative) return runnerRelative;
+
+  if (/^[A-Za-z]:\//.test(normalized) || normalized.startsWith("/")) {
+    return normalized.split("/").filter(Boolean).slice(-4).join("/");
+  }
+
+  return normalized;
+}
+
 export function generateStaticParams() {
   return detailedSessions.map((session) => ({ courseId: session.courseId, slug: session.slug }));
 }
@@ -209,7 +224,7 @@ export default async function DetailedSessionPage({ params }: SessionPageProps) 
           <div className="aside-block source-evidence">
             <h2>원본 근거</h2>
             <p>{session.sourceCoverage.filesRead}개 파일을 읽고 {session.sourceCoverage.filesUsed}개를 직접 반영했습니다.</p>
-            <ul>{session.sources.map((source) => <li key={source.id}>{source.publicUrl ? <a href={source.publicUrl} target="_blank" rel="noreferrer">{source.repository} ↗</a> : <strong>{source.repository}</strong>}<small>{source.path}</small><span>{source.evidence}</span></li>)}</ul>
+            <ul>{session.sources.map((source) => <li key={source.id}>{source.publicUrl ? <a href={source.publicUrl} target="_blank" rel="noreferrer">{publicSourcePath(source.repository)} ↗</a> : <strong>{publicSourcePath(source.repository)}</strong>}<small>{publicSourcePath(source.path)}</small><span>{source.evidence}</span></li>)}</ul>
           </div>
         </aside>
       </div>

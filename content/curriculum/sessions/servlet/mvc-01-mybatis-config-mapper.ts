@@ -228,7 +228,7 @@ foreach($file in $files){if((Get-FileHash -LiteralPath $file.FullName -Algorithm
     { lines: "17-23", explanation: "XML comments를 제외한 active statements와 binding·factory·VO·민감 설정 shape를 셉니다." },
     { lines: "24-27", explanation: "exact contract와 source 불변성을 확인하고 credential values 없이 semantic summary만 출력합니다." },
   ],
-  run: { environment: ["PowerShell 7+", "D:/dev/jspstudy source root", "정적 파일 읽기만 허용", "DB·MyBatis·network 실행 금지"], command: "pwsh -NoProfile -File verify-original-mvc01.ps1 -SourceRoot D:/dev/jspstudy" },
+  run: { environment: ["PowerShell 7+", "jspstudy 저장소의 상위 폴더", "정적 파일 읽기만 허용", "DB·MyBatis·network 실행 금지"], command: "pwsh -NoProfile -File verify-original-mvc01.ps1 -SourceRoot ./jspstudy" },
   output: { value: "files=5|mapperMethods=5|activeStatements=5|selectStar=2|binds=11|rawSubstitution=0|openSession=2|voGetters=5|sensitiveProperties=2|redacted=True|hashes=5/5\nexecution=static-only|db=not-contacted|credentials=not-output", explanation: ["interface5와 active XML statement5가 대응합니다.", "값 binding은11이고 raw substitution은0입니다.", "credential은 존재 여부2만 기록하고 값·hash를 공개하지 않습니다."] },
   experiments: [
     { change: "XML statement id 하나를 interface와 다르게 바꿉니다.", prediction: "개수만 같아도 실제 binding은 runtime에 실패합니다.", result: "다음 장의 namespace/id set equality audit를 함께 적용합니다." },

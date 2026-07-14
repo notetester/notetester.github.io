@@ -503,6 +503,7 @@ a {
 
 .lesson-card {
   display: flex;
+  min-width: 0;
   min-height: 280px;
   flex-direction: column;
   border: 1px solid var(--line);
@@ -537,6 +538,7 @@ a {
 
 .lesson-card h3 {
   margin: 19px 0 9px;
+  overflow-wrap: anywhere;
   font-size: 1.27rem;
   letter-spacing: -0.025em;
   line-height: 1.35;
@@ -554,6 +556,7 @@ a {
 
 .lesson-card > p {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--ink-soft);
   font-size: 0.9rem;
 }
@@ -1871,6 +1874,16 @@ a {
   min-width: 0;
 }
 
+.deep-session__aside,
+.source-evidence li {
+  min-width: 0;
+}
+
+.deep-session__body :where(p, li, dd, dt, h2, h3, h4, h5, summary),
+.deep-session__aside :where(p, li, a, small, span) {
+  overflow-wrap: anywhere;
+}
+
 .deep-question {
   margin-bottom: 72px;
   padding: clamp(28px, 5vw, 48px);
@@ -1995,6 +2008,8 @@ a {
 
 .deep-code__header > code {
   align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
   padding: 7px 10px;
   border: 1px solid var(--line);
   background: var(--card);

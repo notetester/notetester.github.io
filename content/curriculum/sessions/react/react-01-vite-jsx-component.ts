@@ -31,7 +31,7 @@ const topics: ExpertTopic[] = [
       "원본 my-app01의 package.json은 React 19 계열과 react-scripts 5를 함께 둔 CRA 기반 학습 앱입니다. 이 조합은 원본 복습에는 가치가 있지만 새 프로젝트의 기본 선택이라고 일반화하지 않고 lockfile, 실제 설치 tree, Node version과 build result를 별도로 기록합니다.",
       "원본 index.js는 createRoot와 StrictMode를 사용하면서 여러 단계별 component imports와 render 후보를 주석으로 보존합니다. 무엇을 배웠는지 보여 주는 history이지만 한 번에 하나의 composition root와 route catalog로 정리하지 않으면 unused imports, stale code와 현재 실행 화면을 혼동하기 쉽습니다.",
       "원본 Book과 Library는 function component, Fragment, props, child composition을 작은 예제로 보여 줍니다. 문자열로 전달된 page count는 숫자처럼 보이지만 runtime type은 string이므로 이후 계산·validation 단계에서는 typed boundary가 필요합니다.",
-      "D:/dev/REACT의 기존 설명 문서는 CRA 보존 이유, Vite 대안, index.html→entry→App→component 흐름과 실제 실행 결과를 연결합니다. 이번 세션은 그 설명을 그대로 복사하지 않고 source hash와 공식 current docs를 대조해 오류와 적용 범위를 명시합니다.",
+      "REACT 학습 저장소의 기존 설명 문서는 CRA 보존 이유, Vite 대안, index.html→entry→App→component 흐름과 실제 실행 결과를 연결합니다. 이번 세션은 그 설명을 그대로 복사하지 않고 source hash와 공식 current docs를 대조해 오류와 적용 범위를 명시합니다.",
       "source audit의 산출물은 파일 목록만이 아니라 사실, 추론, 미검증 가정을 나눈 표입니다. source에서 관찰한 React version이나 call은 사실이고 browser behavior는 실행 증거이며 production suitability는 별도 qualification 결과입니다.",
     ],
     concepts: [

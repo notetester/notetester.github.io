@@ -49,7 +49,7 @@ foreach($file in $files){if((Get-FileHash -LiteralPath $file.FullName -Algorithm
     { lines: "17-23", explanation: "session·request model·forms·JSTL·EL/c:out counts를 exact하게 비교합니다." },
     { lines: "24-26", explanation: "원본 불변성을 확인하고 DB·container·PII 미사용을 명시합니다." },
   ],
-  run: { environment: ["PowerShell 7+", "D:/dev/jspstudy source root", "정적 파일 읽기만", "DB·Servlet container 불필요"], command: "pwsh -NoProfile -File verify-original-mvc02.ps1 -SourceRoot D:/dev/jspstudy" },
+  run: { environment: ["PowerShell 7+", "jspstudy 저장소의 상위 폴더", "정적 파일 읽기만", "DB·Servlet container 불필요"], command: "pwsh -NoProfile -File verify-original-mvc02.ps1 -SourceRoot ./jspstudy" },
   output: { value: "files=5|sessions=2|requestAttributes=2|postForms=5|cmdFields=5|emptyBranches=2|forEach=1|directEL=13|cOut=0|hashes=5/5\nexecution=static-only|db=not-contacted|servlet=not-started|pii=not-read", explanation: ["두 command가 각각 session과 request attribute를 사용합니다.", "조회 input은 POST form5이고 list/one JSP는 empty branch2를 갖습니다.", "EL13이 직접 출력되고 c:out은0이므로 untrusted stored values의 context encoding을 보강해야 합니다."] },
   experiments: [
     { change: "JSP에 c:out 하나를 추가합니다.", prediction: "cOut0 exact audit가 실패합니다.", result: "원본은 보존하고 개선본 integration test에서 context별 encoding을 검증합니다." },
