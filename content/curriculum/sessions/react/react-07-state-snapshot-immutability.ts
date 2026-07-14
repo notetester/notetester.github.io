@@ -274,7 +274,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-07-state-snapshot-immutability", slug: "react-07-state-snapshot-immutability",
+    inventoryId: "react-07-filter-find-reduce", slug: "react-07-state-snapshot-immutability",
   courseId: "react", moduleId: "react-rendering-components", order: 7,
   title: "state snapshot과 불변 업데이트", subtitle: "일반 변수와 React state를 구분하고 snapshot·queue·structural sharing·복구 불변식으로 예측 가능한 UI 상태를 만듭니다.",
   level: "중급", estimatedMinutes: 110,

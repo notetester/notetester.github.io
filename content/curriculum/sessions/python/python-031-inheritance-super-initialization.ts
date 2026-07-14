@@ -385,7 +385,7 @@ const advancedInheritanceChapters: DetailedSession["chapters"] = [
         { change: "한 subclass에서 super hook 호출을 가로막는 다른 base를 섞습니다.", prediction: "다음 hook이 실행되지 않을 수 있습니다.", result: "모든 participating bases가 cooperative protocol을 지켜야 합니다." },
         { change: "plugin module을 import하지 않습니다.", prediction: "registry에 그 implementation이 없습니다.", result: "discovery/import lifecycle을 entrypoint에서 명시합니다." },
       ],
-      sourceRefs: ["python-init-subclass-031", "python-super-doc", "python-type-mro-031"],
+      sourceRefs: ["python-init-subclass-031", "python-super-doc", "python-type-mro-031", "py-inheritance-source"],
     }],
     diagnostics: [
       { symptom: "plugin이 어떤 실행에서는 registry에 있고 다른 실행에서는 없습니다.", likelyCause: "registration이 module import-time class definition에 의존하지만 plugin discovery/import 순서가 명시되지 않았습니다.", checks: ["등록 class module이 실제 import됐는지 봅니다.", "registry 초기화·reload·test cleanup을 추적합니다.", "entry point metadata를 확인합니다."], fix: "composition root에서 plugin discovery를 명시적으로 실행하고 duplicate·missing key를 startup validation으로 거부합니다.", prevention: "clean process에서 설치된 plugins 목록과 registry snapshot을 integration test합니다." },

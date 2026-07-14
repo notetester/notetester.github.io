@@ -384,7 +384,7 @@ const advancedChapter: DetailedSession["chapters"][number] = {
       { change: "chain을 `low < middle() and middle() < high`로 직접 반복합니다.", prediction: "조건에 따라 middle이 두 번 호출됩니다.", result: "stateful expression 중복을 피합니다." },
       { change: "a call에서 exception을 발생시킵니다.", prediction: "b와 c는 평가되지 않습니다.", result: "왼쪽 evaluation failure가 나머지 event surface를 막습니다." },
     ],
-    sourceRefs: ["python-expression-eval-order-005", "python-operator-precedence-005", "python-comparison-chaining-005"],
+    sourceRefs: ["python-expression-eval-order-005", "python-operator-precedence-005", "python-comparison-chaining-005", "python-data-model-numeric-005", "python-data-model-richcmp-005", "python-operator-module-005", "python-functools-ordering-005"],
   }],
   diagnostics: [
     { symptom: "곱셈이 먼저인데 왜 a 함수가 먼저 호출됐는지 이해되지 않습니다.", likelyCause: "operator precedence와 operand evaluation order를 같은 개념으로 보았습니다.", checks: ["괄호로 parse tree를 적습니다.", "각 call에 event를 기록합니다.", "공식 evaluation order를 확인합니다."], fix: "side-effect calls를 별도 statements로 계산하고 expression에는 values만 사용합니다.", prevention: "복잡한 expression의 event-order test를 둡니다." },

@@ -276,7 +276,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-20-hook-quality-capstone", slug: "react-20-hook-quality-capstone", courseId: "react", moduleId: "react-events-forms-hooks", order: 10,
+  inventoryId: "react-20-usecallback-memo", slug: "react-20-hook-quality-capstone", courseId: "react", moduleId: "react-events-forms-hooks", order: 10,
   title: "Hook 품질·useId와 접근성 capstone", subtitle: "Hook 호출·순수성·public contract와 useId 기반 DOM 관계를 SSR·접근성·보안·rollback evidence로 통합합니다.",
   level: "고급", estimatedMinutes: 125,
   coreQuestion: "custom Hook과 useId를 호출 규칙·순수성·SSR 및 accessible relationship을 지키는 공개 API로 만들고 어떤 evidence로 production 품질을 증명할까요?",

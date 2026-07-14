@@ -386,7 +386,7 @@ expertSession.chapters.push(
           { change: "finally 마지막에 `return ('cleanup', None)`을 넣습니다.", prediction: "모든 성공·오류 결과가 cleanup tuple로 덮입니다.", result: "finally의 return이 기존 제어 흐름을 파괴함을 확인합니다." },
           { change: "except ValueError를 except Exception으로 넓히고 parse_port에 NameError 버그를 넣습니다.", prediction: "버그가 일반 error 결과로 숨겨집니다.", result: "복구 가능한 예외만 좁게 잡아야 함을 확인합니다." },
         ],
-        sourceRefs: ["python-exceptions-tutorial", "python-raise-reference", "python-try-reference", "python-functions-doc"],
+        sourceRefs: ["python-exceptions-tutorial", "python-raise-reference", "python-try-reference", "python-functions-doc", "py-function-parameter-source"],
       },
     ],
     diagnostics: [

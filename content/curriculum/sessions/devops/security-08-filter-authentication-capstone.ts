@@ -214,7 +214,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-08-filter-authentication-capstone", slug: "security-08-filter-authentication-capstone", courseId: "devops", moduleId: "security-filter-authentication", order: 8,
+  inventoryId: "sec-07-jwt-request-filter", slug: "security-08-filter-authentication-capstone", courseId: "devops", moduleId: "security-filter-authentication", order: 8,
   title: "filter·authentication·authorization capstone", subtitle: "source threat model에서 filter chain, credential·인가·browser·error controls, audit, credential incident와 안전한 rollout까지 production readiness로 통합합니다.",
   level: "전문가", estimatedMinutes: 230,
   coreQuestion: "Spring Security 기능 조각을 어떻게 하나의 위협 기반 architecture, 검증 가능한 controls와 사고 후 복구 가능한 운영 체계로 통합할까요?",

@@ -265,7 +265,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-18-memo-callback-performance", slug: "react-18-memo-callback-performance", courseId: "react", moduleId: "react-events-forms-hooks", order: 8,
+  inventoryId: "react-18-useid-accessibility", slug: "react-18-memo-callback-performance", courseId: "react", moduleId: "react-events-forms-hooks", order: 8,
   title: "memo·useMemo·useCallback과 성능 측정", subtitle: "원본 계산·함수 identity 예제를 correctness-first memoization, Profiler, responsiveness, Compiler와 release evidence로 확장합니다.", level: "고급", estimatedMinutes: 120,
   coreQuestion: "어떤 render work와 prop identity가 실제 사용자 성능 문제인지 측정하고 memo·useMemo·useCallback 또는 scheduling/compiler를 correctness 손실 없이 어떻게 선택할까요?",
   summary: "my-app01 step11-hook의 UseMemo01~04, UseCallBack01~03/Child, hook 설명과 REACT hooks/공식 감수/source coverage 문서를 read-only·sanitized 감사하고 여덟 archive counterparts가 byte-identical함을 확인했습니다. actual list·label·log·local URL strings는 복사하지 않습니다. 원본 Callback03의 empty dependency와 captured update는 stable identity가 fresh behavior를 보장하지 않는 실패 근거로 다룹니다. cache eviction/Object.is/purity, production-like Profiler와 distribution, dependency graph, memo comparator, lint/compiler safety, memory cost, transition/deferred scheduling, React Compiler migration, a11y/security parity와 rollback까지 확장합니다. 여섯 exact Node examples는 provenance, identity, percentile, closure, prop comparison과 release gate를 실행합니다.",

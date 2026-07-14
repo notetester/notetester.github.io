@@ -400,7 +400,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-02-userdetails-password-encoder",
+    inventoryId: "sec-02-password-encoder-login",
   slug: "security-02-userdetails-password-encoder",
   courseId: "devops",
   moduleId: "security-filter-authentication",

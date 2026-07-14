@@ -556,7 +556,7 @@ const session = {
             { change: "items[1].src를 invalid protocol/external value로 바꿉니다.", prediction: "property가 request를 시도할 수 있습니다.", result: "allowed media URL/provenance와 error state를 검증합니다." },
             { change: "visual active class만 갱신하고 aria-pressed를 제거합니다.", prediction: "screen reader가 current thumbnail을 알기 어렵습니다.", result: "visual/accessibility state를 함께 render합니다." },
           ],
-          sourceRefs: ["web-thumbnail-gallery-source", "wai-carousel-pattern", "wai-image-alt-tutorial", "html-button-standard"],
+          sourceRefs: ["web-thumbnail-gallery-source", "wai-carousel-pattern", "wai-image-alt-tutorial", "html-button-standard", "web-infinite-clone-slider-source", "css-transforms-standard"],
         },
       ],
       diagnostics: [

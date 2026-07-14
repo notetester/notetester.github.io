@@ -401,7 +401,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-03-session-login-authentication",
+    inventoryId: "sec-04-authentication-authorization",
   slug: "security-03-session-login-authentication",
   courseId: "devops",
   moduleId: "security-filter-authentication",

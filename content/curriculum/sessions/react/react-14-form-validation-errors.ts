@@ -263,7 +263,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-14-form-validation-errors", slug: "react-14-form-validation-errors",
+    inventoryId: "react-14-form-validation-submit", slug: "react-14-form-validation-errors",
   courseId: "react", moduleId: "react-events-forms-hooks", order: 4,
   title: "form validation과 오류 UX", subtitle: "field meta·cross-field·async race·Problem Details·접근성·보안을 하나의 복구 가능한 validation contract로 묶습니다.",
   level: "중급", estimatedMinutes: 125,

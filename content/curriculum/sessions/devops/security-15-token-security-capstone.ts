@@ -232,7 +232,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-15-token-security-capstone", slug: "security-15-token-security-capstone", courseId: "devops", moduleId: "token-client-integration", order: 7,
+  inventoryId: "sec-10-login-token-issuance", slug: "security-15-token-security-capstone", courseId: "devops", moduleId: "token-client-integration", order: 7,
   title: "access·refresh·React token security capstone", subtitle: "JOSE profile·key rollover와 atomic refresh family에서 React single-flight, storage/logout, theft incident와 reversible migration까지 end-to-end로 통합합니다.",
   level: "전문가", estimatedMinutes: 245,
   coreQuestion: "access/refresh/signing credentials가 issuer, server state, React/browser와 운영 경계를 오갈 때 theft·replay·race·rollback에도 안전하고 복구 가능한 하나의 architecture로 어떻게 설계할까요?",

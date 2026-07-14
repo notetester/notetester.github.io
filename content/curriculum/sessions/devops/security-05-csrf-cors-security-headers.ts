@@ -185,7 +185,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-05-csrf-cors-security-headers", slug: "security-05-csrf-cors-security-headers", courseId: "devops", moduleId: "security-filter-authentication", order: 5,
+  inventoryId: "sec-03-cors-csrf-stateless", slug: "security-05-csrf-cors-security-headers", courseId: "devops", moduleId: "security-filter-authentication", order: 5,
   title: "CSRF·CORS·security headers", subtitle: "browser credential 모델에서 CSRF token lifecycle, exact CORS preflight와 CSP/header rollout까지 실제 wire evidence로 검증합니다.",
   level: "고급", estimatedMinutes: 175,
   coreQuestion: "서로 다른 origin의 SPA와 API를 연결하면서 browser가 자동 첨부하는 credential의 CSRF 위험, response 공유를 위한 CORS와 실행 정책인 security headers를 어떻게 혼동 없이 설계할까요?",

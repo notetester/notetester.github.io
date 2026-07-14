@@ -309,7 +309,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-19-custom-hook-contract", slug: "react-19-custom-hook-contract", courseId: "react", moduleId: "react-events-forms-hooks", order: 9,
+  inventoryId: "react-19-usememo-derived", slug: "react-19-custom-hook-contract", courseId: "react", moduleId: "react-events-forms-hooks", order: 9,
   title: "custom Hook 계약과 재사용", subtitle: "원본 Effect·ref·memo·callback 로직을 Rules, typed state/actions, cleanup, async race, external store, SSR와 versioned 운영 contract로 추출합니다.", level: "고급", estimatedMinutes: 115,
   coreQuestion: "반복되는 Effect·ref·memo 로직을 어떤 high-level custom Hook 경계와 input/state/action/resource contract로 추출해야 consumer가 단순해지고 lifecycle·race·SSR·security가 안전할까요?",
   summary: "my-app01 step11-hook의 EffectTest01~05, Ref03~04, Memo02~04, Callback02~03/Child, hook 설명과 REACT hooks/공식 감수/source coverage를 read-only·sanitized 감사하고 열세 archive counterparts가 byte-identical함을 확인했습니다. 실제 remote endpoint/query/payload fields와 display/log/domain strings는 복사하지 않습니다. custom Hook가 logic을 공유하지만 state는 독립이라는 원칙, concrete high-level extraction, Hook order/lints, typed finite return contract, resource cleanup, callback freshness/useEffectEvent, async abort+generation+authorization, useSyncExternalStore snapshots, act/fake-time tests, useDebugValue/performance/SSR/version migration까지 확장합니다. 여섯 exact Node examples는 provenance, instance isolation, call order, return states, latest-wins와 external-store contract를 실행합니다.",

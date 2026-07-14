@@ -440,7 +440,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-12-state-batching-functional-update", slug: "react-12-state-batching-functional-update", courseId: "react", moduleId: "react-events-forms-hooks", order: 2,
+  inventoryId: "react-12-controlled-input", slug: "react-12-state-batching-functional-update", courseId: "react", moduleId: "react-events-forms-hooks", order: 2,
   title: "state batching과 함수형 업데이트",
   subtitle: "일반 변수와 direct setter에서 출발해 render snapshot·update queue·immutability·async race·state release governance까지 확장합니다",
   level: "중급", estimatedMinutes: 115,

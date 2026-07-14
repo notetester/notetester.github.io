@@ -759,7 +759,7 @@ const advancedChapters: DetailedSession["chapters"] = [
         { change: "all input을 [1, 'ok']로 바꿉니다.", prediction: "모두 소비하고 all=True입니다.", result: "falsy counterexample이 없습니다." },
         { change: "한 generator에 any 뒤 all을 연속 적용합니다.", prediction: "all은 남은 tail만 소비합니다.", result: "one-shot iterator ownership을 문서화합니다." },
       ],
-      sourceRefs: ["python-builtins-all-any", "python-iterator-doc-003", "python-expressions-generator-003"],
+      sourceRefs: ["python-builtins-all-any", "python-iterator-doc-003", "python-expressions-generator-003", "python-builtins-bool-003"],
     }],
     diagnostics: [
       { symptom: "빈 입력인데 all 검증이 True입니다.", likelyCause: "empty iterable의 vacuous truth를 최소1개 요구와 혼동했습니다.", checks: ["input length/presence를 봅니다.", "최소 cardinality 요구를 확인합니다.", "empty fixture를 실행합니다."], fix: "최소 한 개가 필요하면 presence와 all predicate를 함께 검사합니다.", prevention: "empty/one/many cases를 test matrix에 둡니다." },

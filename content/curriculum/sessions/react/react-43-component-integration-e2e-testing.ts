@@ -283,7 +283,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-43-component-integration-e2e-testing", slug: "react-43-component-integration-e2e-testing", courseId: "react", moduleId: "react-integrated-app-quality", order: 3,
+  inventoryId: "react-43-mock-local-storage", slug: "react-43-component-integration-e2e-testing", courseId: "react", moduleId: "react-integrated-app-quality", order: 3,
   title: "component·integration·E2E testing", subtitle: "placeholder를 user-centric component, real network contract, isolated browser journey와 security·accessibility release evidence로 교체합니다.",
   level: "고급", estimatedMinutes: 145,
   coreQuestion: "auth·router·CRUD·network가 얽힌 React app을 어떤 test layer와 fixture로 검증해야 빠르고 deterministic하면서도 실제 browser/server failure를 놓치지 않을까요?",

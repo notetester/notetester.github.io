@@ -236,7 +236,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-24-zustand-store-actions", slug: "react-24-zustand-store-actions",
+    inventoryId: "react-24-usereducer-state-machine", slug: "react-24-zustand-store-actions",
   courseId: "react", moduleId: "react-state-management", order: 4,
   title: "Zustand store·action과 immutable update", subtitle: "원본 todo·memo store를 versioned evidence로 감사하고 create/set/get, immutable entity transition, async race와 store lifecycle을 운영 가능한 계약으로 확장합니다.",
   level: "고급", estimatedMinutes: 120,

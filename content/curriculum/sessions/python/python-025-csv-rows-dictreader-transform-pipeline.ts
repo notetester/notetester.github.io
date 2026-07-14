@@ -439,7 +439,7 @@ const dialectContractChapter: DetailedSession["chapters"][number] = {
         { change: "score를 seven으로 바꿉니다.", prediction: "ValueError를 catch해 score issue가 생깁니다.", result: "CSV parse와 domain type conversion을 분리합니다." },
         { change: "note를 `  =cmd`로 바꿉니다.", prediction: "lstrip 검사로 위험 prefix를 발견하고 원래 공백 앞에 apostrophe를 붙입니다.", result: "leading whitespace 우회 fixture를 추가합니다." },
       ],
-      sourceRefs: ["python-csv-dictreader-025", "owasp-csv-injection-025", "python-io-text-025"],
+      sourceRefs: ["python-csv-dictreader-025", "owasp-csv-injection-025", "python-io-text-025", "python-open-text-025"],
     },
   ],
   diagnostics: [

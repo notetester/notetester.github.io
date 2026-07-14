@@ -247,7 +247,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-17-ref-dom-imperative", slug: "react-17-ref-dom-imperative", courseId: "react", moduleId: "react-events-forms-hooks", order: 7,
+  inventoryId: "react-17-useref-dom-mutable", slug: "react-17-ref-dom-imperative", courseId: "react", moduleId: "react-events-forms-hooks", order: 7,
   title: "ref와 DOM imperative escape hatch", subtitle: "원본 DOM focus·mutable ref·previous value를 commit lifecycle, accessibility, measurement, capability security와 SSR 운영으로 확장합니다.", level: "고급", estimatedMinutes: 110,
   coreQuestion: "React의 declarative owner를 깨지 않으면서 DOM focus·measurement·third-party widget 같은 imperative 작업을 ref lifecycle과 최소 capability로 어떻게 안전하게 수행할까요?",
   summary: "my-app01 step11-hook의 UseRefTest01~04, hook 설명, REACT hooks/공식 감수/source coverage 문서를 read-only·sanitized 감사하고 네 코드의 REACT archive counterpart가 byte-identical함을 확인했습니다. 원본의 실제 placeholder·alert·log·display 값은 복사하지 않습니다. state/ref/local lifetime, DOM null attach/detach, controlled authority, keyboard focus, layout batching, callback registry, React 19 ref prop·useImperativeHandle와 React 18 adapter, third-party cleanup, DOM sink/security, concurrency·SSR·flushSync release gate까지 확장합니다. 여섯 Node examples는 provenance, storage lifetime, focus decision, layout phase, dynamic registry와 capability allowlist를 exact stdout으로 실행하되 actual React commit·DOM·browser·screen reader를 대체하지 않습니다.",

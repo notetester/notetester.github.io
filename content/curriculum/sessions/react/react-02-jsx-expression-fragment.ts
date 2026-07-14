@@ -269,7 +269,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-02-jsx-expression-fragment", slug: "react-02-jsx-expression-fragment",
+    inventoryId: "react-02-jsx-expression-rules", slug: "react-02-jsx-expression-fragment",
   courseId: "react", moduleId: "react-rendering-components", order: 2,
   title: "JSX 표현식·속성·Fragment", subtitle: "원본 JSX 예제를 compiler transform, child value types, DOM props, purity, injection boundary와 accessibility까지 확장합니다.",
   level: "기초", estimatedMinutes: 120,

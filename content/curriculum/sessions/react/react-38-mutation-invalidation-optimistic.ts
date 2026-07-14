@@ -346,7 +346,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-38-mutation-invalidation-optimistic", slug: "react-38-mutation-invalidation-optimistic", courseId: "react", moduleId: "react-router-network", order: 8,
+  inventoryId: "react-38-server-state-supplement", slug: "react-38-mutation-invalidation-optimistic", courseId: "react", moduleId: "react-router-network", order: 8,
   title: "mutation·invalidation과 optimistic transaction",
   subtitle: "CRUD side effect를 versioned command, targeted invalidation, immutable response patch와 concurrency-safe optimistic transaction으로 운영합니다.",
   level: "고급", estimatedMinutes: 140,

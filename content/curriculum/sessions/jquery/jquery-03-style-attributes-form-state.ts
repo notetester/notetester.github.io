@@ -499,7 +499,7 @@ const session = {
             { change: "rich content를 .text로 바꿉니다.", prediction: "strong markup이 literal text로 표시됩니다.", result: "plain text 요구에는 이 behavior가 안전합니다." },
             { change: "visibility:hidden element를 $(':visible')로 검사합니다.", prediction: "layout space를 가지면 jQuery 기준 visible일 수 있습니다.", result: "CSS visibility와 jQuery heuristic을 구분합니다." },
           ],
-          sourceRefs: ["web-jquery-each-text-html-source", "web-jquery-computed-css-source", "web-jquery-initial-form-source", "jquery-content-api", "jquery-visibility-api", "trusted-types-standard"],
+          sourceRefs: ["web-jquery-each-text-html-source", "web-jquery-computed-css-source", "web-jquery-initial-form-source", "jquery-content-api", "jquery-visibility-api", "trusted-types-standard", "html-select-state-standard", "dom-token-list-standard"],
         },
       ],
       diagnostics: [

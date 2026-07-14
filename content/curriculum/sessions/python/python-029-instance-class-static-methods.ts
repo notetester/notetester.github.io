@@ -383,7 +383,7 @@ const bindingChapters: DetailedSession["chapters"] = [
         { change: "clock을 instance constructor argument로 옮깁니다.", prediction: "subclass 없이 service instance마다 fake를 주입할 수 있습니다.", result: "병렬 test와 dependency lifetime이 더 명시적입니다." },
         { change: "clock을 일반 instance method로 바꾸고 classmethod에서 호출합니다.", prediction: "instance가 없어 호출할 수 없습니다.", result: "receiver 요구와 factory 책임을 다시 분리합니다." },
       ],
-      sourceRefs: ["python-classmethod-doc", "python-staticmethod-doc", "python-descriptor-howto-029", "python-inspect-method-029"],
+      sourceRefs: ["python-classmethod-doc", "python-staticmethod-doc", "python-descriptor-howto-029", "python-inspect-method-029", "py-car-instance-source"],
     }],
     diagnostics: [
       { symptom: "test가 class clock patch를 복구하지 못해 다른 test 결과가 바뀝니다.", likelyCause: "process-wide class state를 직접 monkey-patch하고 lifecycle을 관리하지 않았습니다.", checks: ["원래 descriptor를 class __dict__에서 확인합니다.", "test 병렬 실행과 patch 범위를 봅니다.", "constructor injection 가능성을 검토합니다."], fix: "fixture/context manager로 patch를 복구하거나 instance dependency injection으로 옮깁니다.", prevention: "병렬·순서 무작위 test와 state leakage 검사를 둡니다." },

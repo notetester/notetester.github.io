@@ -269,7 +269,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-31-router-configuration-layout", slug: "react-31-router-configuration-layout", courseId: "react", moduleId: "react-router-network", order: 1,
+  inventoryId: "react-31-nested-dynamic-router", slug: "react-31-router-configuration-layout", courseId: "react", moduleId: "react-router-network", order: 1,
   title: "Router 구성·layout과 route ownership", subtitle: "버전·mode를 분리해 읽고 route registry, nested layouts, 404/errors, auth guard, base/static hosting과 migration까지 URL 계약으로 운영합니다.",
   level: "중급", estimatedMinutes: 120,
   coreQuestion: "BrowserRouter 기반 학습 앱을 어떻게 URL·layout·data/error·navigation·deployment owner가 명확하고 deep link, 404, auth, 접근성, upgrade와 rollback까지 검증 가능한 router architecture로 확장할까요?",

@@ -196,7 +196,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-07-security-testing-audit", slug: "security-07-security-testing-audit", courseId: "devops", moduleId: "security-filter-authentication", order: 7,
+  inventoryId: "sec-17-security-testing-threat-model", slug: "security-07-security-testing-audit", courseId: "devops", moduleId: "security-filter-authentication", order: 7,
   title: "security testing·audit evidence", subtitle: "source와 runtime, Spring tests, browser/negative/abuse testing, scanners와 재현 가능한 audit gate를 하나의 evidence chain으로 연결합니다.",
   level: "고급", estimatedMinutes: 185,
   coreQuestion: "보안 설정이 있어 보인다는 인상을 넘어 어떤 위협과 control을 어느 source·artifact·runtime에서 실제로 검증했는지 어떻게 재현 가능한 증거로 남길까요?",

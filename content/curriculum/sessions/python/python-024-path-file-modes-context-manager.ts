@@ -393,7 +393,7 @@ expertSession.chapters.push(
           { change: "containment를 문자열 `str(candidate).startswith(str(root))`로 바꿉니다.", prediction: "root와 prefix만 같은 sibling 경로를 잘못 허용할 수 있습니다.", result: "filesystem component 인식 relative_to가 필요한 이유를 확인합니다." },
           { change: "exists()로 없음 확인 뒤 w mode로 만들도록 바꿉니다.", prediction: "검사와 생성 사이 다른 process가 같은 이름을 만들 수 있습니다.", result: "x mode·tempfile처럼 검사와 생성을 결합한 API가 필요한 이유를 확인합니다." },
         ],
-        sourceRefs: ["python-pathlib-doc-024", "python-os-open-doc-024", "python-tempfile-doc-024", "python-open-doc"],
+        sourceRefs: ["python-pathlib-doc-024", "python-os-open-doc-024", "python-tempfile-doc-024", "python-open-doc", "py-day05-file-note"],
       },
     ],
     diagnostics: [

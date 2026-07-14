@@ -204,7 +204,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-28-store-contract-testing", slug: "react-28-store-contract-testing", courseId: "react", moduleId: "react-state-management", order: 8,
+  inventoryId: "react-28-zustand-memo-slices", slug: "react-28-store-contract-testing", courseId: "react", moduleId: "react-state-management", order: 8,
   title: "store contract·component와 fault testing", subtitle: "Zustand action·selector·persist·async race를 fresh-store model부터 accessible component, browser와 결정적 CI까지 검증합니다.",
   level: "고급", estimatedMinutes: 135,
   coreQuestion: "공유 상태와 CRUD가 정상 demo를 넘어서 모든 test 순서·race·storage failure·사용자 상호작용에서도 같은 계약을 지킨다는 것을 어떻게 증명할까요?",

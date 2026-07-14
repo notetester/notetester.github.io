@@ -359,7 +359,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-12-react-token-client", slug: "security-12-react-token-client", courseId: "devops", moduleId: "token-client-integration", order: 4,
+  inventoryId: "sec-11-react-token-storage", slug: "security-12-react-token-client", courseId: "devops", moduleId: "token-client-integration", order: 4,
   title: "React token client·storage·interceptor",
   subtitle: "browser credential threat model에서 epoch state, bounded single-flight refresh, safe replay, XSS/CSRF, multi-tab/offline convergence와 reversible migration까지 구현합니다.",
   level: "전문가", estimatedMinutes: 190,

@@ -55,7 +55,7 @@ const session = {
             { lines: "12-15", explanation: "이름·합계·평균과 변환 전후 str/int 타입을 출력합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "PowerShell 또는 터미널"], command: "python score_input.py", input: "둘리\n90\n80\n70" },
-          output: { value: "이름 : 둘리\n국어점수 : 90\n영어점수 : 80\n수학점수 : 70\nname='둘리'\ntotal=240\naverage=80.00\nstr int", explanation: ["대화형 터미널에서는 입력한 글자가 prompt 뒤에 보입니다. 파이프 실행은 prompt들이 한 줄처럼 이어질 수 있습니다.", "평균은 float 80.0이지만 .2f 표시가 80.00 문자열 모양을 만듭니다.", "kor_text와 kor 타입 출력이 입력과 내부 계산 값 경계를 증명합니다."] },
+          output: { value: "이름 : 국어점수 : 영어점수 : 수학점수 : name='둘리'\ntotal=240\naverage=80.00\nstr int", explanation: ["검증기는 입력을 pipe로 전달하므로 terminal echo 없이 네 prompt가 이어집니다. 대화형 터미널에서는 사용자가 입력한 둘리·90·80·70이 각 prompt 뒤에 보입니다.", "평균은 float 80.0이지만 .2f 표시가 80.00 문자열 모양을 만듭니다.", "kor_text와 kor 타입 출력이 입력과 내부 계산 값 경계를 증명합니다."] },
           experiments: [
             { change: "국어점수에 90.5를 입력합니다.", prediction: "int('90.5')가 정수 리터럴 형식이 아니라 ValueError입니다.", result: "소수 점수를 허용하려면 float 파싱과 범위 정책을 별도로 정해야 합니다." },
             { change: "점수 한 줄을 비워 Enter를 누릅니다.", prediction: "int('')에서 ValueError입니다.", result: "빈 값 정책과 반복 입력·취소 흐름이 필요함을 확인합니다." },
@@ -113,7 +113,7 @@ const session = {
             { lines: "12", explanation: "두 경계를 모두 통과한 int만 내부 검증 값으로 사용합니다." },
           ],
           run: { environment: ["Python 3.11 이상", "validated_score.py를 저장"], command: "python validated_score.py", input: "101" },
-          output: { value: "점수(0~100) : 101\n오류: 점수는 0~100이어야 합니다.", explanation: ["101은 정수 파싱에 성공하므로 ‘정수를 입력’ 오류가 아닙니다.", "입력을 abc로 바꾸면 ValueError 경로의 문법 오류가 출력됩니다.", "입력 100은 포함 경계라 검증 성공입니다."] },
+          output: { value: "점수(0~100) : 오류: 점수는 0~100이어야 합니다.", explanation: ["검증기의 pipe 입력은 101을 terminal에 echo하지 않지만 대화형 실행에서는 prompt 뒤에 사용자가 입력한 101이 보입니다.", "101은 정수 파싱에 성공하므로 ‘정수를 입력’ 오류가 아닙니다.", "입력을 abc로 바꾸면 ValueError 경로의 문법 오류가 출력되고 입력 100은 포함 경계라 검증 성공입니다."] },
           experiments: [
             { change: "입력을 ' 90 '으로 사용합니다.", prediction: "strip 후 90으로 파싱되어 성공합니다.", result: "공백 정규화 정책이 먼저 적용됩니다." },
             { change: "입력을 'nan'으로 하고 int를 float로 바꿉니다.", prediction: "파싱은 성공하지만 범위 비교가 False여서 범위 오류입니다.", result: "실수 입력에서는 math.isfinite 검증을 명시하는 편이 오류 이유를 정확히 합니다." },

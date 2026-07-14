@@ -211,7 +211,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-41-integrated-auth-user-flow", slug: "react-41-integrated-auth-user-flow", courseId: "react", moduleId: "react-integrated-app-quality", order: 1,
+  inventoryId: "react-41-private-route", slug: "react-41-integrated-auth-user-flow", courseId: "react", moduleId: "react-integrated-app-quality", order: 1,
   title: "통합 인증·사용자 여정", subtitle: "회원가입·로그인·프로필·세션 복구·logout을 state, navigation, token lifecycle, 접근성, server authorization과 incident recovery로 완성합니다.",
   level: "고급", estimatedMinutes: 150,
   coreQuestion: "React 사용자 인증 흐름을 편리한 UI에 그치지 않고 credential과 private data의 전체 생명주기, concurrency, accessibility와 복구 가능성까지 어떻게 검증할까요?",

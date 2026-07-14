@@ -215,7 +215,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-42-integrated-guestbook-crud", slug: "react-42-integrated-guestbook-crud", courseId: "react", moduleId: "react-integrated-app-quality", order: 2,
+  inventoryId: "react-42-guestbook-crud", slug: "react-42-integrated-guestbook-crud", courseId: "react", moduleId: "react-integrated-app-quality", order: 2,
   title: "통합 Guestbook CRUD", subtitle: "React form·query/mutation에서 Spring controller·service·SQL과 server authorization, version conflict, 접근성, full-stack recovery까지 연결합니다.",
   level: "고급", estimatedMinutes: 155,
   coreQuestion: "방명록 CRUD를 demo 버튼 모음이 아니라 concurrent users, untrusted content, authorization, DB failure와 rollback 뒤에도 합의되는 full-stack feature로 어떻게 완성할까요?",

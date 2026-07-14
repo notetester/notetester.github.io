@@ -883,7 +883,7 @@ const advancedObjectChapters: DetailedSession["chapters"] = [
         { change: "Percentage.__eq__에서 raw int도 허용합니다.", prediction: "편해 보이지만 symmetric comparison과 hash 설계가 더 복잡해집니다.", result: "explicit value extraction을 우선합니다." },
         { change: "Progress를 Percentage의 subclass로 바꿉니다.", prediction: "Progress가 숫자 비율이 필요한 모든 곳에 대체 가능하다는 잘못된 API가 생깁니다.", result: "is-a와 has-a 질문으로 설계를 검토합니다." },
       ],
-      sourceRefs: ["python-object-repr-028", "python-eq-hash-028", "python-slots-028", "python-class-reference"],
+      sourceRefs: ["python-object-repr-028", "python-eq-hash-028", "python-slots-028", "python-class-reference", "py-class-calc"],
     }],
     diagnostics: [
       { symptom: "Progress가 Percentage API 전체를 노출해 course 의미와 숫자 연산이 섞입니다.", likelyCause: "코드 재사용만 보고 has-a 관계를 상속으로 모델링했습니다.", checks: ["Progress가 Percentage가 필요한 모든 곳에 대체 가능한지 묻습니다.", "부모 public methods가 자식에 모두 유효한지 봅니다.", "composition field로 바꾼 API를 비교합니다."], fix: "Percentage를 field로 포함하고 Progress가 필요한 operations만 위임합니다.", prevention: "상속 결정에 semantic is-a·LSP checklist를 적용합니다." },

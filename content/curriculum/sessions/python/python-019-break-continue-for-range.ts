@@ -449,7 +449,7 @@ expertSession.chapters.push({
         { change: "첫 find 호출이 끝난 Countdown 객체를 변수에 보존해 다시 find합니다.", prediction: "break 당시 남은 상태부터 이어서 소비하며 처음부터 재시작하지 않습니다.", result: "iterator가 단일 소비 상태 객체임을 확인합니다." },
         { change: "values.copy()를 values로 바꿉니다.", prediction: "요소 이동 때문에 일부 입력에서는 삭제 대상이 건너뛰어질 수 있습니다.", result: "반복 중 동일 list 구조 변경의 불안정성을 재현합니다." },
       ],
-      sourceRefs: ["python-iterator-protocol-doc", "python-for-reference-doc", "python-range-doc", "python-itertools-doc", "python-enumerate-doc"],
+      sourceRefs: ["python-iterator-protocol-doc", "python-for-reference-doc", "python-range-doc", "python-itertools-doc", "python-enumerate-doc", "py-while-break"],
     },
   ],
   diagnostics: [

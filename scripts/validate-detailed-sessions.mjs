@@ -66,6 +66,7 @@ for (const { file, session } of sessions) {
   const chapterIds = chapters.map((chapter) => chapter.id);
   const exampleIds = examples.map((example) => example.id);
   const sourceIds = (session.sources ?? []).map((source) => source.id);
+  const referencedSourceIds = new Set(examples.flatMap((example) => example.sourceRefs ?? []));
 
   if (session.schemaVersion !== 2) failures.push(`${label}: schemaVersion must be 2`);
   if (!(session.inventoryIds ?? []).length) failures.push(`${label}: inventoryIds required`);
@@ -87,6 +88,9 @@ for (const { file, session } of sessions) {
   if (!session.lab?.steps?.length || !session.lab?.expectedResult?.length) failures.push(`${label}: incomplete lab`);
   if (!(session.sources ?? []).length) failures.push(`${label}: no source evidence`);
   if (new Set(sourceIds).size !== sourceIds.length) failures.push(`${label}: duplicate source id`);
+  for (const sourceId of sourceIds) {
+    if (!referencedSourceIds.has(sourceId)) failures.push(`${label}: source ${sourceId} is never referenced by an example`);
+  }
   if ((session.sourceCoverage?.filesUsed ?? 0) > (session.sourceCoverage?.filesRead ?? 0)) {
     failures.push(`${label}: filesUsed exceeds filesRead`);
   }

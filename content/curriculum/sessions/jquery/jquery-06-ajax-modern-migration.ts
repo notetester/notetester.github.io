@@ -730,7 +730,7 @@ const session = {
             { change: "jQuery error wrapper가 errorThrown만 message로 사용합니다.", prediction: "server safe error body와 다른 message가 되어 parity가 깨집니다.", result: "error normalization precedence를 합의합니다." },
             { change: "same contract에 abort·timeout·parsererror fixtures를 추가합니다.", prediction: "transport별 raw names를 application categories로 map해야 합니다.", result: "migration coverage가 production failure까지 넓어집니다." },
           ],
-          sourceRefs: ["jquery-ajax-api", "jquery-deferred-api", "fetch-standard", "dom-abort-standard"],
+          sourceRefs: ["jquery-ajax-api", "jquery-deferred-api", "fetch-standard", "dom-abort-standard", "jquery4-upgrade-guide"],
         },
       ],
       diagnostics: [

@@ -342,7 +342,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-10-access-token-validation",
+    inventoryId: "sec-06-jwt-claims-expiration",
   slug: "security-10-access-token-validation",
   courseId: "devops",
   moduleId: "token-client-integration",

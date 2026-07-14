@@ -198,7 +198,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-37-api-state-machine-cache", slug: "react-37-api-state-machine-cache", courseId: "react", moduleId: "react-router-network", order: 7,
+  inventoryId: "react-37-api-module-contract", slug: "react-37-api-state-machine-cache", courseId: "react", moduleId: "react-router-network", order: 7,
   title: "API state machine·query cache", subtitle: "manual fetch/store 흐름을 query identity, status/fetchStatus, freshness, dedupe, pagination, SSR와 auth-scoped cache 계약으로 발전시킵니다.",
   level: "고급", estimatedMinutes: 140,
   coreQuestion: "remote data를 local global state처럼 다루지 않고 identity·freshness·request lifecycle·cache retention과 실패 복구를 어떻게 일관되게 관리할까요?",

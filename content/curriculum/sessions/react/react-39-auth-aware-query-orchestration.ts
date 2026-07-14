@@ -363,7 +363,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-39-auth-aware-query-orchestration", slug: "react-39-auth-aware-query-orchestration", courseId: "react", moduleId: "react-router-network", order: 9,
+  inventoryId: "react-39-app-layout-navbar", slug: "react-39-auth-aware-query-orchestration", courseId: "react", moduleId: "react-router-network", order: 9,
   title: "인증 인지형 query·refresh orchestration",
   subtitle: "auth state·epoch를 query gate, 401 single-flight, bounded replay, logout purge, navigation prefetch와 request-scoped SSR에 연결합니다.",
   level: "고급", estimatedMinutes: 140,

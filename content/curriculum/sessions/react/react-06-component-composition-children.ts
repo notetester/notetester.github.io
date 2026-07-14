@@ -232,7 +232,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-06-component-composition-children", slug: "react-06-component-composition-children", courseId: "react", moduleId: "react-rendering-components", order: 6,
+  inventoryId: "react-06-list-map-key", slug: "react-06-component-composition-children", courseId: "react", moduleId: "react-rendering-components", order: 6,
   title: "component 합성과 children slot", subtitle: "원본 parent-child tree와 direct children 예제를 opaque node·named/render/compound slots, semantic ownership, security·performance와 async API 운영으로 확장합니다.", level: "중급", estimatedMinutes: 105,
   coreQuestion: "재사용 가능한 UI를 어떤 component/children/slot 경계로 합성해야 data flow와 state ownership이 명확하고 semantics·security·performance·failure가 통제될까요?",
   summary: "my-app01의 Book, Library, Comment, CommentList, Item과 direct children example, REACT intro composition document를 read-only·sanitized 감사했습니다. Library→Book, CommentList→Comment, prop-driven semantic Item과 root App composition, start/end tags 사이 JSX를 children으로 전달하는 실제 구조를 보존하되 book/person/message/item/event strings는 복사하지 않습니다. React element/node/opaque children, containment/named slots, render props, compound components/scoped Context, Children/cloneElement alternatives, semantic DOM/a11y owner, untrusted content/prop forwarding, composition performance와 lazy/error/SSR/API migration을 current official sources로 확장합니다. 다섯 Node examples는 source tree, node shapes, slot validation, compound registry와 release manifest를 exact stdout으로 실행합니다.",

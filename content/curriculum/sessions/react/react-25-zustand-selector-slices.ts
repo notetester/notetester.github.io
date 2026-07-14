@@ -263,7 +263,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-25-zustand-selector-slices", slug: "react-25-zustand-selector-slices",
+    inventoryId: "react-25-zustand-store-actions", slug: "react-25-zustand-selector-slices",
   courseId: "react", moduleId: "react-state-management", order: 5,
   title: "Zustand selector·slice와 render 경계", subtitle: "원본 whole-store consumers를 atomic selector, shallow output, slice ownership, selector subscription과 measurable render budget으로 단계적으로 전환합니다.",
   level: "고급", estimatedMinutes: 125,

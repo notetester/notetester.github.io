@@ -252,7 +252,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-29-state-architecture-migration", slug: "react-29-state-architecture-migration", courseId: "react", moduleId: "react-state-management", order: 9,
+  inventoryId: "react-29-state-ownership-decision", slug: "react-29-state-architecture-migration", courseId: "react", moduleId: "react-state-management", order: 9,
   title: "상태 아키텍처 선택·migration", subtitle: "local·lifted·Context/reducer·Zustand·server cache의 권위를 구분하고 dual-read/write, reconciliation, cutover와 rollback으로 무손실 전환합니다.",
   level: "고급", estimatedMinutes: 130,
   coreQuestion: "각 state의 가장 작은 올바른 owner를 어떻게 고르고, 이미 중복된 old/new 상태를 사용자-visible 데이터 손실 없이 단계적으로 전환하고 되돌릴까요?",

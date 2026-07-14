@@ -387,7 +387,7 @@ const advancedJsonChapters: DetailedSession["chapters"] = [
         { change: "두 JSON document를 newline 없이 연결합니다.", prediction: "loads가 Extra data 오류를 냅니다.", result: "명시적 framing 필요성을 확인합니다." },
         { change: "한 line을 중간에서 자릅니다.", prediction: "JSONDecodeError가 나고 record 번호와 함께 격리할 수 있습니다.", result: "stream 전체를 민감 로그에 남기지 않습니다." },
       ],
-      sourceRefs: ["json-lines-027", "python-json-loads-hooks-027", "json-schema-core-027", "rfc8259-027"],
+      sourceRefs: ["json-lines-027", "python-json-loads-hooks-027", "json-schema-core-027", "rfc8259-027", "py-day05-json-note", "python-json-decoder-027", "python-io-text-027"],
     }],
     diagnostics: [
       { symptom: "여러 object를 dump한 파일을 load하면 Extra data 오류가 납니다.", likelyCause: "독립 JSON documents를 framing 없이 연속 기록했습니다.", checks: ["첫 document 종료 뒤 non-whitespace가 있는지 봅니다.", "array·JSON Lines·length prefix 중 계약을 확인합니다.", "producer의 write 호출을 추적합니다."], fix: "하나의 array 또는 명시적 JSON Lines/length framing으로 다시 설계합니다.", prevention: "0·1·여러 records와 truncated 마지막 record를 parser contract test에 둡니다." },

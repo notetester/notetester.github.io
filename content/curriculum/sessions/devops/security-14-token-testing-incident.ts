@@ -594,7 +594,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-14-token-testing-incident",
+    inventoryId: "sec-13-private-route-not-security-boundary",
   slug: "security-14-token-testing-incident",
   courseId: "devops",
   moduleId: "token-client-integration",

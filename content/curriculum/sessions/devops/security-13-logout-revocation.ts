@@ -343,7 +343,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-13-logout-revocation", slug: "security-13-logout-revocation", courseId: "devops", moduleId: "token-client-integration", order: 5,
+  inventoryId: "sec-14-logout-revocation", slug: "security-13-logout-revocation", courseId: "devops", moduleId: "token-client-integration", order: 5,
   title: "logout·revocation·multi-tab/device convergence",
   subtitle: "local clear에서 server family/user revoke, tab·device·provider·offline propagation, privacy audit와 monotonic rollback까지 logout을 검증 가능한 lifecycle로 만듭니다.",
   level: "전문가", estimatedMinutes: 195,

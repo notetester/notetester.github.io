@@ -357,7 +357,7 @@ const advancedChapters: DetailedSession["chapters"] = [
         { change: "encoded.decode('utf-8') == text를 출력합니다.", prediction: "True입니다.", result: "같은 encoding으로 round trip합니다." },
         { change: "utf-8 bytes를 ascii로 decode합니다.", prediction: "UnicodeDecodeError가 납니다.", result: "decoder 계약 불일치를 확인합니다." },
       ],
-      sourceRefs: ["python-builtins-functions", "python-data-model", "python-unicode-howto"],
+      sourceRefs: ["python-builtins-functions", "python-data-model", "python-unicode-howto", "py-day01-ex03"],
     }],
     diagnostics: [
       { symptom: "빈 줄·tab·공백 차이를 print에서 구분하기 어렵습니다.", likelyCause: "str 사용자 표현만 보고 hidden characters를 관찰하지 않았습니다.", checks: ["repr(value)를 봅니다.", "len과 code points를 봅니다.", "입력 normalization을 확인합니다."], fix: "진단에는 redacted repr/hex를 사용하고 사용자 UI와 분리합니다.", prevention: "whitespace boundary fixtures를 둡니다." },

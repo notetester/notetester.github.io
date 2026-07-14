@@ -929,7 +929,7 @@ expertSession.chapters.push(
           { change: "filter predicate를 None으로 바꾸고 records 대신 [0, 1, '', 'x']를 넣습니다.", prediction: "0과 빈 문자열도 제거됩니다.", result: "truthiness filter가 domain-valid falsy 값을 잃을 수 있음을 확인합니다." },
           { change: "active_names 생성 직후 list(active_names)로 디버깅 출력합니다.", prediction: "후속 실제 소비에서는 아무 이름도 남지 않습니다.", result: "lazy iterator의 소비 소유권을 확인합니다." },
         ],
-        sourceRefs: ["python-operator-doc", "python-functional-howto-023", "python-partial-reference", "python-lambda-reference"],
+        sourceRefs: ["python-operator-doc", "python-functional-howto-023", "python-partial-reference", "python-lambda-reference", "py-lambda-import-dependency"],
       },
     ],
     diagnostics: [

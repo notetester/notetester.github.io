@@ -249,7 +249,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-32-route-params-search-state", slug: "react-32-route-params-search-state", courseId: "react", moduleId: "react-router-network", order: 2,
+  inventoryId: "react-32-navigation-notfound", slug: "react-32-route-params-search-state", courseId: "react", moduleId: "react-router-network", order: 2,
   title: "route params·search와 URL state", subtitle: "URL을 public input·shareable state·history entry·hosting contract로 함께 다루며 parsing, canonicalization, deep link와 보안을 끝까지 검증합니다.",
   level: "중급", estimatedMinutes: 120,
   coreQuestion: "route params와 search를 어떻게 읽을지가 아니라, 어떤 URL도 안전하고 canonical하며 공유·새로고침·back/forward 가능한 application state가 되게 하려면 무엇을 계약해야 할까요?",

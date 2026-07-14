@@ -1011,7 +1011,7 @@ public class NegativeInheritanceContracts {
           { change: "missing-super-noarg Child()에 super(1)을 추가합니다.", prediction: "fixture가 compile되어 expected-fail assertion이 실패합니다.", result: "명시적 applicable Parent constructor가 chain을 복구합니다." },
           { change: "harness에서 -d option을 제거합니다.", prediction: "diagnostic은 같을 수 있지만 partial class artifact 위치를 통제하지 못합니다.", result: "실패 semantics뿐 아니라 artifact isolation도 test contract입니다." },
         ],
-        sourceRefs: ["jdk21-javac", "jls-access-control", "jls-constructor-body", "jls-final-class", "java-compiler-api", "java-diagnostic-api", "java-files-api", "java-uuid-api"],
+        sourceRefs: ["jdk21-javac", "jls-access-control", "jls-constructor-body", "jls-final-class", "java-compiler-api", "java-diagnostic-api", "java-files-api", "java-uuid-api", "jls-members", "jls-protected-access"],
       }],
       diagnostics: [
         { symptom: "negative suite가 실패했지만 expected error를 확인하지 않고 성공으로 처리했다.", likelyCause: "compiled=false만 보고 parser error·classpath error·목표 semantic error를 구분하지 않았습니다.", checks: ["Diagnostic.Kind.ERROR 개수를 확인합니다.", "1-based line과 machine code를 비교합니다.", "unexpected warnings까지 전체 diagnostic count로 잡습니다."], fix: "exactly one error·expected line·expected code를 모두 assert합니다.", prevention: "fixture record에 source와 expectation을 함께 두고 JDK version을 pin합니다." },

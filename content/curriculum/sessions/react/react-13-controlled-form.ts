@@ -259,7 +259,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-13-controlled-form", slug: "react-13-controlled-form",
+    inventoryId: "react-13-form-checkbox-radio-select", slug: "react-13-controlled-form",
   courseId: "react", moduleId: "react-events-forms-hooks", order: 3,
   title: "controlled form과 입력 상태 모델", subtitle: "text·number·checkbox·radio·select·submit을 raw draft, canonical state, schema와 접근 가능한 transaction flow로 연결합니다.",
   level: "중급", estimatedMinutes: 125,

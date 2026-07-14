@@ -718,7 +718,7 @@ const advancedChapters: DetailedSession["chapters"] = [
         { change: "nonlocal을 global로 바꿉니다.", prediction: "module에 count가 없으므로 실행 시 이름 경계가 달라집니다.", result: "enclosing state와 module state를 구분합니다." },
         { change: "counter를 두 번 make_counter로 만듭니다.", prediction: "각 counter는 독립 count cell에서1부터 시작합니다.", result: "closure factory 호출별 ownership을 확인합니다." },
       ],
-      sourceRefs: ["python-execution-model-002", "python-global-nonlocal", "python-faq-programming"],
+      sourceRefs: ["python-execution-model-002", "python-global-nonlocal", "python-faq-programming", "python-typing-doc-002"],
     }],
     diagnostics: [
       { symptom: "UnboundLocalError: local variable referenced before assignment가 납니다.", likelyCause: "함수 안 assignment 때문에 이름이 local로 분류됐는데 그 전에 읽었습니다.", checks: ["함수 전체의 assignment targets를 찾습니다.", "global/nonlocal 의도를 확인합니다.", "read-modify-write 순서를 봅니다."], fix: "값을 인수/반환으로 전달하거나 의도한 enclosing binding에는 nonlocal을 명시합니다.", prevention: "숨은 global mutation을 피하고 scope-focused tests를 둡니다." },

@@ -272,7 +272,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-33-nested-route-data-errors", slug: "react-33-nested-route-data-errors", courseId: "react", moduleId: "react-router-network", order: 3,
+  inventoryId: "react-33-fetch-lifecycle", slug: "react-33-nested-route-data-errors", courseId: "react", moduleId: "react-router-network", order: 3,
   title: "nested route·data loading과 error boundary", subtitle: "route tree에 layout, loader, action, cancellation, error recovery와 SSR isolation을 함께 배치하고 실제 실패 순서로 검증합니다.",
   level: "고급", estimatedMinutes: 130,
   coreQuestion: "nested route의 화면 계층과 data lifecycle을 어떻게 연결해야 느린 요청·mutation·오류·취소·SSR에서도 올바른 layout과 최신 data를 안전하게 유지할까요?",

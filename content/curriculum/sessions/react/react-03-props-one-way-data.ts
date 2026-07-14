@@ -255,7 +255,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-03-props-one-way-data", slug: "react-03-props-one-way-data",
+    inventoryId: "react-03-function-component-composition", slug: "react-03-props-one-way-data",
   courseId: "react", moduleId: "react-rendering-components", order: 3,
   title: "props와 단방향 데이터 흐름", subtitle: "읽기 전용 snapshot, runtime schema, callback capability와 state ownership으로 부모·자식 component 계약을 설계합니다.",
   level: "기초", estimatedMinutes: 120,

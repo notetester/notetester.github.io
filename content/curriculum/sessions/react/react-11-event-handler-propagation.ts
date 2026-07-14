@@ -413,7 +413,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-11-event-handler-propagation", slug: "react-11-event-handler-propagation", courseId: "react", moduleId: "react-events-forms-hooks", order: 1,
+  inventoryId: "react-11-state-event-patterns", slug: "react-11-event-handler-propagation", courseId: "react", moduleId: "react-events-forms-hooks", order: 1,
   title: "이벤트 처리·전파와 접근 가능한 상호작용",
   subtitle: "step06 handler 문법을 capture·target·bubble, native default, keyboard, async cardinality와 운영 evidence로 확장합니다",
   level: "중급", estimatedMinutes: 110,

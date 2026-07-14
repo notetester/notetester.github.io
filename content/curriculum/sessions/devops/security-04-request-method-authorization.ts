@@ -195,7 +195,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-04-request-method-authorization", slug: "security-04-request-method-authorization", courseId: "devops", moduleId: "security-filter-authentication", order: 4,
+  inventoryId: "sec-15-object-authorization", slug: "security-04-request-method-authorization", courseId: "devops", moduleId: "security-filter-authentication", order: 4,
   title: "request·method·resource 인가", subtitle: "ordered request matchers에서 method proxy와 object/tenant policy, negative matrix, policy rollout까지 defense in depth로 연결합니다.",
   level: "고급", estimatedMinutes: 170,
   coreQuestion: "인증된 요청이라는 사실을 넘어 누가 어떤 resource에 어떤 action을 할 수 있는지 request, method와 data boundary마다 어떻게 일관되게 검증하고 운영할까요?",

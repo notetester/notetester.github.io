@@ -477,7 +477,7 @@ const session = {
             { change: "id를 모두 제거하고 name은 둡니다.", prediction: "FormData entries는 유지되지만 label/query wiring을 별도 고쳐야 합니다.", result: "id와 name 역할이 다릅니다." },
             { change: "form.submit와 requestSubmit을 각각 instrument합니다.", prediction: "submit method는 validation/submit listener를 건너뛰고 requestSubmit은 수행합니다.", result: "실제 product path에 맞는 API를 선택합니다." },
           ],
-          sourceRefs: ["web-jquery-form-event-source", "html-forms-standard", "html-form-entry-standard"],
+          sourceRefs: ["web-jquery-form-event-source", "html-forms-standard", "html-form-entry-standard", "jquery-hover-api"],
         },
       ],
       diagnostics: [

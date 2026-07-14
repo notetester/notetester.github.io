@@ -281,7 +281,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-34-protected-route-navigation-a11y", slug: "react-34-protected-route-navigation-a11y", courseId: "react", moduleId: "react-router-network", order: 4,
+  inventoryId: "react-34-fetch-detail-cancel", slug: "react-34-protected-route-navigation-a11y", courseId: "react", moduleId: "react-router-network", order: 4,
   title: "보호 route·navigation과 접근성", subtitle: "client guard를 server authorization과 분리하고 session·redirect·focus·title·status·keyboard·blocker를 하나의 복구 가능한 navigation lifecycle로 만듭니다.",
   level: "고급", estimatedMinutes: 130,
   coreQuestion: "로그인이 필요한 route를 어떻게 보호해야 forged/stale client state가 권한을 얻지 못하고, 모든 navigation·redirect·pending·blocked 상태가 keyboard와 assistive technology에도 명확할까요?",

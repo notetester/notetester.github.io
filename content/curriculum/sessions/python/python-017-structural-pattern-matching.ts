@@ -368,7 +368,7 @@ expertSession.chapters.push(
           { change: "첫 OR의 두 번째 대안에서 code 캡처를 제거합니다.", prediction: "대안의 바인딩 이름 집합이 달라 SyntaxError입니다.", result: "OR case 블록의 이름 계약이 컴파일 단계에 검증됨을 확인합니다." },
           { change: "bad_source의 wildcard에 `if False` guard를 붙입니다.", prediction: "뒤 case가 문법적으로 도달 가능해져 compile이 성공합니다.", result: "irrefutable pattern과 guard가 도달 가능성에 미치는 차이를 확인합니다." },
         ],
-        sourceRefs: ["pep-634-spec", "pep-635-rationale", "pep-636-tutorial", "python-match-reference", "python-pycompile-doc"],
+        sourceRefs: ["pep-634-spec", "pep-635-rationale", "pep-636-tutorial", "python-match-reference", "python-pycompile-doc", "python-enum-doc", "python-sys-version-doc"],
       },
     ],
     diagnostics: [

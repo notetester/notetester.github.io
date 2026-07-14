@@ -208,7 +208,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-16-oauth-authorization-code-pkce", slug: "security-16-oauth-authorization-code-pkce", courseId: "devops", moduleId: "oauth-api-hardening", order: 1,
+  inventoryId: "oauth-01-authorization-code-flow", slug: "security-16-oauth-authorization-code-pkce", courseId: "devops", moduleId: "oauth-api-hardening", order: 1,
   title: "OAuth authorization code·PKCE·state·issuer", subtitle: "provider login source를 exact redirect, one-time state transaction, PKCE S256, issuer/nonce binding과 reversible provider operations로 강화합니다.",
   level: "고급", estimatedMinutes: 205,
   coreQuestion: "browser redirect를 거치는 OAuth code flow에서 session swapping, code interception, open redirect와 issuer mix-up 없이 올바른 client/provider transaction만 local identity/session으로 바꾸려면 무엇을 검증해야 할까요?",

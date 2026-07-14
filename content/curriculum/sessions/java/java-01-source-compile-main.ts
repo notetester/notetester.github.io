@@ -359,7 +359,7 @@ public class CommandLineArgs {
             { change: "argument 없이 실행합니다.", prediction: "count=0이고 loop body는 실행되지 않습니다.", result: "args[0] 직접 접근 전 length를 검증합니다." },
             { change: "secret을 argument로 전달하고 process list/history를 확인합니다.", prediction: "운영 환경에서 노출 surface가 생길 수 있습니다.", result: "민감 값 전달 channel과 logging을 재설계합니다." },
           ],
-          sourceRefs: ["java-original-hello-source", "jdk21-java-launcher", "jls-execution"],
+          sourceRefs: ["java-original-hello-source", "jdk21-java-launcher", "jls-execution", "jep512-compact-main"],
         },
       ],
       diagnostics: [

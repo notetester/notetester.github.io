@@ -210,7 +210,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-27-crud-state-server-sync", slug: "react-27-crud-state-server-sync", courseId: "react", moduleId: "react-state-management", order: 7,
+  inventoryId: "react-27-zustand-auth-persist", slug: "react-27-crud-state-server-sync", courseId: "react", moduleId: "react-state-management", order: 7,
   title: "CRUD state와 server 동기화", subtitle: "local draft, normalized entity, operation state machine, optimistic transaction과 HTTP version conflict를 하나의 복구 가능한 흐름으로 연결합니다.",
   level: "고급", estimatedMinutes: 135,
   coreQuestion: "local/persisted/server CRUD가 동시에 존재할 때 빠른 UI를 유지하면서 stale overwrite, lost update, 권한 오류와 실패 후 divergence를 어떻게 막을까요?",

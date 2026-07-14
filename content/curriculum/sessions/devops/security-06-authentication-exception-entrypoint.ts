@@ -190,7 +190,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-06-authentication-exception-entrypoint", slug: "security-06-authentication-exception-entrypoint", courseId: "devops", moduleId: "security-filter-authentication", order: 6,
+  inventoryId: "sec-08-jwt-error-contract", slug: "security-06-authentication-exception-entrypoint", courseId: "devops", moduleId: "security-filter-authentication", order: 6,
   title: "security 예외·EntryPoint·AccessDeniedHandler", subtitle: "filter failure에서 401/403 translation, RFC 9457 문제 응답, client recovery와 credential incident 대응까지 하나의 계약으로 만듭니다.",
   level: "고급", estimatedMinutes: 170,
   coreQuestion: "missing·invalid credential과 권한 거부를 올바른 401/403, challenge와 안전한 문제 응답으로 번역하면서 double response, token 노출과 client retry loop를 어떻게 막을까요?",

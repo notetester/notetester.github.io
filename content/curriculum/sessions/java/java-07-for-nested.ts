@@ -548,7 +548,7 @@ public class PatternLab {
             { change: "size를 1로 바꿉니다.", prediction: "identity=1, anti=1, cells=1, ones=1입니다.", result: "최소 non-empty boundary를 검증합니다." },
             { change: "size를 -1로 바꿉니다.", prediction: "NEGATIVE_SIZE 예외입니다.", result: "invalid domain을 빈 출력으로 숨기지 않습니다." },
           ],
-          sourceRefs: ["java-day06-nested", "jls-for"],
+          sourceRefs: ["java-day06-nested", "jls-for", "jls-continue"],
         },
       ],
       diagnostics: [{ symptom: "반대 대각선의 1이 한 칸씩 밀린다.", likelyCause: "0-based 좌표에서 row+column==size를 사용했습니다.", checks: ["좌상단을 0,0으로 둡니다.", "양 끝 좌표 0,size-1과 size-1,0을 대입합니다.", "1 count를 셉니다."], fix: "0-based 정사각 grid의 반대 대각선을 row+column==size-1로 정의합니다.", prevention: "size 1·2·4 normalized rows를 golden으로 둡니다." }],

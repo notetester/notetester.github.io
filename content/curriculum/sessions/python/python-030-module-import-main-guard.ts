@@ -393,7 +393,7 @@ const advancedImportChapters: DetailedSession["chapters"] = [
         { change: "cycle_b import를 함수 안으로 옮깁니다.", prediction: "module import는 성공하지만 함수 호출 시 cycle/결합 문제가 나타날 수 있습니다.", result: "local import의 근거를 문서화합니다." },
         { change: "shared에 high-level service import를 다시 추가합니다.", prediction: "cycle이 새로운 모양으로 돌아옵니다.", result: "contract layer가 상위 구현을 참조하지 않게 합니다." },
       ],
-      sourceRefs: ["python-import-doc", "python-importlib-030", "python-sys-modules-030", "pyproject-spec-030"],
+      sourceRefs: ["python-import-doc", "python-importlib-030", "python-sys-modules-030", "pyproject-spec-030", "py-import-consumer-source"],
     }],
     diagnostics: [
       { symptom: "cannot import name ... from partially initialized module 오류가 납니다.", likelyCause: "서로의 top-level name을 초기화가 끝나기 전에 from-import하는 cycle이 있습니다.", checks: ["import graph와 첫 실행 순서를 그립니다.", "두 modules의 top-level name 정의 위치를 봅니다.", "shared contracts와 TYPE_CHECKING-only imports를 구분합니다."], fix: "공통 model·Protocol을 낮은 module로 추출하고 dependency direction을 단방향으로 만듭니다.", prevention: "각 public module을 새 process에서 서로 다른 순서로 import하는 smoke test를 둡니다." },

@@ -289,7 +289,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-21-reducer-state-machine", slug: "react-21-reducer-state-machine", courseId: "react", moduleId: "react-state-management", order: 1,
+  inventoryId: "react-21-custom-hook-supplement", slug: "react-21-reducer-state-machine", courseId: "react", moduleId: "react-state-management", order: 1,
   title: "useReducer와 상태 머신", subtitle: "validated action·pure total reducer·finite transition·command/recovery evidence로 복잡한 UI state를 예측 가능하게 운영합니다.",
   level: "고급", estimatedMinutes: 120,
   coreQuestion: "복잡한 UI state 변화를 validated action과 pure reducer로 모델링하고 impossible state, side effect, concurrency와 migration 실패까지 어떻게 통제할까요?",

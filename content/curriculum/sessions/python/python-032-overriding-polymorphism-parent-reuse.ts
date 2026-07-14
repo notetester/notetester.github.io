@@ -388,7 +388,7 @@ const advancedPolymorphismChapters: DetailedSession["chapters"] = [
         { change: "base method가 Animal parameter를 받고 override가 Dog만 받게 합니다.", prediction: "base caller가 Cat을 전달할 때 subclass만 실패해 LSP를 위반합니다.", result: "override parameter를 좁히지 않습니다." },
         { change: "@override method 이름을 creat로 오타 냅니다.", prediction: "type checker가 base member를 override하지 않는다고 진단합니다.", result: "rename drift를 조기에 발견합니다." },
       ],
-      sourceRefs: ["python-override-032", "typing-variance-032", "python-class-doc", "python-super-doc"],
+      sourceRefs: ["python-override-032", "typing-variance-032", "python-class-doc", "python-super-doc", "py-overload-default-source", "py-overload-varargs-source"],
     }],
     diagnostics: [
       { symptom: "override decorator가 있는데 production에서 반환 타입 오류가 납니다.", likelyCause: "annotation과 decorator를 runtime validation으로 오해했거나 type checker를 실행하지 않았습니다.", checks: ["type checker CI 결과를 확인합니다.", "실제 return type과 postcondition을 기록합니다.", "base contract suite를 모든 factories에 실행합니다."], fix: "static checker를 CI에 포함하고 system boundary·contract tests에서 runtime result를 검증합니다.", prevention: "정상·잘못된 implementation fixtures로 static 및 runtime negative tests를 둡니다." },

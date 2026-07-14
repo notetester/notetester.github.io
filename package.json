@@ -17,7 +17,8 @@
     "content:coverage": "node --experimental-strip-types scripts/report-curriculum-coverage.mjs",
     "content:depth": "node --experimental-strip-types scripts/report-session-depth.mjs",
     "content:depth:strict": "node --experimental-strip-types scripts/report-session-depth.mjs --strict",
-    "content:examples:executable": "node --experimental-strip-types scripts/verify-executable-examples.mjs"
+    "content:examples:executable": "node --experimental-strip-types scripts/verify-executable-examples.mjs",
+    "content:examples:parallel": "node --experimental-strip-types scripts/verify-executable-examples-parallel.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

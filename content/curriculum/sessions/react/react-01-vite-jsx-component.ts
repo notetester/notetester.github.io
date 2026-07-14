@@ -364,7 +364,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-01-vite-jsx-component",
+    inventoryId: "react-01-toolchain-entry",
   slug: "react-01-vite-jsx-component",
   courseId: "react",
   moduleId: "react-rendering-components",

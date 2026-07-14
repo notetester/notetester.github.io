@@ -368,7 +368,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-11-refresh-token-rotation",
+    inventoryId: "sec-09-access-refresh-lifecycle",
   slug: "security-11-refresh-token-rotation",
   courseId: "devops",
   moduleId: "token-client-integration",

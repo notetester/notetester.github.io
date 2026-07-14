@@ -431,7 +431,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-40-router-network-capstone", slug: "react-40-router-network-capstone", courseId: "react", moduleId: "react-router-network", order: 10,
+  inventoryId: "react-40-login-register-profile", slug: "react-40-router-network-capstone", courseId: "react", moduleId: "react-router-network", order: 10,
   title: "Router·HTTP·server state capstone",
   subtitle: "두 학습 앱의 Router·Fetch/Axios·auth·Zustand·Guestbook을 deep-link에서 mutation, logout, SSR/static deploy와 observability까지 하나의 검증 가능한 system으로 결합합니다.",
   level: "고급", estimatedMinutes: 150,

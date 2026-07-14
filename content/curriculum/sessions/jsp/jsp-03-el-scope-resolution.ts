@@ -509,7 +509,7 @@ public class ElOutputSafety {
         { change: "title을 unquoted attribute에 넣습니다.", prediction: "HTML text encoder와 다른 위험이 생깁니다.", result: "quoted attribute-safe primitive를 사용합니다." },
         { change: "error query를 message에 연결합니다.", prediction: "escape가 없으면 reflected XSS가 됩니다.", result: "error view도 같은 output policy를 적용합니다." },
       ],
-      sourceRefs: ["source-jsp03-error", "source-jsp03-el", "jakarta-tags-out", "owasp-xss", "whatwg-html"],
+      sourceRefs: ["source-jsp03-error", "source-jsp03-el", "jakarta-tags-out", "owasp-xss", "whatwg-html", "jakarta-el-api", "jakarta-pages-page-context"],
     }],
     diagnostics: [
       { symptom: "error/title 값의 tag가 실행됩니다.", likelyCause: "EL direct output을 자동 escaping으로 오해했습니다.", checks: ["rendered raw response를 봅니다.", "source provenance를 추적합니다.", "sink context를 식별합니다."], fix: "HTML text c:out/encoder와 context-specific primitives를 사용합니다.", prevention: "malicious model regression과 CSP를 둡니다." },

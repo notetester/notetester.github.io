@@ -203,7 +203,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-35-fetch-http-lifecycle", slug: "react-35-fetch-http-lifecycle", courseId: "react", moduleId: "react-router-network", order: 5,
+  inventoryId: "react-35-axios-instance", slug: "react-35-fetch-http-lifecycle", courseId: "react", moduleId: "react-router-network", order: 5,
   title: "Fetch와 HTTP request lifecycle", subtitle: "Request/Response·stream·schema·deadline·retry·cache·CORS와 secret incident recovery를 하나의 typed network boundary로 구현합니다.",
   level: "고급", estimatedMinutes: 140,
   coreQuestion: "브라우저 Fetch가 반환하는 transport 결과를 어떻게 검증·취소·복구해 application이 신뢰할 수 있는 typed data와 안전한 failure로 바꿀까요?",

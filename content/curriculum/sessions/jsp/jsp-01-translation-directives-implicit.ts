@@ -490,7 +490,7 @@ public class DeterministicJspModel {
         { change: "Clock.systemDefaultZone을 사용합니다.", prediction: "host와 자정 경계에 따라 날짜가 달라질 수 있습니다.", result: "업무 zone을 명시합니다." },
         { change: "label을 JavaScript string literal 안에 넣습니다.", prediction: "HTML text encoder만으로는 충분하지 않습니다.", result: "각 parser context에 맞는 serializer를 사용합니다." },
       ],
-      sourceRefs: ["source-jsp01-ex03", "java-clock", "java-int-supplier", "owasp-xss"],
+      sourceRefs: ["source-jsp01-ex03", "java-clock", "java-int-supplier", "owasp-xss", "jakarta-pages-api", "whatwg-html"],
     }],
     diagnostics: [
       { symptom: "날짜 test가 특정 시간대에서 하루 차이로 실패합니다.", likelyCause: "system default zone과 현재 시간을 직접 읽었습니다.", checks: ["ZoneId.systemDefault를 기록합니다.", "자정 경계를 재현합니다.", "Clock dependency를 확인합니다."], fix: "업무 ZoneId와 injected Clock을 사용합니다.", prevention: "CI를 여러 zone에서 실행하고 fixed fixture를 둡니다." },

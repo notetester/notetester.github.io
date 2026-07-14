@@ -641,7 +641,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-45-production-capstone",
+    inventoryId: "react-45-accessibility-performance",
   slug: "react-45-production-capstone",
   courseId: "react",
   moduleId: "react-integrated-app-quality",

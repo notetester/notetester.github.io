@@ -267,7 +267,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-26-zustand-persist-auth", slug: "react-26-zustand-persist-auth",
+    inventoryId: "react-26-zustand-todo-crud", slug: "react-26-zustand-persist-auth",
   courseId: "react", moduleId: "react-state-management", order: 6,
   title: "Zustand persist·인증 상태 생명주기", subtitle: "persisted state를 untrusted versioned envelope로 다루고 hydration·migration·SSR·storage failure와 client/server 인증 경계를 하나의 운영 수명주기로 완성합니다.",
   level: "고급", estimatedMinutes: 130,

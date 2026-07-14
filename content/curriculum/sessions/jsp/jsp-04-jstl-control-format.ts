@@ -520,7 +520,7 @@ public class FormatTagsModel {
         { change: "percent input을12로 바꿉니다.", prediction: "1200.0%가 됩니다.", result: "domain ratio scale을 명시합니다." },
         { change: "Locale.getDefault와 ZoneId.systemDefault를 사용합니다.", prediction: "host별 separators/date가 달라질 수 있습니다.", result: "format context를 request policy로 고정합니다." },
       ],
-      sourceRefs: ["source-jsp04-format", "jakarta-tags-format-number", "jakarta-tags-format-date", "java-decimal-format", "java-date-time-formatter", "java-instant", "java-zone-id"],
+      sourceRefs: ["source-jsp04-format", "jakarta-tags-format-number", "jakarta-tags-format-date", "java-decimal-format", "java-date-time-formatter", "java-instant", "java-zone-id", "jakarta-tags-spec", "jakarta-tags-fmt"],
     }],
     diagnostics: [
       { symptom: "같은 record 시간이 서버마다 다릅니다.", likelyCause: "LocalDateTime.now와 systemDefault zone에 의존했습니다.", checks: ["stored type을 봅니다.", "default zone을 기록합니다.", "fmt timeZone config를 확인합니다."], fix: "Instant/offset을 저장하고 explicit display ZoneId로 format합니다.", prevention: "UTC/Asia-Seoul matrix와 fixed Clock tests를 둡니다." },

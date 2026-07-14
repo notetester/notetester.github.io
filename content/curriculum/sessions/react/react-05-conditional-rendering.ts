@@ -222,7 +222,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-05-conditional-rendering", slug: "react-05-conditional-rendering", courseId: "react", moduleId: "react-rendering-components", order: 5,
+  inventoryId: "react-05-state-setter-batching", slug: "react-05-conditional-rendering", courseId: "react", moduleId: "react-rendering-components", order: 5,
   title: "조건부 렌더링과 UI 상태", subtitle: "원본 if/ternary/null/&&/||를 exhaustive UI state, async race, lifecycle, Suspense/error, accessibility·authorization과 release 운영으로 확장합니다.", level: "중급", estimatedMinutes: 100,
   coreQuestion: "loading·empty·content·error·unauthorized 같은 UI 상태를 어떻게 빠짐없이 렌더링하고 async race, focus, security와 state lifetime을 안전하게 유지할까요?",
   summary: "my-app01 step05-if 세 파일과 REACT archive counterparts를 read-only·sanitized 감사해 if/else, null, early return, logical AND/OR와 boolean prop list 흐름을 보존하고 counterpart hashes가 일치함을 확인했습니다. 실제 item/display strings는 복사하지 않습니다. truthiness와 syntax 선택, exhaustive finite UI states, unmount/hidden/inert state lifetime, async generation/cancel, Error Boundary, Suspense reveal, status/focus accessibility와 client visibility가 authorization이 아닌 security boundary, performance/feature-flag release까지 current official sources로 확장합니다. 다섯 Node examples는 falsy values, state renderer, out-of-order response, visibility policy와 release gates를 exact stdout으로 실행합니다.",

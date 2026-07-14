@@ -527,7 +527,7 @@ public class ResponseCommitModel {
         { change: "오류를 catch한 뒤 body에 stack을 씁니다.", prediction: "정보 노출과 부분 응답이 생깁니다.", result: "commit 전 safe error boundary를 둡니다." },
         { change: "write 뒤 redirect를 시도합니다.", prediction: "late Location과 status 변경이 실패합니다.", result: "redirect를 terminal outcome으로 먼저 결정합니다." },
       ],
-      sourceRefs: ["source-jsp02-response", "jakarta-http-response", "jakarta-request-dispatcher", "rfc9110"],
+      sourceRefs: ["source-jsp02-response", "jakarta-http-response", "jakarta-request-dispatcher", "rfc9110", "jakarta-servlet-spec", "jakarta-http-request", "owasp-xss", "owasp-unvalidated-redirects"],
     }],
     diagnostics: [
       { symptom: "오류인데 client는200으로 봅니다.", likelyCause: "body가 먼저 commit된 뒤 status를 바꾸거나 모든 결과를 HTML message로만 표현했습니다.", checks: ["wire status를 봅니다.", "commit 시점을 기록합니다.", "exception mapping order를 봅니다."], fix: "render 전에 typed outcome을 status/header/body로 변환합니다.", prevention: "status/body matrix integration test를 둡니다." },

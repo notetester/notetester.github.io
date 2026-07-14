@@ -191,7 +191,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-23-context-performance-selector", slug: "react-23-context-performance-selector",
+    inventoryId: "react-23-context-split-performance", slug: "react-23-context-performance-selector",
   courseId: "react", moduleId: "react-state-management", order: 3,
   title: "Context 성능·selector와 external store", subtitle: "Provider identity, split boundaries, memo, immutable snapshot과 field-level subscription을 측정 가능한 계약으로 설계합니다.",
   level: "고급", estimatedMinutes: 130,

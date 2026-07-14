@@ -267,7 +267,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-08-state-identity-reset", slug: "react-08-state-identity-reset",
+    inventoryId: "react-08-conditional-render", slug: "react-08-state-identity-reset",
   courseId: "react", moduleId: "react-rendering-components", order: 8,
   title: "state 보존·reset과 component identity", subtitle: "position·type·key로 state lifecycle을 예측하고 list reorder, profile 전환과 focus 복구를 제품 의도에 맞게 설계합니다.",
   level: "중급", estimatedMinutes: 110,

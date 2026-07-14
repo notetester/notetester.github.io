@@ -287,7 +287,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-30-state-management-capstone", slug: "react-30-state-management-capstone", courseId: "react", moduleId: "react-state-management", order: 10,
+  inventoryId: "react-30-router-routes-link", slug: "react-30-state-management-capstone", courseId: "react", moduleId: "react-state-management", order: 10,
   title: "상태 관리·복구 가능성 capstone", subtitle: "my-app01~03의 67개 state flow를 전수 감사하고 owner·command·async·persist·test·migration·운영을 복구 가능한 하나의 architecture로 완성합니다.",
   level: "고급", estimatedMinutes: 145,
   coreQuestion: "여러 학습 프로젝트에 흩어진 local, Context, reducer, Zustand와 server-backed 상태를 어떻게 전수 감사하고 데이터 무결성·보안·접근성·성능·복구까지 입증한 production-grade architecture로 통합할까요?",

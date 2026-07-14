@@ -291,7 +291,7 @@ const session = {
     "pytest fixture·parametrize·raises·approx·marker를 사용할 수 있다.",
     "clean CI matrix·coverage·flaky·dependency 공급망 gate를 설계할 수 있다.",
   ],
-  nextSessions: [],
+  nextSessions: ["gap-001"],
   sources: [
     { id: "py-env-info-source", repository: "PYTHON-BASIC", path: "day15_venv/ex01_env_info.py", publicUrl: "https://github.com/notetester/PYTHON-BASIC/blob/main/day15_venv/ex01_env_info.py", usedFor: ["sys.executable", "version", "prefix/base_prefix", "venv 환경 변수", "sys.path"], evidence: "원본 환경 진단 필드를 감사하고 path-dependent 출력은 개념·privacy 설명으로 분리했습니다." },
     { id: "py-installed-packages-source", repository: "PYTHON-BASIC", path: "day15_venv/ex02_installed_packages.py", publicUrl: "https://github.com/notetester/PYTHON-BASIC/blob/main/day15_venv/ex02_installed_packages.py", usedFor: ["importlib.metadata version/distributions", "PackageNotFoundError", "import availability"], evidence: "target package 설치/미설치와 전체 distribution metadata 조회 흐름을 감사했습니다." },

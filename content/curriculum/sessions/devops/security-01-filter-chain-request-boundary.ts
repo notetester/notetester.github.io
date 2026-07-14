@@ -341,7 +341,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "security-01-filter-chain-request-boundary",
+    inventoryId: "sec-01-security-filter-chain",
   slug: "security-01-filter-chain-request-boundary",
   courseId: "devops",
   moduleId: "security-filter-authentication",

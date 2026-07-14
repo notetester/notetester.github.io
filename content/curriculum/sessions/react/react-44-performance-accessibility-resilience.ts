@@ -275,7 +275,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-44-performance-accessibility-resilience", slug: "react-44-performance-accessibility-resilience", courseId: "react", moduleId: "react-integrated-app-quality", order: 4,
+  inventoryId: "react-44-component-testing", slug: "react-44-performance-accessibility-resilience", courseId: "react", moduleId: "react-integrated-app-quality", order: 4,
   title: "성능·접근성·error resilience", subtitle: "Profiler·current Web Vitals·bundle·list/input work를 accessible pending/error/offline recovery와 privacy-safe release gates로 통합합니다.",
   level: "고급", estimatedMinutes: 145,
   coreQuestion: "React app을 빠르게 만드는 최적화가 keyboard·assistive technology·slow/offline 사용자와 실패 복구를 해치지 않으면서 실제 field outcome으로 증명되려면 무엇을 측정하고 운영해야 할까요?",

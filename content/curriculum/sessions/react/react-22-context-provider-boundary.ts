@@ -308,7 +308,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-22-context-provider-boundary", slug: "react-22-context-provider-boundary", courseId: "react", moduleId: "react-state-management", order: 2,
+  inventoryId: "react-22-prop-drilling-context", slug: "react-22-context-provider-boundary", courseId: "react", moduleId: "react-state-management", order: 2,
   title: "Context provider와 공유 상태 경계", subtitle: "guarded defaults·least-authority value·scoped ownership·SSR isolation과 measured fan-out으로 안전한 공유 state boundary를 만듭니다.",
   level: "고급", estimatedMinutes: 120,
   coreQuestion: "어떤 state를 어느 provider scope가 소유하고 consumers에 어떤 read/action capability만 제공해야 Context가 누락·과도한 fan-out·cross-user leak 없이 진화할까요?",

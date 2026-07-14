@@ -369,7 +369,7 @@ const advancedChapters: DetailedSession["chapters"] = [
         { change: "dict를 f-string으로 직접 JSON처럼 출력합니다.", prediction: "Python repr의 작은따옴표 때문에 일반적인 JSON이 아닙니다.", result: "serializer를 대체할 수 없음을 확인합니다." },
         { change: "message에 demo token marker를 넣고 금지 assert를 추가합니다.", prediction: "허용 필드 정책이 없다면 그대로 남습니다.", result: "escaping과 redaction은 별도 책임입니다." },
       ],
-      sourceRefs: ["python-html-escape-006", "python-json-006", "python-logging-006"],
+      sourceRefs: ["python-html-escape-006", "python-json-006", "python-logging-006", "python-fstring-lexical-006"],
     }],
     diagnostics: [
       { symptom: "사용자 이름의 따옴표 때문에 JSON parse가 실패합니다.", likelyCause: "JSON 문자열을 f-string으로 직접 조립해 escape와 타입 규칙을 빠뜨렸습니다.", checks: ["결과를 json.loads로 읽어 봅니다.", "문자열 연결·f-string JSON 생성을 검색합니다.", "따옴표·역슬래시·개행 fixture를 넣습니다."], fix: "dict/list 구조를 만들고 json.dumps 또는 framework serializer를 사용합니다.", prevention: "직렬화 결과 round-trip과 schema test를 둡니다." },

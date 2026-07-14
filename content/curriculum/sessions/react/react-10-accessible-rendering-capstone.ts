@@ -453,7 +453,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-10-accessible-rendering-capstone", slug: "react-10-accessible-rendering-capstone", courseId: "react", moduleId: "react-rendering-components", order: 10,
+  inventoryId: "react-10-synthetic-events", slug: "react-10-accessible-rendering-capstone", courseId: "react", moduleId: "react-rendering-components", order: 10,
   title: "접근 가능한 component rendering capstone",
   subtitle: "원본 App·JSX·목록·CSS를 semantic tree, stable identity, complete states와 keyboard/zoom evidence가 있는 capstone으로 통합합니다",
   level: "중급", estimatedMinutes: 120,

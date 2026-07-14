@@ -227,7 +227,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-04-list-key-reconciliation", slug: "react-04-list-key-reconciliation", courseId: "react", moduleId: "react-rendering-components", order: 4,
+  inventoryId: "react-04-props-oneway-dataflow", slug: "react-04-list-key-reconciliation", courseId: "react", moduleId: "react-rendering-components", order: 4,
   title: "목록 렌더링·key와 reconciliation", subtitle: "원본 map/filter/find/reduce/some/every를 stable identity·state/focus preservation·security·large-list budgets와 async collection 운영으로 확장합니다.", level: "중급", estimatedMinutes: 110,
   coreQuestion: "동적으로 변하는 collection을 어떤 identity와 pure transforms로 렌더링해야 reorder·filter·retry 뒤에도 올바른 component state, focus와 성능을 유지할까요?",
   summary: "my-app01 CommentList/Comment와 step04-map 네 파일, REACT archive의 동일 네 파일을 read-only·sanitized 감사했습니다. CommentList의 index key와 filter 예제의 item-owned key 차이, find one-or-none, reduce summary와 some/every predicate를 실제 구조로 보존하되 원본 인물·message strings는 복사하지 않습니다. list key/sibling scope, reconciliation과 state/effect lifetime, duplicate/index/generated keys, transform empty semantics, immutable reorder, focus/accessibility, untrusted content/authorization, large-list performance와 async page/rebase 운영까지 current official specifications로 확장합니다. 다섯 Node examples는 source inventory, stable/index reorder, transform shapes, focus recovery와 window/security budget을 exact stdout으로 실행합니다.",

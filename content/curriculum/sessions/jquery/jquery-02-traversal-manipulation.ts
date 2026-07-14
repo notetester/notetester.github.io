@@ -481,7 +481,7 @@ const session = {
             { change: "detach한 node를 1,000개 배열에 보관합니다.", prediction: "화면에는 없어도 references/data가 memory에 retained됩니다.", result: "cache eviction/dispose가 필요합니다." },
             { change: "direct handler 대신 document-level native listener와 timer를 plugin처럼 등록합니다.", prediction: "remove만으로 외부 resource가 자동 정리되지 않을 수 있습니다.", result: "component destroy contract가 필요합니다." },
           ],
-          sourceRefs: ["web-jquery-clone-source", "jquery-removal-api", "dom-node-standard"],
+          sourceRefs: ["web-jquery-clone-source", "jquery-removal-api", "dom-node-standard", "jquery-positional-migration-api", "trusted-types-standard"],
         },
       ],
       diagnostics: [

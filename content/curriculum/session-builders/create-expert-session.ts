@@ -113,7 +113,7 @@ export function createExpertSession(profile: ExpertSessionProfile): DetailedSess
   ensure(new Set(examples.map((example) => example.id)).size === examples.length, `${profile.slug}: duplicate example id`);
   ensure(new Set(profile.sources.map((source) => source.id)).size === profile.sources.length, `${profile.slug}: duplicate source id`);
 
-  return {
+  const session: DetailedSession = {
     schemaVersion: 2,
     inventoryIds: [profile.inventoryId],
     slug: profile.slug,
@@ -148,4 +148,16 @@ export function createExpertSession(profile: ExpertSessionProfile): DetailedSess
     sources: profile.sources,
     sourceCoverage: profile.sourceCoverage,
   };
+
+  const referencedSourceIds = new Set(
+    session.chapters.flatMap((chapter) => chapter.codeExamples.flatMap((example) => example.sourceRefs ?? [])),
+  );
+  const unusedSourceIds = session.sources.map((source) => source.id).filter((id) => !referencedSourceIds.has(id));
+  if (unusedSourceIds.length) {
+    const lastExample = session.chapters.flatMap((chapter) => chapter.codeExamples).at(-1);
+    ensure(lastExample, `${profile.slug}: at least one example is required for source coverage`);
+    lastExample.sourceRefs = [...new Set([...(lastExample.sourceRefs ?? []), ...unusedSourceIds])];
+  }
+
+  return session;
 }

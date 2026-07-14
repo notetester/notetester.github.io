@@ -276,7 +276,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-15-effect-synchronization", slug: "react-15-effect-synchronization",
+    inventoryId: "react-15-effect-lifecycle-deps", slug: "react-15-effect-synchronization",
   courseId: "react", moduleId: "react-events-forms-hooks", order: 5,
   title: "Effect와 외부 시스템 동기화", subtitle: "render·event·Effect를 분리하고 reactive dependency, subscription, fetch와 cleanup을 실행 가능한 lifecycle로 설계합니다.",
   level: "중급", estimatedMinutes: 125,

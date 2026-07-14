@@ -202,7 +202,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-36-axios-client-interceptors", slug: "react-36-axios-client-interceptors", courseId: "react", moduleId: "react-router-network", order: 6,
+  inventoryId: "react-36-axios-interceptor", slug: "react-36-axios-client-interceptors", courseId: "react", moduleId: "react-router-network", order: 6,
   title: "Axios client·interceptor와 오류 경계", subtitle: "trust-boundary instances, config precedence, typed errors, single-flight refresh, cancellation과 adapter contract tests를 운영 가능한 policy로 만듭니다.",
   level: "고급", estimatedMinutes: 140,
   coreQuestion: "Axios의 편의 기능을 global side effect와 retry/security bug 없이 어떻게 명시적이고 테스트 가능한 HTTP application boundary로 만들까요?",

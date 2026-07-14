@@ -357,7 +357,7 @@ const advancedChapters: DetailedSession["chapters"] = [
         { change: "nan 검사에 `value == float('nan')`을 씁니다.", prediction: "항상 False입니다.", result: "math.isnan을 사용합니다." },
         { change: "json.dumps에 NaN을 전달하고 allow_nan=False를 설정합니다.", prediction: "ValueError로 non-standard value를 거부합니다.", result: "API interoperability policy를 명시합니다." },
       ],
-      sourceRefs: ["python-math-specials", "python-expressions-comparisons-004", "python-json-numbers-004"],
+      sourceRefs: ["python-math-specials", "python-expressions-comparisons-004", "python-json-numbers-004", "py-day01-note"],
     }],
     diagnostics: [
       { symptom: "range check를 통과하지도 실패하지도 않고 NaN이 남습니다.", likelyCause: "NaN ordered comparisons가 모두 False인 특성을 고려하지 않았습니다.", checks: ["math.isnan/isfinite를 먼저 봅니다.", "parser가 nan text를 허용하는지 확인합니다.", "aggregation source를 추적합니다."], fix: "range 비교 전에 finite-number contract를 적용합니다.", prevention: "NaN·±inf·-0.0 fixtures를 numeric boundary에 둡니다." },

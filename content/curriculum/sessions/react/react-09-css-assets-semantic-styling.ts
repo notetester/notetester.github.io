@@ -290,7 +290,7 @@ const sources: SessionSource[] = [
 ];
 
 const session = createExpertSession({
-  inventoryId: "react-09-css-assets-semantic-styling", slug: "react-09-css-assets-semantic-styling",
+    inventoryId: "react-09-css-assets-layout", slug: "react-09-css-assets-semantic-styling",
   courseId: "react", moduleId: "react-rendering-components", order: 9,
   title: "CSS·asset과 semantic component styling", subtitle: "semantic DOM, bounded style API, cascade·responsive·accessible image와 secure cacheable asset pipeline을 하나의 component contract로 설계합니다.",
   level: "중급", estimatedMinutes: 105,
